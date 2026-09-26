@@ -6,3 +6,5 @@
  *
  * @module
  */
+
+export { Vector2 } from "./math/vector2.ts";
