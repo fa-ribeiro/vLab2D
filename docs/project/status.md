@@ -2,22 +2,23 @@
 
 ## Current checkpoint
 
-The first kinematics foundation is in place.
+The engine now has a small kinematics foundation with two numerical integration methods.
 
-The engine currently provides:
+The public engine API currently provides:
 
 - `Vector2`, an immutable two-dimensional vector value.
 - `KinematicState`, representing position and velocity at a particular instant.
-- `ExplicitEulerIntegrator`, which advances a kinematic state using constant acceleration and the Explicit Euler method.
+- `ExplicitEulerIntegrator`, which advances position using the velocity at the beginning of the timestep.
+- `SemiImplicitEulerIntegrator`, which updates velocity first and then advances position using the updated velocity.
 
-The integration behavior is kept separate from the state it operates on. Kinematic state and integration inputs are not mutated during an integration step.
+Both integration algorithms operate on the same kinematic state representation, return new state objects, and do not mutate their inputs.
 
-The implementation is covered by colocated tests, including checks that Explicit Euler uses the velocity at the beginning of the timestep when updating position.
+Their intentionally similar implementations make their defining numerical difference explicit and provide the first concrete example of alternative simulation behaviors in vLab2D.
 
 ## Next step
 
-Implement a **Semi-Implicit Euler integrator**.
+Introduce the first small piece of simulation behavior that **consumes an integration strategy**.
 
-This will give the project two concrete integration algorithms with naturally comparable behavior. Once both implementations exist, review their actual interfaces and extract a shared `Integrator` contract only if the common abstraction is justified by the code.
+The purpose of this step is not yet to design a complete simulation runtime. It is to discover, from a real consumer, what information and behavior an integrator actually needs to expose.
 
-The two algorithms will then provide the first concrete example of interchangeable simulation behavior in vLab2D.
+Although the two current Euler implementations have the same `integrate(...)` method shape, vLab2D will not introduce a shared `Integrator` interface until a real consumer provides stronger evidence that this is the appropriate abstraction.

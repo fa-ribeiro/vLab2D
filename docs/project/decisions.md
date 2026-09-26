@@ -272,3 +272,19 @@ The engine does not adopt browser Canvas screen coordinates, where positive Y no
 Renderers are responsible for transforming world coordinates into their target display coordinate system.
 
 This keeps simulation mathematics independent from rendering technology and allows conventional physical values such as downward gravitational acceleration to be represented with a negative Y component.
+
+## D-037 — Integrator abstraction is deliberately deferred
+
+**Status:** Accepted
+
+`ExplicitEulerIntegrator` and `SemiImplicitEulerIntegrator` currently expose the same `integrate(...)` method shape.
+
+This similarity is not considered sufficient evidence that the project has discovered the correct general-purpose integrator abstraction.
+
+A future integration method may require different state, historical information, force data, or other inputs. Extracting an interface from only the first two implementations could prematurely constrain later designs.
+
+The concrete integrators therefore remain independent classes for now.
+
+A shared integrator contract should be introduced only after a real simulation consumer demonstrates which behavior must genuinely be interchangeable.
+
+This follows the project principle that abstractions should emerge from concrete requirements rather than be introduced speculatively.
