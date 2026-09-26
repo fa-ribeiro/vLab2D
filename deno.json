@@ -1,0 +1,21 @@
+{
+  "tasks": {
+    "fmt": "deno fmt",
+    "fmt:check": "deno fmt --check",
+    "lint": "deno lint",
+    "check": "deno check",
+    "test": "deno test",
+    "test:watch": "deno test --watch",
+    "doc:lint": "deno doc --lint src/engine/mod.ts",
+    "doc:html": "deno doc --html --name=\"vLab2D - Interactive Visual Lab Engine\" --output=generated/api src/engine/mod.ts",
+    "verify": "deno task fmt:check && deno task lint && deno task check && deno task doc:lint && deno task test"
+  },
+  "imports": {
+    "@std/assert": "jsr:@std/assert@1"
+  },
+  "fmt": {
+    "lineWidth": 96,
+    "proseWrap": "preserve"
+  },
+  "exclude": ["coverage/", "generated/"]
+}

@@ -1,0 +1,10 @@
+# Generated output
+coverage/
+generated/
+
+# Optional Node/npm compatibility output if introduced later
+node_modules/
+
+# Operating-system metadata
+.DS_Store
+Thumbs.db
