@@ -95,25 +95,6 @@ Update the continuity pack after any of the following:
 
 Minor coding discussion does not need documentation unless it affects future work.
 
-## Working agreement / feature lifecycle
-
-For each meaningful feature, default to this loop:
-
-1. Define the smallest useful behavior and its place in the architecture.
-2. Explain the relevant concepts, terminology, standard approaches, and tradeoffs.
-3. Present the proposed approach and explicitly explain why it is preferred here and why plausible alternatives are not being selected yet.
-4. Implement from the ground up in small, understandable pieces.
-5. Walk through the formatted code, including how dependencies and responsibilities fit the wider design.
-6. Add JSDoc/comments. Internal comments should explain non-obvious reasoning; every exported public engine API symbol must be documented sufficiently for generated API documentation, with concise JSDoc acceptable for obvious members.
-7. Add relevant tests, prioritizing trustworthy behavior/edge-case coverage over coverage percentage.
-8. Run/inspect the feature and tests when execution is available.
-9. Stop for user review/approval before treating the implementation as settled.
-10. Before commit, review and update all project documentation materially affected by the feature (`status.md` routinely; decisions/environment/map/context only when relevant).
-11. Run `deno task verify`, inspect the staged diff, and confirm code, tests, public API documentation, and project documentation describe the same completed state.
-12. Commit the complete feature as one coherent checkpoint, then move to the next feature.
-
-A feature is ready to commit when its implementation, tests, API documentation, relevant project documentation, and verification all agree on the same state.
-
 ## Technical-choice explanation standard
 
 When presenting a meaningful choice, include as applicable:
@@ -179,3 +160,88 @@ For each meaningful public API, document as applicable:
 Every symbol that forms part of the exported public engine API must have JSDoc sufficient for `deno doc --lint`. For obvious accessors or trivial values, keep that documentation concise rather than padding it with artificial explanation. Non-obvious public contracts should receive fuller documentation. Documentation must teach correct use, not narrate syntax.
 
 The public engine root module is part of the documentation-quality workflow: lint it with `deno doc --lint` and generate searchable HTML with `deno doc --html`. Prefer native Deno documentation tooling over a third-party generator unless a demonstrated project need justifies the dependency.
+
+## Step-based feature lifecycle
+
+vLab2D is developed in small, understandable, independently reviewable steps.
+
+Each feature starts from an accepted repository baseline and should introduce the smallest useful capability that advances the project or proves the need for a new abstraction.
+
+The normal lifecycle is:
+
+1. **Establish the baseline**
+   - Start from the latest commit explicitly confirmed as the project baseline.
+   - Review `status.md` to understand the current checkpoint and next small goal.
+
+2. **Understand the problem**
+   - Clarify the concepts, terminology, algorithms, and responsibilities involved.
+   - Compare reasonable implementation options.
+   - Discuss advantages, disadvantages, trade-offs, and common mistakes.
+   - Prefer established techniques when they exist, adapting them to the scale and learning goals of vLab2D.
+
+3. **Agree on the smallest useful scope**
+   - Define what the feature should do.
+   - Explicitly identify what it should _not_ do yet.
+   - Avoid speculative abstractions and functionality whose need has not been demonstrated.
+
+4. **Implement incrementally**
+   - Build the feature from the ground up.
+   - Explain important TypeScript, architectural, mathematical, and algorithmic decisions as they appear.
+   - Keep modules focused and dependencies explicit.
+   - Document exported public API symbols with JSDoc.
+   - Comment internal code only when the comment adds meaning that the code itself does not communicate clearly.
+
+5. **Test meaningful behavior**
+   - Add colocated unit tests where appropriate.
+   - Prioritize behavioral contracts, invariants, edge cases, failure behavior, and regression protection over coverage metrics.
+   - Avoid tests that merely mirror implementation details.
+   - Use test doubles when they help isolate the responsibility under test.
+
+6. **Verify the implementation**
+   - Run focused tests while developing.
+   - Run the complete project quality gate:
+
+   ```sh
+   deno task verify
+   ```
+
+7. **Review together**
+   - Review the implementation, API shape, naming, tests, documentation, and architectural fit.
+   - A passing test suite is necessary but does not by itself mean the feature is complete.
+   - Do not move to the next feature until the current implementation is understood and approved.
+
+8. **Perform the pre-commit documentation review**
+   - Update `status.md` to describe the new current checkpoint and the next small goal.
+   - Update `decisions.md` only when the feature establishes or changes a durable project decision.
+   - Update other project documentation only when its authoritative information has actually changed.
+   - Avoid duplicating information between documents.
+   - During review, share the complete updated `status.md`; incremental additions are sufficient for `decisions.md`.
+
+9. **Perform the pre-commit verification**
+   - Run `deno task verify` again after documentation changes.
+   - Review `git status`, the diff, and the staged diff.
+   - Confirm that implementation, tests, API documentation, and project documentation all describe the same project state.
+
+10. **Commit the completed step**
+    - Prefer one coherent commit containing the feature, its tests, its API documentation, and the relevant project-documentation updates.
+    - The commit should represent a trustworthy checkpoint that can be understood and resumed independently.
+
+11. **Establish the new baseline**
+    - After the commit is created, the commit identifier is shared explicitly.
+    - Once confirmed, that commit becomes the new authoritative project baseline and supersedes the previous baseline and all earlier project snapshots.
+
+```mermaid
+flowchart LR
+    B[Baseline] --> U[Understand]
+    U --> S[Scope]
+    S --> I[Implement]
+    I --> T[Test]
+    T --> V[Verify]
+    V --> R[Review]
+    R --> D[Update docs]
+    D --> P[Pre-commit verify]
+    P --> C[Commit]
+    C --> NB[New baseline]
+```
+
+The purpose of this lifecycle is not process for its own sake. Each completed step should be small enough to understand completely and strong enough to serve as a reliable foundation for the next one.
