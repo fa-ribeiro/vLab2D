@@ -232,3 +232,43 @@ Keep the root `README.md` focused on presenting vLab2D to a repository visitor: 
 Prefer one authoritative location for each kind of project information and use links or concise summaries elsewhere. In particular, `status.md` records only the current checkpoint and next small goal rather than commit history; Git remains the implementation-history source. `deno.json` is authoritative for task definitions, while the root README provides the human-facing command summary. Stable repository identity belongs in `project-context.md`. Handoff and environment documents should point to those authoritative sources instead of copying fast-changing details.
 
 This reduces synchronization work and prevents contradictory documentation as the project evolves.
+
+## D-034 — Kinematic state is separate from integration behavior
+
+**Status:** Accepted
+
+`KinematicState` describes motion at a particular instant through position and velocity. It does not know how to advance itself through time.
+
+Numerical integration is a separate responsibility performed by integrator implementations.
+
+This separation allows the same state representation to be processed by different numerical methods without coupling the state to a specific algorithm.
+
+## D-035 — Engine time is expressed in seconds
+
+**Status:** Accepted
+
+Simulation timestep values (`dt`) are expressed in seconds.
+
+Consequently, kinematic quantities use consistent time-based units:
+
+- velocity: world units per second
+- acceleration: world units per second squared
+
+Hosts whose native timing source uses another unit, such as browser milliseconds, are responsible for converting values at the engine boundary.
+
+This keeps numerical equations expressed in their conventional form and avoids coupling the engine to a particular host timing API.
+
+## D-036 — Engine world coordinates use mathematical axis orientation
+
+**Status:** Accepted
+
+The simulation engine uses a mathematical two-dimensional coordinate system:
+
+- positive X points right
+- positive Y points up
+
+The engine does not adopt browser Canvas screen coordinates, where positive Y normally points downward.
+
+Renderers are responsible for transforming world coordinates into their target display coordinate system.
+
+This keeps simulation mathematics independent from rendering technology and allows conventional physical values such as downward gravitational acceleration to be represented with a negative Y component.

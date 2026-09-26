@@ -1,29 +1,23 @@
-# Status
-
-Last updated: 2026-09-26
-
-## Phase
-
-Implementation — project foundation established; engine math primitives have begun.
+# Project Status
 
 ## Current checkpoint
 
-The project bootstrap is in place and the first engine primitive, immutable `Vector2`, is complete.
+The first kinematics foundation is in place.
 
-The current baseline includes:
+The engine currently provides:
 
-- Deno-native formatting, linting, type checking, testing, and API-documentation checks
-- a self-contained `src/engine/` boundary with `src/engine/mod.ts` as its public entry point
-- an independent `src/visualization/` boundary
-- colocated `*.test.ts` unit tests
-- public API documentation linting and searchable HTML generation through native Deno tooling
-- immutable `Vector2` with `add`, `subtract`, and `scale` behavior, tests, JSDoc, and public export through the engine entry module
-- project continuity documentation under `docs/project/`
+- `Vector2`, an immutable two-dimensional vector value.
+- `KinematicState`, representing position and velocity at a particular instant.
+- `ExplicitEulerIntegrator`, which advances a kinematic state using constant acceleration and the Explicit Euler method.
+
+The integration behavior is kept separate from the state it operates on. Kinematic state and integration inputs are not mutated during an integration step.
+
+The implementation is covered by colocated tests, including checks that Explicit Euler uses the velocity at the beginning of the timestep when updating position.
 
 ## Next step
 
-Choose and design the next **smallest useful engine feature**.
+Implement a **Semi-Implicit Euler integrator**.
 
-Do not assume the feature in advance. First identify what should logically follow `Vector2`, compare reasonable options, explain their learning/architectural value and tradeoffs, then agree on one small goal before implementation begins.
+This will give the project two concrete integration algorithms with naturally comparable behavior. Once both implementations exist, review their actual interfaces and extract a shared `Integrator` contract only if the common abstraction is justified by the code.
 
-The next feature should continue the established feature lifecycle: design → implementation → tests/documentation → review → project-doc synchronization → verification → commit.
+The two algorithms will then provide the first concrete example of interchangeable simulation behavior in vLab2D.
