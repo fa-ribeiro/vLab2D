@@ -338,3 +338,33 @@ Callers may retain and compare body identifiers, but they should not assign mean
 Body identifiers are not required to be globally unique across different worlds.
 
 This keeps public identity independent from internal storage and leaves the engine free to change the representation or allocation strategy later if a concrete requirement demands it.
+
+## D-042 — Kinematic worlds use injected integration behavior
+
+**Status:** Accepted
+
+`KinematicWorld` depends on the narrow `KinematicIntegrator` contract rather than on a concrete numerical integration algorithm.
+
+The integration strategy is supplied when the world is created and is used to advance every body in that world.
+
+This allows the same world behavior and initial conditions to be exercised with different integration algorithms, such as Explicit Euler and Semi-Implicit Euler, without changing `KinematicWorld`.
+
+The dependency is injected because integration behavior is genuinely variable and already has multiple concrete implementations. No dependency-injection framework or additional abstraction is required.
+
+All bodies in a `KinematicWorld` currently share one integrator and one world-level acceleration. Per-body integration policies or acceleration should be introduced only if a concrete requirement demonstrates their need.
+
+## D-043 — World steps are atomic
+
+**Status:** Accepted
+
+A `KinematicWorld` step is committed only when every body's candidate next state has been successfully computed and validated.
+
+During a step, candidate states are kept separate from authoritative body state. The world replaces its current states only after all candidates are known to be valid.
+
+If integration of any body fails or produces invalid state, no body's authoritative state is changed.
+
+This prevents a failed step from leaving the world partially advanced, where some bodies represent the new timestep while others still represent the previous one.
+
+The invariant is:
+
+> A world step either succeeds for every body or changes no body state.

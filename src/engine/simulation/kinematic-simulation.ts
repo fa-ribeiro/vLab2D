@@ -1,8 +1,11 @@
 import type { KinematicIntegrator } from "../kinematics/kinematic-integrator.ts";
 import { KinematicState } from "../kinematics/kinematic-state.ts";
 import { Vector2 } from "../math/vector2.ts";
-import { assertFiniteState, assertFiniteVector } from "../kinematics/validation.ts";
-
+import {
+  assertFiniteState,
+  assertFiniteVector,
+  assertValidTimestep,
+} from "../kinematics/validation.ts";
 /**
  * Owns and advances the authoritative state of a single two-dimensional
  * kinematic simulation.
@@ -85,13 +88,7 @@ export class KinematicSimulation {
    * integrator produces a state containing non-finite values.
    */
   public step(dt: number): void {
-    if (!Number.isFinite(dt)) {
-      throw new RangeError("The timestep must be finite.");
-    }
-
-    if (dt < 0) {
-      throw new RangeError("The timestep must not be negative.");
-    }
+    assertValidTimestep(dt);
 
     const nextState = this.#integrator.integrate(this.#state, this.#acceleration, dt);
 

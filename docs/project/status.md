@@ -2,7 +2,7 @@
 
 ## Current checkpoint
 
-The engine now has a minimal multi-body kinematic world.
+The engine now has a minimal multi-body kinematic simulation world.
 
 The public engine API currently provides:
 
@@ -13,32 +13,28 @@ The public engine API currently provides:
 - `SemiImplicitEulerIntegrator`, which updates velocity first and then advances position using the updated velocity.
 - `KinematicSimulation`, a state-owning single-state runtime used to establish controlled mutation, validation, and injected integration behavior.
 - `BodyId`, an opaque world-local identifier for a simulated body.
-- `KinematicWorld`, which owns the kinematic state of multiple identified bodies.
+- `KinematicWorld`, which owns and advances the kinematic state of multiple identified bodies.
 
-`KinematicWorld` currently supports creating bodies and observing their state.
+`KinematicWorld` supports:
 
-Body state is stored privately by the world in a `Map<BodyId, KinematicState>`. External consumers interact with bodies through their identifiers and do not receive access to the world's internal storage.
+- creating bodies;
+- observing individual body state;
+- configuring a world-level constant acceleration;
+- advancing every body through time with an injected `KinematicIntegrator`.
 
-Body creation validates the supplied initial state before accepting it into the world. Unknown body identifiers return `undefined` when queried.
+All bodies currently share the same world acceleration and integration strategy.
 
-The world currently provides only identity, ownership, creation, and observation. It does not yet advance bodies through time.
+The world's authoritative body state remains private. External consumers interact with bodies through `BodyId` values and cannot directly mutate the world's internal body storage.
 
-## Next step
+World stepping is transactional.
 
-Allow `KinematicWorld` to advance all of its bodies through time.
+During `step(dt)`, the world:
 
-The next feature should introduce:
+1. validates the timestep;
+2. computes a candidate next state for every body;
+3. validates every candidate state;
+4. commits the new states only after all candidates have succeeded.
 
-- an injected `KinematicIntegrator`;
-- a world-level constant acceleration, initially serving as gravity;
-- `step(dt)` behavior that advances every body using the same world configuration.
+If any body produces an invalid candidate state, the entire step is rejected and every body's previous authoritative state is preserved.
 
-A world step should preserve the state-safety guarantees already established by the engine.
-
-All candidate body states should therefore be computed and validated before any of them replace the world's current authoritative state.
-
-The intended behavior is transactional:
-
-> Either the entire world step succeeds, or the world remains unchanged.
-
-This will turn `KinematicWorld` from a state container into the first practical multi-body simulation workbench while keeping the scope deliberately small.
+This gives the project its first practical multi-body simulation workbench. Different numerical integration strategies can now be exercised against the same world abstraction without changing
