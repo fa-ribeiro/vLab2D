@@ -1,19 +1,27 @@
+import type { KinematicIntegrator } from "../kinematics/kinematic-integrator.ts";
+import { KinematicState } from "../kinematics/kinematic-state.ts";
 import {
   assertFiniteState,
   assertFiniteVector,
   assertValidTimestep,
 } from "../kinematics/validation.ts";
-import { KinematicState } from "../kinematics/kinematic-state.ts";
 import { Vector2 } from "../math/vector2.ts";
 import type { BodyId } from "./body-id.ts";
-import type { KinematicIntegrator } from "../kinematics/kinematic-integrator.ts";
+import type { KinematicBodySnapshot } from "./kinematic-body-snapshot.ts";
+
+function copyState(state: KinematicState): KinematicState {
+  return new KinematicState(
+    new Vector2(state.position.x, state.position.y),
+    new Vector2(state.velocity.x, state.velocity.y),
+  );
+}
 
 /**
  * Owns and advances the kinematic state of a collection of identified bodies.
  *
  * Bodies are represented externally by {@link BodyId} values. Their
  * authoritative state remains private to the world and may be observed through
- * the world's public API.
+ * detached snapshots exposed by the world's public API.
  *
  * All bodies currently share the same world acceleration and numerical
  * integration strategy.
@@ -84,14 +92,35 @@ export class KinematicWorld {
   }
 
   /**
-   * Returns the current kinematic state of a body.
+   * Returns a detached snapshot of the current kinematic state of a body.
+   *
+   * Modifying the returned state cannot change the authoritative state owned by
+   * the world.
    *
    * @param bodyId The identifier of the body to observe.
-   * @returns The body's current state, or `undefined` when the identifier does
-   * not belong to this world.
+   * @returns A snapshot of the body's current state, or `undefined` when the
+   * identifier does not belong to this world.
    */
   public getBodyState(bodyId: BodyId): KinematicState | undefined {
-    return this.#bodies.get(bodyId);
+    const state = this.#bodies.get(bodyId);
+
+    return state === undefined ? undefined : copyState(state);
+  }
+
+  /**
+   * Returns detached snapshots of all bodies currently owned by the world.
+   *
+   * The returned array and body states are independent from the world's
+   * authoritative storage. Their order should not be interpreted as part of the
+   * world's public contract.
+   *
+   * @returns A snapshot for every body currently in the world.
+   */
+  public getBodySnapshots(): readonly KinematicBodySnapshot[] {
+    return Array.from(this.#bodies, ([id, state]): KinematicBodySnapshot => ({
+      id,
+      state: copyState(state),
+    }));
   }
 
   /**

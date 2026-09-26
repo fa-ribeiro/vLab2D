@@ -136,9 +136,17 @@ Deno.test("KinematicWorld advances every body using the injected integrator", ()
 
   world.step(0.5);
 
-  assertStrictEquals(world.getBodyState(firstBodyId), firstNextState);
+  const firstResult = world.getBodyState(firstBodyId);
+  const secondResult = world.getBodyState(secondBodyId);
 
-  assertStrictEquals(world.getBodyState(secondBodyId), secondNextState);
+  assert(firstResult !== undefined);
+  assert(secondResult !== undefined);
+
+  assertVector(firstResult.position, 5, 6);
+  assertVector(firstResult.velocity, 7, 8);
+
+  assertVector(secondResult.position, 50, 60);
+  assertVector(secondResult.velocity, 70, 80);
 
   assertEquals(integrator.calls.length, 2);
 
@@ -196,7 +204,12 @@ Deno.test("KinematicWorld rejects an invalid timestep before integrating bodies"
 
   assertEquals(integrator.calls.length, 0);
 
-  assertStrictEquals(world.getBodyState(bodyId), initialState);
+  const stateAfterRejectedStep = world.getBodyState(bodyId);
+
+  assert(stateAfterRejectedStep !== undefined);
+
+  assertVector(stateAfterRejectedStep.position, 1, 2);
+  assertVector(stateAfterRejectedStep.velocity, 3, 4);
 });
 
 Deno.test(
@@ -236,9 +249,17 @@ Deno.test(
       `Integrator result for body ${secondBodyId} position must contain finite components.`,
     );
 
-    assertStrictEquals(world.getBodyState(firstBodyId), firstState);
+    const firstResult = world.getBodyState(firstBodyId);
+    const secondResult = world.getBodyState(secondBodyId);
 
-    assertStrictEquals(world.getBodyState(secondBodyId), secondState);
+    assert(firstResult !== undefined);
+    assert(secondResult !== undefined);
+
+    assertVector(firstResult.position, 1, 2);
+    assertVector(firstResult.velocity, 3, 4);
+
+    assertVector(secondResult.position, 10, 20);
+    assertVector(secondResult.velocity, 30, 40);
   },
 );
 
@@ -252,4 +273,74 @@ Deno.test("KinematicWorld rejects invalid initial acceleration", () => {
     RangeError,
     "Acceleration must contain finite components.",
   );
+});
+
+Deno.test("KinematicWorld exposes snapshots of all bodies", () => {
+  const world = new KinematicWorld(new Vector2(0, -10), new StubIntegrator((state) => state));
+
+  const firstId = world.createBody(new KinematicState(new Vector2(1, 2), new Vector2(3, 4)));
+
+  const secondId = world.createBody(
+    new KinematicState(new Vector2(10, 20), new Vector2(30, 40)),
+  );
+
+  const snapshots = world.getBodySnapshots();
+
+  assertEquals(snapshots.length, 2);
+
+  const first = snapshots.find((snapshot) => snapshot.id === firstId);
+  const second = snapshots.find((snapshot) => snapshot.id === secondId);
+
+  assert(first !== undefined);
+  assert(second !== undefined);
+
+  assertVector(first.state.position, 1, 2);
+  assertVector(first.state.velocity, 3, 4);
+
+  assertVector(second.state.position, 10, 20);
+  assertVector(second.state.velocity, 30, 40);
+});
+
+Deno.test("KinematicWorld exposes an empty body snapshot collection when empty", () => {
+  const world = new KinematicWorld(new Vector2(0, -10), new StubIntegrator((state) => state));
+
+  assertEquals(world.getBodySnapshots(), []);
+});
+
+Deno.test("KinematicWorld body snapshots cannot mutate authoritative world state", () => {
+  const world = new KinematicWorld(new Vector2(0, -10), new StubIntegrator((state) => state));
+
+  const bodyId = world.createBody(new KinematicState(new Vector2(1, 2), new Vector2(3, 4)));
+
+  const snapshots = world.getBodySnapshots();
+
+  const observedState = snapshots[0].state;
+
+  // Deliberately bypass TypeScript's readonly contract to verify that the
+  // observation object is detached from authoritative world state.
+  (observedState.position as { x: number }).x = 999;
+
+  const authoritativeSnapshot = world.getBodyState(bodyId);
+
+  assert(authoritativeSnapshot !== undefined);
+
+  assertVector(authoritativeSnapshot.position, 1, 2);
+});
+
+Deno.test("KinematicWorld getBodyState returns detached state", () => {
+  const world = new KinematicWorld(new Vector2(0, -10), new StubIntegrator((state) => state));
+
+  const bodyId = world.createBody(new KinematicState(new Vector2(1, 2), new Vector2(3, 4)));
+
+  const observedState = world.getBodyState(bodyId);
+
+  assert(observedState !== undefined);
+
+  (observedState.velocity as { x: number }).x = 999;
+
+  const nextObservation = world.getBodyState(bodyId);
+
+  assert(nextObservation !== undefined);
+
+  assertVector(nextObservation.velocity, 3, 4);
 });

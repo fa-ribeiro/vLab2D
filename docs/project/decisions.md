@@ -368,3 +368,29 @@ This prevents a failed step from leaving the world partially advanced, where som
 The invariant is:
 
 > A world step either succeeds for every body or changes no body state.
+
+## D-044 — World observation uses detached state
+
+**Status:** Accepted
+
+`KinematicWorld` does not expose references to its authoritative body state through its public observation API.
+
+`getBodyState(...)` returns a detached copy of the requested `KinematicState`, including detached position and velocity values.
+
+Collection-level observation similarly returns detached body snapshots rather than exposing the world's internal state objects.
+
+This protects the engine's ownership boundary at runtime rather than relying solely on TypeScript `readonly` declarations, which do not provide runtime immutability.
+
+An external consumer may therefore inspect or even improperly mutate its returned observation without changing the authoritative state owned by the world.
+
+## D-045 — Collection observation does not expose world storage
+
+**Status:** Accepted
+
+`KinematicWorld` exposes bodies for observation through `KinematicBodySnapshot` values rather than exposing its private `Map<BodyId, KinematicState>`.
+
+A body snapshot combines the body's world-local identity with its observed kinematic state and represents data rather than engine behavior.
+
+The order of snapshots returned by the world is not part of the public contract. Consumers should use `BodyId` when identity matters rather than depending on iteration or storage order.
+
+This keeps the public observation model independent from the world's internal storage representation and allows that representation to evolve without affecting external renderers, debuggers, inspectors, or other consumers.

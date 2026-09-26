@@ -18,4 +18,6 @@ export { Vector2 } from "./math/vector2.ts";
 export { KinematicSimulation } from "./simulation/kinematic-simulation.ts";
 
 export type { BodyId } from "./world/body-id.ts";
+export type { KinematicBodySnapshot } from "./world/kinematic-body-snapshot.ts";
+
 export { KinematicWorld } from "./world/kinematic-world.ts";
