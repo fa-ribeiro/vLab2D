@@ -1,5 +1,6 @@
 import { Vector2 } from "../math/vector2.ts";
 import { KinematicState } from "./kinematic-state.ts";
+import type { KinematicIntegrator } from "./kinematic-integrator.ts";
 
 /**
  * Advances kinematic state using the Semi-Implicit Euler integration method.
@@ -15,7 +16,7 @@ import { KinematicState } from "./kinematic-state.ts";
  *
  * Semi-Implicit Euler is also commonly known as Symplectic Euler.
  */
-export class SemiImplicitEulerIntegrator {
+export class SemiImplicitEulerIntegrator implements KinematicIntegrator {
   /**
    * Advances a kinematic state by one timestep.
    *

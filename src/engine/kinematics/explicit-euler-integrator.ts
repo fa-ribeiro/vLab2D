@@ -1,5 +1,6 @@
 import { Vector2 } from "../math/vector2.ts";
 import { KinematicState } from "./kinematic-state.ts";
+import type { KinematicIntegrator } from "./kinematic-integrator.ts";
 
 /**
  * Advances kinematic state using the Explicit Euler integration method.
@@ -13,7 +14,7 @@ import { KinematicState } from "./kinematic-state.ts";
  * This method is intentionally simple and will later provide a useful baseline
  * for comparison with other numerical integration methods.
  */
-export class ExplicitEulerIntegrator {
+export class ExplicitEulerIntegrator implements KinematicIntegrator {
   /**
    * Advances a kinematic state by one timestep.
    *

@@ -288,3 +288,27 @@ The concrete integrators therefore remain independent classes for now.
 A shared integrator contract should be introduced only after a real simulation consumer demonstrates which behavior must genuinely be interchangeable.
 
 This follows the project principle that abstractions should emerge from concrete requirements rather than be introduced speculatively.
+
+## D-038 — Kinematic simulation owns authoritative state
+
+**Status:** Accepted
+
+`KinematicSimulation` owns the current kinematic state and acceleration.
+
+External consumers may observe these values but may not replace them directly. Runtime changes occur through validated public commands such as `setAcceleration(...)` and `step(...)`.
+
+An injected integrator produces a candidate next state. The simulation validates that candidate before accepting it as authoritative state.
+
+This keeps state mutation controlled by the engine boundary and prevents invalid external or injected behavior from silently corrupting the simulation.
+
+## D-039 — Kinematic integration is represented by a narrow strategy contract
+
+**Status:** Accepted
+
+The engine defines `KinematicIntegrator` as the capability required by `KinematicSimulation` to advance kinematic state.
+
+The interface is deliberately specific to `KinematicState`; it is not intended to define a universal numerical integration abstraction.
+
+`ExplicitEulerIntegrator` and `SemiImplicitEulerIntegrator` implement this contract and can therefore be injected interchangeably into the simulation.
+
+The abstraction was introduced only after a concrete consumer demonstrated the need for interchangeable integration behavior.
