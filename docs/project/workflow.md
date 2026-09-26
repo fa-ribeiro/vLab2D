@@ -44,7 +44,7 @@ Good candidates for comments/docs include:
 - important edge cases and surprising consequences
 - public APIs whose contract is not obvious from the type signature
 
-Usually avoid comments such as “x coordinate”, “increment index”, or comments that just translate a line of TypeScript into English. Prefer clear names and small functions for obvious code.
+Usually avoid internal comments such as “x coordinate”, “increment index”, or comments that just translate a line of TypeScript into English. Prefer clear names and small functions for obvious code. Exported public API symbols are the exception: they may use concise JSDoc when documentation completeness requires it.
 
 When introducing a significant algorithm, prefer a short nearby explanation plus, when useful, a more complete project note or reference. The code should remain readable without turning every file into a textbook.
 
@@ -59,10 +59,26 @@ Documentation should help a future version of the user answer: “Why did I writ
 - When proposing classes/interfaces, explain the responsibility and dependency boundary they are intended to protect.
 - Do not introduce deep inheritance trees when composition or a simple function/object would express the behavior more clearly.
 - Avoid expanding scope merely because a professional engine might include a feature.
-- Track meaningful decisions in `DECISIONS.md`.
-- Track operational progress in `STATUS.md`.
-- Track tooling/version changes in `ENVIRONMENT.md`.
-- Update `PROJECT_CONTEXT.md` if the project's identity, major goals, architecture, or handoff protocol changes.
+- Track meaningful decisions in `decisions.md`.
+- Track operational progress in `status.md`.
+- Track tooling/version changes in `environment.md`.
+- Update `project-context.md` if the project's identity, major goals, architecture, or handoff protocol changes.
+
+## Documentation ownership and duplication rule
+
+Prefer a **single authoritative home** for each kind of project information. Other documents may provide a short summary or link when that helps navigation, but should not reproduce the same detailed information.
+
+- `README.md` — project front door: concise presentation, environment summary, structure, normal commands, current-status summary, and links to deeper documentation.
+- `project-context.md` — stable project identity, goals, constraints, architectural principles, and repository identity.
+- `status.md` — only the current checkpoint and the next small goal; it is not a changelog or commit history.
+- `decisions.md` — durable accepted/rejected architectural and workflow decisions with rationale.
+- `environment.md` — development environment, versions, tooling constraints, and environment-specific notes; task definitions themselves live in `deno.json`.
+- `workflow.md` — development/learning process and working agreement.
+- `project-map.md` — visual conceptual map where diagrams materially improve understanding.
+- `handoff.md` — how to resume the project; it should point to authoritative files rather than repeat their current contents.
+- `deno.json` — authoritative project task definitions.
+
+The Git commit history remains the source for historical implementation chronology. Do not duplicate that history in `status.md` or other continuity files unless a historical reference is specifically needed to explain a durable decision.
 
 ## Continuity maintenance trigger
 
@@ -79,19 +95,7 @@ Update the continuity pack after any of the following:
 
 Minor coding discussion does not need documentation unless it affects future work.
 
-## New-chat workflow
-
-At the beginning of a new chat:
-
-1. Load the continuity pack.
-2. Load the source repository/files needed for the current task.
-3. Read `STATUS.md` for where work stopped.
-4. Read `DECISIONS.md` before proposing architectural changes.
-5. Read `ENVIRONMENT.md` before giving setup/build commands.
-6. Continue the existing project rather than restarting its design.
-7. Update the pack as new durable information emerges.
-
-## Feature implementation / approval loop
+## Working agreement / feature lifecycle
 
 For each meaningful feature, default to this loop:
 
@@ -100,11 +104,15 @@ For each meaningful feature, default to this loop:
 3. Present the proposed approach and explicitly explain why it is preferred here and why plausible alternatives are not being selected yet.
 4. Implement from the ground up in small, understandable pieces.
 5. Walk through the formatted code, including how dependencies and responsibilities fit the wider design.
-6. Add JSDoc/comments where intent, contracts, algorithms, assumptions, units, limitations, or rationale are not obvious from the code itself.
+6. Add JSDoc/comments. Internal comments should explain non-obvious reasoning; every exported public engine API symbol must be documented sufficiently for generated API documentation, with concise JSDoc acceptable for obvious members.
 7. Add relevant tests, prioritizing trustworthy behavior/edge-case coverage over coverage percentage.
 8. Run/inspect the feature and tests when execution is available.
-9. Stop for user review/approval before treating the feature as settled.
-10. After approval, record/commit the feature and update continuity documentation as needed before moving to the next feature.
+9. Stop for user review/approval before treating the implementation as settled.
+10. Before commit, review and update all project documentation materially affected by the feature (`status.md` routinely; decisions/environment/map/context only when relevant).
+11. Run `deno task verify`, inspect the staged diff, and confirm code, tests, public API documentation, and project documentation describe the same completed state.
+12. Commit the complete feature as one coherent checkpoint, then move to the next feature.
+
+A feature is ready to commit when its implementation, tests, API documentation, relevant project documentation, and verification all agree on the same state.
 
 ## Technical-choice explanation standard
 
@@ -129,6 +137,14 @@ Do not hide important tradeoffs behind "best practice" language.
 - Deno and appropriate Deno standard-library utilities are acceptable infrastructure, particularly for tests.
 - Make genuinely variable behavior replaceable/composable: integrators, collision detection, collision solving, forces, and similar policies should be able to evolve toward independent implementations as concrete alternatives appear.
 - Let the folder/module structure make these boundaries visible without prematurely creating a framework.
+
+## File and test naming conventions
+
+- Prefer lowercase kebab-case for project-owned filenames, for example `project-context.md`, `collision-detector.ts`, or `semi-implicit-euler.ts`.
+- Preserve widely established conventional filenames such as `README.md`, `CHANGELOG.md`, and `LICENSE`.
+- Name tests with the `*.test.ts` form, for example `vector2.test.ts`.
+- Colocate unit/module tests with the implementation they exercise.
+- Reserve the root `tests/` tree for integration, end-to-end, bootstrap, or other project-level tests that do not belong naturally to one module.
 
 ## Testing standard
 
@@ -160,6 +176,6 @@ For each meaningful public API, document as applicable:
 - relevant determinism or reproducibility behavior
 - a concise example when usage is not self-evident
 
-Do not add verbose documentation for obvious accessors or trivial values when the type/name fully communicate the contract. Documentation must teach correct use, not narrate syntax.
+Every symbol that forms part of the exported public engine API must have JSDoc sufficient for `deno doc --lint`. For obvious accessors or trivial values, keep that documentation concise rather than padding it with artificial explanation. Non-obvious public contracts should receive fuller documentation. Documentation must teach correct use, not narrate syntax.
 
-When a public root module exists, include `deno doc --lint` in the documentation-quality workflow and generate searchable HTML with `deno doc --html`. Prefer native Deno documentation tooling over a third-party generator unless a demonstrated project need justifies the dependency.
+The public engine root module is part of the documentation-quality workflow: lint it with `deno doc --lint` and generate searchable HTML with `deno doc --html`. Prefer native Deno documentation tooling over a third-party generator unless a demonstrated project need justifies the dependency.

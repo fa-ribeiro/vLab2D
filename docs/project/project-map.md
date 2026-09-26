@@ -1,4 +1,4 @@
-# Interactive Visual 2D Lab — Project Map
+# vLab2D — Project Map
 
 Last updated: 2026-09-26
 
@@ -6,7 +6,7 @@ This is an orientation map, not a frozen architecture or roadmap.
 
 ```mermaid
 mindmap
-  root((Interactive Visual Lab))
+  root((vLab2D))
     Purpose
       Learn TypeScript
       Learn simulation concepts
@@ -86,8 +86,10 @@ flowchart LR
     D --> E[Document + test]
     E --> F[Observe / run]
     F --> G[User review & approval]
-    G --> H[Commit / record]
-    H --> I[Next feature]
+    G --> H[Sync affected project docs]
+    H --> I[Verify + inspect staged diff]
+    I --> J[Commit]
+    J --> K[Next feature]
 ```
 
 ## Engine boundary

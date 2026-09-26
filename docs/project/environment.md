@@ -19,45 +19,22 @@ Last updated: 2026-09-26
 - Do not introduce frameworks or third-party libraries merely for convenience.
 - Prefer built-in browser/platform APIs and Deno capabilities when they are sufficient.
 - Testing should prefer Deno's native test runner and appropriate Deno standard-library test/assertion utilities.
-- Public/non-obvious APIs should use JSDoc-style documentation comments. Prefer Deno's native `deno doc` for generated API documentation and documentation linting. Once the root public module exists, add project tasks for HTML generation and doc linting.
+- Public/non-obvious APIs should use JSDoc-style documentation comments. The public engine root module is documented with Deno's native `deno doc`, with project tasks for documentation linting and searchable HTML generation.
 
-## Planned API documentation workflow
+## Tooling notes
 
-Once the public engine entry module exists, prefer native Deno tooling such as:
-
-```text
-deno doc --lint <public-entry-module>
-deno doc --html --name="vLab2D - Interactive Visual Lab Engine" --output=<generated-docs-dir> <public-entry-module>
-```
-
-The exact module path and generated-documentation directory remain intentionally undecided until the repository structure is created. Generated documentation should be treated as build output rather than hand-edited source documentation.
-
-## Bootstrap task commands — draft pending approval
-
-The v0.0.0 bootstrap currently defines:
-
-```text
-deno task fmt
-deno task fmt:check
-deno task lint
-deno task check
-deno task test
-deno task test:watch
-deno task doc:lint
-deno task doc:html
-deno task verify
-```
-
-`verify` runs formatting verification, linting, type checking, public API documentation linting, and tests. Generated API documentation is written under `generated/api/`, which is ignored by Git.
-
-The VS Code workspace enables the Deno language server with `"deno.enable": true` and recommends the official `denoland.vscode-deno` extension.
+- Prefer Deno's native formatter, linter, type checker, test runner, task runner, and documentation generator.
+- The authoritative task definitions live in the repository `deno.json`.
+- The root `README.md` provides the concise human-facing command reference.
+- Public API documentation is generated and linted with native `deno doc` tooling.
+- Generated API documentation is written under `generated/api/` and is treated as derived output rather than hand-edited source documentation.
+- The VS Code workspace enables the Deno language server and recommends the official Deno extension.
 
 ## Not yet decided
 
 - Operating system used for development
 - Browser targets
 - Rendering technology (Canvas 2D, SVG, WebGL, etc.)
-- Git hosting / repository URL
 - Whether any build/bundle step is needed at all
 
 ## Environment-recording rule

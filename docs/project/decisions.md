@@ -74,7 +74,9 @@ Maintain a continuity pack containing project goals, current status, decisions, 
 
 **Status:** Accepted
 
-Documentation and code comments are important because this is a learning project. Comments should document non-obvious behavior, algorithms, assumptions, units/conventions, tradeoffs, design rationale, limitations, and important edge cases. Avoid comments that merely restate obvious code, property names, or simple syntax. Clear code should carry the obvious meaning; comments should preserve the reasoning that the code alone does not communicate well.
+Documentation and code comments are important because this is a learning project. Internal comments should document non-obvious behavior, algorithms, assumptions, units/conventions, tradeoffs, design rationale, limitations, and important edge cases. Avoid internal comments that merely restate obvious code, property names, or simple syntax. Clear code should carry the obvious meaning; comments should preserve reasoning that the code alone does not communicate well.
+
+Public engine API documentation is the deliberate exception: every exported public symbol must satisfy the API-documentation contract in D-025, so obvious public members may receive concise JSDoc for completeness without turning that style into a rule for internal code.
 
 ## D-013 — Separation of concerns / focused responsibilities
 
@@ -161,7 +163,7 @@ This boundary should make invalid or unsafe state transitions difficult or impos
 
 **Status:** Accepted
 
-The engine's public observation and command/control APIs must be especially well documented with JSDoc suitable for generated API documentation. Documentation should focus on the contract a caller needs to use the API correctly rather than restating TypeScript syntax.
+The engine's exported public API must be documented with JSDoc suitable for generated API documentation and must pass `deno doc --lint`. Every exported public symbol receives documentation; obvious members may use concise JSDoc, while non-obvious contracts should be documented in greater depth. Documentation should focus on what a caller needs to use the API correctly rather than restating TypeScript syntax.
 
 For public API members, document as applicable:
 
@@ -183,18 +185,50 @@ Prefer Deno's native `deno doc` tooling for generated documentation because it d
 
 ## D-026 — Initial repository structure
 
-**Status:** Proposed / pending v0.0.0 approval
+**Status:** Accepted
 
 Begin with a deliberately small repository structure: project continuity under `docs/project/`, a self-contained `src/engine/` boundary, a separate `src/visualization/` boundary, and `tests/` only for project-level/bootstrap tests. Feature-specific tests should normally be colocated with the module they exercise. Add deeper folders such as `integrators/`, `collisions/`, or `forces/` only when concrete implementations exist.
 
 ## D-027 — Prefer the Deno-native toolchain for bootstrap quality gates
 
-**Status:** Proposed / pending v0.0.0 approval
+**Status:** Accepted
 
 Use Deno's built-in formatter, linter, type checker, test runner, task runner, and documentation generator rather than adding third-party equivalents. The normal bootstrap quality gate is `deno task verify`, combining formatting verification, linting, type checking, API-doc linting, and tests.
 
 ## D-028 — `src/engine/mod.ts` is the public engine entry module
 
-**Status:** Proposed / pending v0.0.0 approval
+**Status:** Accepted
 
 Treat `src/engine/mod.ts` as the consumer-facing engine root. Renderers, debuggers, inspectors, experiment orchestration, and other external code should depend on exports from this root rather than importing engine implementation files directly. This gives the engine an explicit API/documentation boundary while still allowing internal structure to evolve incrementally.
+
+## D-029 — Test files use `*.test.ts` and unit tests are colocated
+
+**Status:** Accepted
+
+Use the `*.test.ts` naming form (for example `vector2.test.ts`). Unit/module tests should normally live beside the implementation they exercise. Keep the root `tests/` tree for integration, end-to-end, bootstrap, or other project-level tests that do not naturally belong to one module. This keeps behavior and its tests discoverable together while avoiding a mirrored test tree.
+
+## D-030 — Documentation synchronization is part of the pre-commit definition of done
+
+**Status:** Accepted
+
+Documentation affected by a feature must be reviewed before that feature is committed. `status.md` will normally change for each meaningful feature; `decisions.md`, `environment.md`, `project-map.md`, `project-context.md`, or other documentation should change only when the feature materially affects them. Run the normal verification gate and inspect the staged diff after documentation is synchronized so code, tests, generated API documentation, and project documentation form one coherent commit.
+
+## D-031 — Project-owned filenames prefer lowercase kebab-case
+
+**Status:** Accepted
+
+Prefer lowercase kebab-case for project-owned filenames, including Markdown documentation and TypeScript modules. Preserve well-established conventional filenames such as `README.md`, `CHANGELOG.md`, and `LICENSE`. The convention improves consistency and avoids unnecessary case-sensitive path mistakes across platforms.
+
+## D-032 — Root `README.md` is the project front door
+
+**Status:** Accepted
+
+Keep the root `README.md` focused on presenting vLab2D to a repository visitor: project purpose, a concise environment/status summary, structure, normal commands, and links into deeper project documentation. The README may summarize information needed at the front door, but detailed authoritative information belongs in the appropriate project document. The detailed working agreement belongs in `docs/project/workflow.md` rather than being duplicated in the README.
+
+## D-033 — Project documentation avoids duplicated sources of truth
+
+**Status:** Accepted
+
+Prefer one authoritative location for each kind of project information and use links or concise summaries elsewhere. In particular, `status.md` records only the current checkpoint and next small goal rather than commit history; Git remains the implementation-history source. `deno.json` is authoritative for task definitions, while the root README provides the human-facing command summary. Stable repository identity belongs in `project-context.md`. Handoff and environment documents should point to those authoritative sources instead of copying fast-changing details.
+
+This reduces synchronization work and prevents contradictory documentation as the project evolves.

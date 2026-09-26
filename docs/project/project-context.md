@@ -1,6 +1,6 @@
-# Interactive Visual 2D Lab — Project Context
+# vLab2D — Project Context
 
-> Canonical handoff document. A new chat should read this file first. Keep it synchronized with the companion files in this folder whenever important project information changes.
+> Canonical stable project-context document. A new chat should read this file first; `handoff.md` defines the resume procedure and `workflow.md` defines the working agreement.
 
 ## 1. Project identity
 
@@ -161,7 +161,7 @@ Important learning themes:
 - chaotic systems / butterfly effect
 - energy drift and stability
 
-## 5a. Initial repository boundary (v0.0.0 draft)
+## 6. Initial repository boundary
 
 The first bootstrap intentionally creates only a few structural boundaries:
 
@@ -172,7 +172,7 @@ The first bootstrap intentionally creates only a few structural boundaries:
 
 Do not infer future folders from this bootstrap. Add deeper module structure only when real features require it.
 
-## 6. Early project shape
+## 7. Early project shape
 
 Do not treat this as a binding roadmap. It is only a plausible starting sequence.
 
@@ -194,66 +194,16 @@ Do not treat this as a binding roadmap. It is only a plausible starting sequence
 
 The project may deliberately diverge from this sequence.
 
-## 7. Working arrangement with ChatGPT
+## 8. Continuity principle
 
-ChatGPT should act as a collaborator/tutor, not as an autopilot that removes the learning challenge.
+Project continuity is a first-class requirement. Stable identity, goals, constraints, architecture, decisions, environment, workflow, and current status must remain recoverable from the repository rather than depending on conversation history.
 
-Default working style:
+The detailed development/learning agreement lives in `workflow.md`. The procedure for resuming the project in a fresh chat lives in `handoff.md`. The current operational state lives in `status.md`.
 
-- use Deno 2.9.7, TypeScript 6.0.3, and Visual Studio Code as the recorded working environment
-- use vanilla TypeScript with minimal external dependencies
-- for each meaningful feature: explain concepts/options and rationale, implement incrementally, add relevant tests/docs, then pause for user approval before the feature is considered settled/committed
-- explain credible alternatives and why they are not preferred for the current step
-- favor modular/interchangeable implementations for genuinely variable simulation behaviors such as integrators and collision subsystems
-- let source-folder structure communicate these module boundaries without premature framework design
-- prefer trustworthy tests over superficial coverage-chasing
-- complement non-trivial structural/algorithmic explanations with Mermaid diagrams when useful
-- treat meaningful documentation and comments as part of implementation quality
-- treat the engine public API as a first-class documented contract: JSDoc should explain semantics, units, mutability/ownership, validation, timing/side effects, invariants, and non-obvious usage
-- prefer Deno's native `deno doc` for API-documentation linting and searchable generated HTML before considering third-party documentation generators
-- prefer comments that preserve reasoning, assumptions, units, algorithms, limitations, and tradeoffs
-- avoid obvious comments that merely restate identifiers or syntax
-- explain concepts and tradeoffs before introducing sophisticated solutions
-- prefer small next steps
-- avoid dumping a production architecture onto the project
-- help identify standard algorithms when a problem appears
-- distinguish learning-friendly implementations from production-grade ones
-- challenge unnecessary complexity
-- preserve separation of concerns; avoid letting physics, rendering, UI, logging, and orchestration leak into each other
-- preserve state ownership: external observers read through safe views/snapshots; state changes go through validated engine APIs rather than direct object mutation
-- prefer composition and explicit injected collaborators when behavior genuinely needs to vary
-- use OOP as a modeling tool, not as a requirement to turn every concept into a class or inheritance hierarchy
-- help with debugging while preserving understanding
-- support project management and decision recording
+The continuity documents do not replace the source repository, tests, configuration, or Git history; a faithful handoff needs the repository as well.
 
-When a meaningful decision, milestone, environment change, workflow change, architectural change, or newly discovered goal occurs, update the continuity pack.
+## 9. Repository identity
 
-## 8. Continuity protocol
+Repository: <https://github.com/fa-ribeiro/vLab2D>
 
-At the beginning of a new chat:
-
-1. Provide this continuity pack (or make it available as Project files).
-2. Ask ChatGPT to read `PROJECT_CONTEXT.md` first, followed by `STATUS.md`, `DECISIONS.md`, `ENVIRONMENT.md`, and `WORKFLOW.md`.
-3. Continue from the recorded current state rather than reconstructing the project from memory.
-4. Treat `STATUS.md` as the current operational state and `DECISIONS.md` as the source of settled choices.
-5. If code/files are part of the project, provide or connect the repository as well; these notes do not replace source code.
-
-### Important limitation
-
-This pack can preserve project context, decisions, workflow, and recorded environment details, but it cannot literally reproduce hidden chat state, model internals, or guarantee that ChatGPT product/tool capabilities remain unchanged between chats. The goal is a reproducible _project handoff_, not a snapshot of the underlying AI runtime.
-
-## 9. Current state
-
-The project is still in the brainstorming / definition phase.
-
-The recorded development environment is Deno 2.9.7, TypeScript 6.0.3, and Visual Studio Code. The project uses vanilla TypeScript and intentionally minimizes external dependencies. Deno native tooling and appropriate Deno standard-library utilities are acceptable, particularly for testing.
-
-No renderer technology, exact build/run workflow, repository structure, or physics representation has yet been selected. A UI framework is not planned under the vanilla/minimal-dependency policy. The exact source structure and documentation-generation workflow will be chosen when implementation begins.
-
-Remaining unknowns should remain unknown until deliberately decided.
-
-## 10. New-chat bootstrap text
-
-Use the following short instruction when starting a fresh chat:
-
-> We are continuing the Interactive Visual 2D Lab project. Read the attached continuity pack, starting with `PROJECT_CONTEXT.md`, then `STATUS.md`, `DECISIONS.md`, `ENVIRONMENT.md`, and `WORKFLOW.md`. Treat those files as the source of truth for project goals, current status, settled decisions, environment, and our working arrangement. Do not redesign the project from scratch. Continue from the recorded state and update the continuity pack whenever materially relevant information changes.
+Current implementation state deliberately does **not** live in this document. Read `status.md` for the current checkpoint and next step. This file should remain focused on stable project identity, goals, constraints, architecture, and continuity principles rather than repeating operational status.
