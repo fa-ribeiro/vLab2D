@@ -312,3 +312,29 @@ The interface is deliberately specific to `KinematicState`; it is not intended t
 `ExplicitEulerIntegrator` and `SemiImplicitEulerIntegrator` implement this contract and can therefore be injected interchangeably into the simulation.
 
 The abstraction was introduced only after a concrete consumer demonstrated the need for interchangeable integration behavior.
+
+## D-040 — Worlds own body state
+
+**Status:** Accepted
+
+`KinematicWorld` owns the authoritative kinematic state associated with each body.
+
+Bodies are identified externally by `BodyId` values. External consumers do not receive mutable body objects and do not access the world's internal body storage directly.
+
+This preserves the engine's state-ownership boundary while allowing bodies to be referenced consistently by renderers, debuggers, future commands, and other engine consumers.
+
+The current implementation uses a private `Map<BodyId, KinematicState>` because it is simple, explicit, and sufficient for the project's current requirements.
+
+More specialized storage should be introduced only if a concrete requirement justifies it.
+
+## D-041 — Body identifiers are world-local opaque values
+
+**Status:** Accepted
+
+`BodyId` identifies a body within the `KinematicWorld` that created it.
+
+Callers may retain and compare body identifiers, but they should not assign meaning to the underlying numeric value or depend on the world's current identifier allocation strategy.
+
+Body identifiers are not required to be globally unique across different worlds.
+
+This keeps public identity independent from internal storage and leaves the engine free to change the representation or allocation strategy later if a concrete requirement demands it.

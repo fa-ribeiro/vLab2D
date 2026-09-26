@@ -1,6 +1,7 @@
 import type { KinematicIntegrator } from "../kinematics/kinematic-integrator.ts";
 import { KinematicState } from "../kinematics/kinematic-state.ts";
 import { Vector2 } from "../math/vector2.ts";
+import { assertFiniteState, assertFiniteVector } from "../kinematics/validation.ts";
 
 /**
  * Owns and advances the authoritative state of a single two-dimensional
@@ -97,16 +98,5 @@ export class KinematicSimulation {
     assertFiniteState(nextState, "Integrator result");
 
     this.#state = nextState;
-  }
-}
-
-function assertFiniteState(state: KinematicState, name: string): void {
-  assertFiniteVector(state.position, `${name} position`);
-  assertFiniteVector(state.velocity, `${name} velocity`);
-}
-
-function assertFiniteVector(vector: Vector2, name: string): void {
-  if (!Number.isFinite(vector.x) || !Number.isFinite(vector.y)) {
-    throw new RangeError(`${name} must contain finite components.`);
   }
 }
