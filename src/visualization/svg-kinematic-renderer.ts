@@ -1,4 +1,5 @@
 import type { KinematicBodySnapshot } from "../engine/mod.ts";
+import { ViewportTransform } from "./viewport-transform.ts";
 
 const ORIGIN_MARKER_HALF_SIZE = 5;
 
@@ -27,9 +28,7 @@ function assertPositiveFinite(value: number, name: string): void {
  * crosshair at its mapped display position.
  */
 export class SvgKinematicRenderer {
-  readonly #width: number;
-  readonly #height: number;
-  readonly #pixelsPerUnit: number;
+  readonly #transform: ViewportTransform;
   readonly #bodyRadius: number;
 
   /**
@@ -43,14 +42,11 @@ export class SvgKinematicRenderer {
    * @throws {RangeError} If any supplied value is not positive and finite.
    */
   public constructor(width: number, height: number, pixelsPerUnit: number, bodyRadius = 4) {
-    assertPositiveFinite(width, "Width");
-    assertPositiveFinite(height, "Height");
-    assertPositiveFinite(pixelsPerUnit, "Pixels per unit");
+    const transform = new ViewportTransform(width, height, pixelsPerUnit);
+
     assertPositiveFinite(bodyRadius, "Body radius");
 
-    this.#width = width;
-    this.#height = height;
-    this.#pixelsPerUnit = pixelsPerUnit;
+    this.#transform = transform;
     this.#bodyRadius = bodyRadius;
   }
 
@@ -65,9 +61,9 @@ export class SvgKinematicRenderer {
 
     return [
       `<svg xmlns="http://www.w3.org/2000/svg"`,
-      `  width="${this.#width}"`,
-      `  height="${this.#height}"`,
-      `  viewBox="0 0 ${this.#width} ${this.#height}">`,
+      `  width="${this.#transform.width}"`,
+      `  height="${this.#transform.height}"`,
+      `  viewBox="0 0 ${this.#transform.width} ${this.#transform.height}">`,
       this.#renderGrid(),
       this.#renderAxes(),
       this.#renderOrigin(),
@@ -79,15 +75,15 @@ export class SvgKinematicRenderer {
   }
 
   #renderBody(snapshot: KinematicBodySnapshot): string {
-    const x = this.#worldToDisplayX(snapshot.state.position.x);
-    const y = this.#worldToDisplayY(snapshot.state.position.y);
+    const x = this.#transform.worldToDisplayX(snapshot.state.position.x);
+    const y = this.#transform.worldToDisplayY(snapshot.state.position.y);
 
     return `  <circle data-body-id="${snapshot.id}" cx="${x}" cy="${y}" r="${this.#bodyRadius}" />`;
   }
 
   #renderOrigin(): string {
-    const x = this.#worldToDisplayX(0);
-    const y = this.#worldToDisplayY(0);
+    const x = this.#transform.worldToDisplayX(0);
+    const y = this.#transform.worldToDisplayY(0);
 
     return [
       `  <g data-world-origin="">`,
@@ -102,20 +98,20 @@ export class SvgKinematicRenderer {
   }
 
   #renderAxes(): string {
-    const originX = this.#worldToDisplayX(0);
-    const originY = this.#worldToDisplayY(0);
+    const originX = this.#transform.worldToDisplayX(0);
+    const originY = this.#transform.worldToDisplayY(0);
 
     return [
-      `  <line data-world-axis="x" x1="0" y1="${originY}" x2="${this.#width}" y2="${originY}" stroke="currentColor" opacity="0.45" />`,
-      `  <line data-world-axis="y" x1="${originX}" y1="0" x2="${originX}" y2="${this.#height}" stroke="currentColor" opacity="0.45" />`,
+      `  <line data-world-axis="x" x1="0" y1="${originY}" x2="${this.#transform.width}" y2="${originY}" stroke="currentColor" opacity="0.45" />`,
+      `  <line data-world-axis="y" x1="${originX}" y1="0" x2="${originX}" y2="${this.#transform.height}" stroke="currentColor" opacity="0.45" />`,
     ].join("\n");
   }
 
   #renderGrid(): string {
     const lines: string[] = [];
 
-    const halfWorldWidth = this.#width / (2 * this.#pixelsPerUnit);
-    const halfWorldHeight = this.#height / (2 * this.#pixelsPerUnit);
+    const halfWorldWidth = this.#transform.width / (2 * this.#transform.pixelsPerUnit);
+    const halfWorldHeight = this.#transform.height / (2 * this.#transform.pixelsPerUnit);
 
     const minWorldX = Math.ceil(-halfWorldWidth);
     const maxWorldX = Math.floor(halfWorldWidth);
@@ -128,9 +124,9 @@ export class SvgKinematicRenderer {
         continue;
       }
 
-      const x = this.#worldToDisplayX(worldX);
+      const x = this.#transform.worldToDisplayX(worldX);
 
-      lines.push(`    <line x1="${x}" y1="0" x2="${x}" y2="${this.#height}" />`);
+      lines.push(`    <line x1="${x}" y1="0" x2="${x}" y2="${this.#transform.height}" />`);
     }
 
     for (let worldY = minWorldY; worldY <= maxWorldY; worldY++) {
@@ -138,9 +134,9 @@ export class SvgKinematicRenderer {
         continue;
       }
 
-      const y = this.#worldToDisplayY(worldY);
+      const y = this.#transform.worldToDisplayY(worldY);
 
-      lines.push(`    <line x1="0" y1="${y}" x2="${this.#width}" y2="${y}" />`);
+      lines.push(`    <line x1="0" y1="${y}" x2="${this.#transform.width}" y2="${y}" />`);
     }
 
     return [
@@ -148,13 +144,5 @@ export class SvgKinematicRenderer {
       ...lines,
       `  </g>`,
     ].join("\n");
-  }
-
-  #worldToDisplayX(worldX: number): number {
-    return this.#width / 2 + worldX * this.#pixelsPerUnit;
-  }
-
-  #worldToDisplayY(worldY: number): number {
-    return this.#height / 2 - worldY * this.#pixelsPerUnit;
   }
 }

@@ -1,4 +1,5 @@
 import type { KinematicBodySnapshot } from "../engine/mod.ts";
+import { ViewportTransform } from "./viewport-transform.ts";
 
 interface CanvasDrawingContext {
   clearRect(x: number, y: number, width: number, height: number): void;
@@ -31,9 +32,7 @@ function assertPositiveFinite(value: number, name: string): void {
  */
 export class CanvasKinematicRenderer {
   readonly #context: CanvasDrawingContext;
-  readonly #width: number;
-  readonly #height: number;
-  readonly #pixelsPerUnit: number;
+  readonly #transform: ViewportTransform;
   readonly #bodyRadius: number;
 
   public constructor(
@@ -43,15 +42,12 @@ export class CanvasKinematicRenderer {
     pixelsPerUnit: number,
     bodyRadius = 4,
   ) {
-    assertPositiveFinite(width, "Width");
-    assertPositiveFinite(height, "Height");
-    assertPositiveFinite(pixelsPerUnit, "Pixels per unit");
+    const transform = new ViewportTransform(width, height, pixelsPerUnit);
+
     assertPositiveFinite(bodyRadius, "Body radius");
 
     this.#context = context;
-    this.#width = width;
-    this.#height = height;
-    this.#pixelsPerUnit = pixelsPerUnit;
+    this.#transform = transform;
     this.#bodyRadius = bodyRadius;
   }
 
@@ -61,7 +57,7 @@ export class CanvasKinematicRenderer {
    * @param snapshots The detached body observations to render.
    */
   public render(snapshots: readonly KinematicBodySnapshot[]): void {
-    this.#context.clearRect(0, 0, this.#width, this.#height);
+    this.#context.clearRect(0, 0, this.#transform.width, this.#transform.height);
 
     for (const snapshot of snapshots) {
       this.#renderBody(snapshot);
@@ -69,19 +65,11 @@ export class CanvasKinematicRenderer {
   }
 
   #renderBody(snapshot: KinematicBodySnapshot): void {
-    const x = this.#worldToDisplayX(snapshot.state.position.x);
-    const y = this.#worldToDisplayY(snapshot.state.position.y);
+    const x = this.#transform.worldToDisplayX(snapshot.state.position.x);
+    const y = this.#transform.worldToDisplayY(snapshot.state.position.y);
 
     this.#context.beginPath();
     this.#context.arc(x, y, this.#bodyRadius, 0, Math.PI * 2);
     this.#context.fill();
-  }
-
-  #worldToDisplayX(worldX: number): number {
-    return this.#width / 2 + worldX * this.#pixelsPerUnit;
-  }
-
-  #worldToDisplayY(worldY: number): number {
-    return this.#height / 2 - worldY * this.#pixelsPerUnit;
   }
 }

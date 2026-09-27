@@ -460,3 +460,33 @@ The browser host may cap unusually large frame deltas before adding them to the 
 Rendering currently uses the latest completed fixed-step state. Interpolation between simulation states is intentionally deferred until a concrete need justifies the additional state and presentation complexity.
 
 The current loop remains application/example code rather than being extracted into a reusable runtime abstraction. A dedicated simulation-loop abstraction should be introduced only if additional hosts or runtime requirements demonstrate that need.
+
+## D-049 — World-to-display mapping is owned by a shared viewport transform
+
+**Status:** Accepted
+
+SVG and Canvas independently demonstrated the same viewport configuration and world-to-display coordinate mapping.
+
+That concrete duplication is now extracted into `ViewportTransform`.
+
+`ViewportTransform` owns:
+
+- viewport width;
+- viewport height;
+- display units per world unit;
+- placement of the world origin at the viewport center;
+- conversion of world X coordinates into display X coordinates;
+- inversion and conversion of mathematical world Y coordinates into display Y coordinates;
+- validation of viewport dimensions and scale.
+
+The transform is deliberately independent from rendering technology. It contains no SVG or Canvas behavior.
+
+It is also independent from simulation-domain value types such as `Vector2`; coordinate conversion currently operates on numeric coordinates directly.
+
+`SvgKinematicRenderer` and `CanvasKinematicRenderer` create and own their respective `ViewportTransform` internally. The transform is not currently injected because the project has not demonstrated a need for independently replaceable transformation behavior.
+
+Existing renderer constructor shapes are preserved.
+
+The extraction does not introduce a renderer interface, camera abstraction, matrix framework, scene graph, pan, zoom, or inverse display-to-world mapping.
+
+Those capabilities should be introduced only when concrete visualization or interaction requirements establish their necessary shape.

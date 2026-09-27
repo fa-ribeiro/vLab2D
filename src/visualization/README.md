@@ -13,6 +13,8 @@ The project currently has two concrete visualization implementations:
 
 Both consume detached `KinematicBodySnapshot` values exposed by the simulation engine.
 
+`ViewportTransform` provides the world-to-display coordinate mapping shared by both renderers.
+
 Neither renderer advances simulation time or performs physics calculations.
 
 ## SVG renderer
@@ -111,9 +113,9 @@ The engine uses mathematical world coordinates:
 - positive X points right;
 - positive Y points up.
 
-Both SVG and Canvas use display coordinate systems where positive Y points downward.
+SVG and Canvas use display coordinate systems where positive Y points downward.
 
-The two current renderers therefore independently perform equivalent mappings:
+The shared `ViewportTransform` owns the conversion between those coordinate systems:
 
 ```text
 displayX = viewportWidth / 2 + worldX × pixelsPerUnit
@@ -121,9 +123,26 @@ displayX = viewportWidth / 2 + worldX × pixelsPerUnit
 displayY = viewportHeight / 2 - worldY × pixelsPerUnit
 ```
 
-The duplicated transformation is now a real architectural signal.
+The world origin maps to the center of the viewport.
 
-A shared viewport/world-to-display abstraction should be considered after the initial Canvas animation loop has been made stable. It should be extracted from the demonstrated needs of both renderers rather than designed as a speculative rendering framework.
+```mermaid
+flowchart LR
+    WORLD["World coordinates<br/>+X right<br/>+Y up"]
+
+    TRANSFORM["ViewportTransform"]
+
+    DISPLAY["Display coordinates<br/>+X right<br/>+Y down"]
+
+    WORLD --> TRANSFORM --> DISPLAY
+```
+
+`ViewportTransform` contains no rendering behavior.
+
+It stores only immutable viewport geometry and scale and exposes numeric coordinate conversion operations.
+
+Both `SvgKinematicRenderer` and `CanvasKinematicRenderer` own a transform internally while retaining their existing public constructor shapes.
+
+This abstraction was introduced only after both concrete renderers independently demonstrated the same coordinate-mapping responsibility.
 
 ## Rendering roles
 
@@ -149,8 +168,16 @@ The two concrete implementations should continue to teach us which concepts are 
 
 ## Direction
 
-SVG and Canvas now provide two concrete implementations of the same world-to-display coordinate conversion.
+The next visualization step is to bring the spatial reference information already available in SVG into the live Canvas renderer.
 
-The next visualization step is to inspect that demonstrated duplication and extract the smallest reusable viewport/world-to-display transformation needed by both renderers.
+Canvas should gain:
+
+- an integer-coordinate grid;
+- world X and Y axes;
+- a world-origin marker.
+
+Those elements should use `ViewportTransform` for their coordinate placement.
+
+This will make the animated view easier to interpret while further exercising the shared viewport boundary.
 
 Pan, zoom, renderer interfaces, richer diagnostics, and other visualization abstractions remain deferred until concrete requirements establish their shape.

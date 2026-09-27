@@ -63,9 +63,12 @@ src/
 │   └── mod.ts
 │
 └── visualization/
-    └── svg-kinematic-renderer.ts
+    ├── canvas-kinematic-renderer.ts
+    ├── svg-kinematic-renderer.ts
+    └── viewport-transform.ts
 
 examples/
+├── kinematic-world-canvas/
 └── kinematic-world-svg.ts
 ```
 
@@ -548,15 +551,16 @@ Visualization lives outside the engine:
 src/visualization/
 ```
 
-The current renderer is:
+The current concrete renderers are:
 
 ```text
 SvgKinematicRenderer
+CanvasKinematicRenderer
 ```
 
-Its input is detached engine observation data.
+Both consume detached engine observations.
 
-Its output is SVG text.
+Their output mechanisms differ:
 
 ```mermaid
 flowchart LR
@@ -565,23 +569,28 @@ flowchart LR
     SNAP["readonly KinematicBodySnapshot[]"]
 
     SVG["SvgKinematicRenderer"]
+    CANVAS["CanvasKinematicRenderer"]
 
     DOC["SVG document"]
+    CTX["Canvas 2D context"]
 
     WORLD -->|"getBodySnapshots()"| SNAP
-    SNAP --> SVG
-    SVG --> DOC
+
+    SNAP --> SVG --> DOC
+    SNAP --> CANVAS --> CTX
 ```
 
-The renderer does not:
+Neither renderer:
 
-- advance simulation time;
-- calculate acceleration;
-- integrate velocity or position;
-- modify world state;
-- inspect the world's private storage.
+- advances simulation time;
+- calculates acceleration;
+- integrates velocity or position;
+- modifies world state;
+- inspects the world's private storage.
 
-Its responsibility starts after the simulation state has already been produced.
+Their responsibility starts after simulation state has already been produced.
+
+The two renderers intentionally retain different output models. Their existence does not currently justify a generic renderer interface.
 
 ---
 
@@ -594,22 +603,26 @@ The engine uses mathematical world coordinates:
 +y → up
 ```
 
-SVG uses display coordinates where positive Y points downward.
+The current display technologies use coordinates where positive Y points downward.
 
-The renderer therefore performs a display transformation:
+World-to-display conversion is therefore owned by the shared `ViewportTransform`.
 
 ```mermaid
-flowchart LR
+flowchart TD
     WORLD["World coordinates<br/>+X right<br/>+Y up"]
 
-    MAP["World-to-display mapping"]
+    TRANSFORM["ViewportTransform<br/>width<br/>height<br/>pixelsPerUnit"]
 
-    DISPLAY["SVG coordinates<br/>+X right<br/>+Y down"]
+    SVG["SvgKinematicRenderer"]
+    CANVAS["CanvasKinematicRenderer"]
 
-    WORLD --> MAP --> DISPLAY
+    WORLD --> TRANSFORM
+
+    TRANSFORM --> SVG
+    TRANSFORM --> CANVAS
 ```
 
-Currently:
+The current mapping is:
 
 ```text
 displayX = width / 2 + worldX × pixelsPerUnit
@@ -617,15 +630,26 @@ displayX = width / 2 + worldX × pixelsPerUnit
 displayY = height / 2 - worldY × pixelsPerUnit
 ```
 
+The world origin therefore appears at the center of the viewport.
+
 The minus sign in the Y mapping performs the coordinate-system inversion.
 
-At present this transformation is private to `SvgKinematicRenderer`.
+`ViewportTransform` owns only viewport geometry, scale, validation, and numeric coordinate conversion.
 
-That duplication has **not yet appeared elsewhere**, so a shared viewport abstraction has intentionally not been extracted.
+It deliberately does not know about:
 
-A future Canvas renderer is expected to provide the second concrete use case.
+```text
+SVG
+Canvas
+KinematicWorld
+KinematicBodySnapshot
+Vector2
+rendering primitives
+```
 
-At that point a reusable transformation component may become justified.
+Both renderers construct their transform internally from their existing viewport constructor arguments.
+
+The transform was extracted only after SVG and Canvas independently demonstrated the same coordinate-mapping responsibility.
 
 ---
 
@@ -749,9 +773,11 @@ External engine consumers are expected to import from `src/engine/mod.ts`.
 
 ### Abstractions are introduced from concrete needs
 
-There is no generalized renderer hierarchy, viewport framework, event bus, entity-component system, or dependency-injection container.
+`ViewportTransform` was introduced only after SVG and Canvas independently demonstrated the same viewport geometry and coordinate-conversion responsibility.
 
-None has yet been justified by the implementation.
+There is still no generalized renderer hierarchy, camera framework, event bus, entity-component system, or dependency-injection container.
+
+Those abstractions have not been justified by the implementation.
 
 ---
 
@@ -799,13 +825,13 @@ It is useful to keep these categories separate.
 ✓ detached body observations
 ✓ atomic world stepping
 ✓ independent SVG visualization
-✓ world-to-SVG coordinate mapping
-✓ external host/example composition
 ✓ independent Canvas 2D visualization
+✓ shared ViewportTransform
+✓ shared world-to-display coordinate mapping
+✓ external host/example composition
 ✓ browser requestAnimationFrame host
 ✓ fixed-timestep accumulator loop
 ✓ simulation/render cadence separation
-✓ duplicated SVG/Canvas world-to-display mapping
 ```
 
 ### Established architectural principles
@@ -825,8 +851,9 @@ It is useful to keep these categories separate.
 Possible future capabilities include:
 
 ```text
-? reusable viewport/world-to-display transform
+? Canvas grid, axes and origin reference rendering
 ? pan and zoom
+? inverse display-to-world mapping
 ? experiment orchestration
 ? synchronized multiple worlds
 ? UI controls
@@ -841,44 +868,62 @@ These are directions, not promises about concrete class or folder structure.
 
 ---
 
-## 19. Architectural pressure: shared world-to-display transformation
+## 19. Shared viewport transformation
 
-SVG and Canvas now independently implement the same world-to-display transformation.
+SVG and Canvas previously implemented the same world-to-display transformation independently.
 
-This duplication is concrete evidence rather than a predicted future requirement:
+That duplication produced the evidence needed to extract `ViewportTransform`.
 
 ```mermaid
 flowchart TD
-    SNAP["Detached world snapshots"]
+    WORLD["World coordinates"]
+
+    TRANSFORM["ViewportTransform"]
 
     SVG["SvgKinematicRenderer"]
     CANVAS["CanvasKinematicRenderer"]
 
-    SVGTRANS["SVG world/display mapping"]
-    CANVASTRANS["Canvas world/display mapping"]
+    WORLD --> TRANSFORM
 
-    SNAP --> SVG
-    SNAP --> CANVAS
-
-    SVG --> SVGTRANS
-    CANVAS --> CANVASTRANS
+    TRANSFORM --> SVG
+    TRANSFORM --> CANVAS
 ```
 
-Both renderers currently need the same concepts:
+The shared transform owns:
 
 - viewport width and height;
 - pixels per world unit;
-- the world origin mapped to the viewport center;
+- placement of the world origin at the viewport center;
 - inversion between mathematical positive Y and display positive Y;
-- conversion from world coordinates to display coordinates.
+- conversion from world coordinates into display coordinates.
 
-The duplication now justifies reviewing whether those concepts belong in a small shared transformation component.
+The renderers retain responsibility for rendering-specific behavior.
 
-The extraction should remain narrower than a generic rendering abstraction. SVG and Canvas still have different rendering mechanisms and output models, and the project has not demonstrated a need for a renderer interface, drawing backend, scene graph, or camera framework.
+For example:
 
-A shared transformation should first represent only the coordinate behavior already required by both concrete renderers.
+```text
+ViewportTransform
+    coordinate geometry
 
-Pan and zoom may later extend that boundary once the basic shared transformation has been proven.
+SvgKinematicRenderer
+    SVG document generation
+    grid / axes / origin SVG elements
+    body SVG elements
+
+CanvasKinematicRenderer
+    Canvas frame clearing
+    body drawing
+```
+
+The transform is intentionally immutable and is created internally by each renderer.
+
+It is not currently an injected strategy because the project has not demonstrated a need to substitute transformation behavior independently from renderer construction.
+
+The abstraction also remains independent from engine-domain values such as `Vector2`; its coordinate operations accept and return numbers.
+
+No renderer hierarchy, camera model, transformation matrix framework, pan/zoom system, or inverse coordinate mapping has been introduced.
+
+Those capabilities remain available for later evolution when concrete requirements make their shape clear.
 
 ---
 

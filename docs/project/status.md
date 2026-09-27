@@ -2,7 +2,7 @@
 
 ## Current checkpoint
 
-vLab2D now has a small multi-body simulation engine, static SVG visualization, and live browser animation through Canvas 2D with simulation time decoupled from display refresh rate.
+vLab2D now has a small multi-body simulation engine, reproducible SVG visualization, live Canvas 2D animation with fixed simulation timing, and a shared viewport transformation used by both rendering paths.
 
 ### Simulation engine
 
@@ -28,9 +28,62 @@ World stepping remains atomic: candidate states for all bodies are calculated an
 
 Visualization remains outside the simulation engine.
 
-Two concrete rendering paths now consume detached engine observations.
+Two concrete rendering paths consume detached engine observations:
 
-#### SVG
+- `SvgKinematicRenderer` for reproducible static output;
+- `CanvasKinematicRenderer` for live browser rendering.
+
+Neither renderer advances simulation time or mutates engine state.
+
+### Shared viewport transformation
+
+`ViewportTransform` now owns the world-to-display coordinate mapping shared by SVG and Canvas.
+
+It stores immutable viewport configuration:
+
+- viewport width;
+- viewport height;
+- display units per world unit.
+
+It maps the mathematical world coordinate system:
+
+```text
++x → right
++y → up
+```
+
+into display coordinates where positive Y points downward:
+
+```text
+displayX = width / 2 + worldX × pixelsPerUnit
+
+displayY = height / 2 - worldY × pixelsPerUnit
+```
+
+The world origin therefore maps to the center of the viewport.
+
+```mermaid
+flowchart TD
+    WORLD["World coordinates"]
+
+    TRANSFORM["ViewportTransform"]
+
+    SVG["SvgKinematicRenderer"]
+    CANVAS["CanvasKinematicRenderer"]
+
+    WORLD --> TRANSFORM
+
+    TRANSFORM --> SVG
+    TRANSFORM --> CANVAS
+```
+
+The transform contains no rendering behavior and has no dependency on SVG, Canvas, or engine-domain types such as `Vector2`.
+
+Both renderers continue to expose their existing constructors and create their viewport transformation internally.
+
+Viewport validation for width, height, and scale now belongs to `ViewportTransform`. Renderer-specific validation, such as body radius, remains with the renderer that owns that concept.
+
+### SVG
 
 `SvgKinematicRenderer` produces static SVG output containing:
 
@@ -39,16 +92,18 @@ Two concrete rendering paths now consume detached engine observations.
 - X and Y axes;
 - a world-origin marker.
 
+Body positions, grid positions, axes, and origin placement now use `ViewportTransform`.
+
 SVG remains useful for snapshots, debugging captures, exports, and documentation images.
 
-#### Canvas
+### Canvas
 
-`CanvasKinematicRenderer` draws body snapshots into a Canvas 2D drawing context.
+`CanvasKinematicRenderer` draws detached body snapshots into a Canvas 2D drawing context.
 
 It:
 
 - clears each previous frame;
-- converts mathematical world positions into display coordinates;
+- maps body positions using `ViewportTransform`;
 - draws observed bodies;
 - performs no simulation calculations;
 - does not own or mutate engine state.
@@ -59,15 +114,13 @@ The browser example under:
 examples/kinematic-world-canvas/
 ```
 
-provides the first live visualization path.
+provides the live visualization path.
 
 ### Fixed-timestep browser loop
 
-Browser rendering is driven by `requestAnimationFrame`, but simulation advancement is no longer tied to the number of rendered frames.
+Browser rendering is driven by `requestAnimationFrame`, but simulation advancement is independent from display refresh rate.
 
-The browser callback timestamp is used to measure real elapsed time.
-
-That elapsed time is accumulated and consumed in fixed simulation steps:
+The browser callback timestamp measures real elapsed time. That time is accumulated and consumed in fixed simulation steps:
 
 ```mermaid
 flowchart LR
@@ -88,75 +141,10 @@ The current simulation timestep is:
 1 / 60 second
 ```
 
-A fast display may render frames in which no simulation step occurs. A slow display may require multiple fixed simulation steps before one render.
+A fast display may render frames without advancing the simulation. A slower display may require multiple fixed simulation steps before one render.
 
-The world itself remains unaware of browser timing and rendering cadence.
+The world remains unaware of browser timing and rendering cadence.
 
-The browser host also limits how much delayed real time may be added to the accumulator from one frame. This prevents a long-suspended or heavily delayed browser tab from attempting an excessive simulation catch-up when it resumes.
+The browser host limits unusually large frame deltas before adding them to the accumulator so a delayed or suspended tab does not attempt excessive simulation catch-up.
 
-Interpolation between fixed simulation states is deliberately not implemented yet.
-
-### Browser development workflow
-
-The Canvas example is bundled for the browser using Deno.
-
-The available tasks now include:
-
-```text
-canvas:build
-canvas:watch
-canvas:serve
-```
-
-`canvas:watch` automatically rebuilds the browser bundle when TypeScript source changes, while the generated files remain ignored derived artifacts.
-
-A typical development setup is:
-
-```text
-source edit
-    ↓
-deno task canvas:watch
-    ↓
-automatic browser bundle
-    ↓
-deno task canvas:serve
-    ↓
-browser refresh
-```
-
-### Emerging visualization duplication
-
-SVG and Canvas now independently implement the same essential world-to-display mapping:
-
-```text
-displayX = viewportWidth / 2 + worldX × pixelsPerUnit
-
-displayY = viewportHeight / 2 - worldY × pixelsPerUnit
-```
-
-This is no longer hypothetical duplication: two concrete renderers now require the same transformation semantics.
-
-No generic renderer abstraction has been introduced.
-
-## Next step
-
-Review the duplicated SVG and Canvas coordinate transformations and extract the smallest reusable world-to-display / viewport transformation that both renderers genuinely need.
-
-The first shared transformation should cover only requirements already demonstrated by the two renderers, such as:
-
-- viewport width and height;
-- pixels per world unit;
-- world origin placement;
-- mathematical-to-display Y-axis inversion;
-- conversion of world coordinates into display coordinates.
-
-It should not yet introduce:
-
-- pan;
-- zoom;
-- cameras;
-- renderer interfaces;
-- scene graphs;
-- generalized drawing primitives.
-
-Once SVG and Canvas both use the shared transformation successfully, pan and zoom can become a later extension built on a proven coordinate boundary.
+Interpolation between fixed simulation states remains deliberatel
