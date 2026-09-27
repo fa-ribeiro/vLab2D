@@ -13,7 +13,7 @@ The project currently has two concrete visualization implementations:
 
 Both consume detached `KinematicBodySnapshot` values exposed by the simulation engine.
 
-`ViewportTransform` provides the world-to-display coordinate mapping shared by both renderers.
+`ViewportTransform` provides the world-to-display coordinate mapping, continuous visible-world geometry, and mutable world-space viewport center shared by both renderers.
 
 Neither renderer advances simulation time or performs physics calculations.
 
@@ -38,6 +38,8 @@ It currently renders:
 3. a vertical world Y axis;
 4. a world-origin marker;
 5. body markers above the spatial reference elements.
+
+The SVG renderer also exposes `setViewportCenter(...)` for the shared programmatic world-space centering capability.
 
 The SVG renderer is useful as a:
 
@@ -87,7 +89,9 @@ flowchart LR
 
 The grid omits zero-coordinate lines because those positions are represented by the world axes.
 
-Spatial references and body positions use the shared `ViewportTransform`.
+Spatial references and body positions use the shared `ViewportTransform`. `setViewportCenter(...)` changes which world position occupies the display center, while `panViewportBy(...)` accepts finite Canvas display-space deltas and converts them into world-center movement.
+
+The live browser host owns pointer dragging. It tracks one active pointer, uses pointer capture, converts CSS-pixel movement into Canvas drawing-buffer units, and forwards only display-space deltas to `panViewportBy(...)`. The renderer itself does not depend on Pointer Events or other DOM input APIs.
 
 Clearing the previous frame remains deliberate. Trails should become an explicit visualization capability rather than appearing accidentally because old frames were left on the canvas.
 
@@ -126,12 +130,12 @@ SVG and Canvas use display coordinate systems where positive Y points downward.
 The shared `ViewportTransform` owns the conversion between those coordinate systems:
 
 ```text
-displayX = viewportWidth / 2 + worldX × pixelsPerUnit
+displayX = viewportWidth / 2 + (worldX - centerWorldX) × pixelsPerUnit
 
-displayY = viewportHeight / 2 - worldY × pixelsPerUnit
+displayY = viewportHeight / 2 - (worldY - centerWorldY) × pixelsPerUnit
 ```
 
-The world origin maps to the center of the viewport.
+The configured world-space center maps to the center of the viewport. The world origin occupies that position by default.
 
 ```mermaid
 flowchart LR
@@ -146,7 +150,7 @@ flowchart LR
 
 `ViewportTransform` contains no rendering behavior.
 
-It stores immutable viewport geometry and scale, exposes numeric coordinate conversion operations, and describes the continuous world-space extent visible through the viewport:
+It stores immutable viewport dimensions and scale together with a mutable world-space center, exposes numeric coordinate conversion operations, and describes the continuous world-space extent visible through the viewport:
 
 ```text
 minWorldX
@@ -155,7 +159,7 @@ minWorldY
 maxWorldY
 ```
 
-These bounds are viewport geometry rather than grid policy. Each renderer remains responsible for choosing its discrete grid coordinates by applying `ceil` / `floor`, skipping zero where the world axes own that coordinate, and drawing with renderer-specific primitives.
+These bounds move with the world-space center and remain viewport geometry rather than grid policy. Each renderer remains responsible for choosing its discrete grid coordinates by applying `ceil` / `floor`, skipping zero where the world axes own that coordinate, and drawing with renderer-specific primitives.
 
 ```mermaid
 flowchart TD
@@ -197,10 +201,8 @@ The two concrete implementations should continue to teach us which concepts are 
 
 ## Direction
 
-The next visualization step is Canvas-first panning at the viewport-geometry level.
+Programmatic viewport centering is now supported by both concrete renderers, and the Canvas browser example supports pointer-drag panning.
 
-`ViewportTransform` should first learn to represent a world-space viewport center other than `(0, 0)`. That center should affect both world-to-display mapping and the continuous visible world bounds.
+The next visualization step is inverse display-to-world mapping with a concrete Canvas use case: report the world coordinate underneath the pointer. This should extend `ViewportTransform` only with the smallest inverse scalar operations required by that feature.
 
-The first version should be programmatic and testable rather than interactive. Canvas should prove the capability first; SVG should consume the same viewport model where doing so remains natural.
-
-Mouse/pointer panning, zoom, cameras, inverse display-to-world mapping, renderer interfaces, richer diagnostics, and generalized rendering abstractions remain deferred until concrete requirements establish their shape.
+The browser host should remain responsible for converting DOM pointer coordinates into Canvas drawing-buffer coordinates before world-space conversion. Body picking, selection, zoom, cameras, renderer interfaces, richer diagnostics, and generalized rendering abstractions remain deferred until concrete requirements establish their shape.

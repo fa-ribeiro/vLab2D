@@ -468,7 +468,7 @@ CanvasKinematicRenderer
     body drawing
 ```
 
-Both renderers use `ViewportTransform` for coordinate placement while retaining rendering-technology-specific drawing behavior.
+Both renderers use `ViewportTransform` for coordinate placement while retaining rendering-technology-specific drawing behavior. Both expose programmatic viewport centering. Canvas additionally accepts display-space pan deltas, while browser pointer-event orchestration remains outside the renderer in host/example code.
 
 Canvas and canvas-like interactive rendering are the primary visualization target. SVG remains a secondary static companion where maintaining support is natural and reasonably inexpensive. Shared abstractions should represent genuinely common concepts; SVG compatibility must not force Canvas into a weaker or less useful design.
 
@@ -505,14 +505,14 @@ flowchart TD
 The current mapping is:
 
 ```text
-displayX = width / 2 + worldX × pixelsPerUnit
+displayX = width / 2 + (worldX - centerWorldX) × pixelsPerUnit
 
-displayY = height / 2 - worldY × pixelsPerUnit
+displayY = height / 2 - (worldY - centerWorldY) × pixelsPerUnit
 ```
 
-The world origin therefore appears at the center of the viewport.
+The configured world-space center therefore appears at the center of the viewport; `(0, 0)` remains the default center.
 
-`ViewportTransform` owns viewport geometry, scale, validation, numeric coordinate conversion, and the continuous world-space extent visible through the viewport.
+`ViewportTransform` owns viewport dimensions, scale, mutable world-space center, validation, numeric coordinate conversion, and the continuous world-space extent visible through the viewport.
 
 The visible extent is exposed through scalar values equivalent to:
 
@@ -525,9 +525,9 @@ maxWorldY
 
 It deliberately does not know about integer-grid selection, SVG, Canvas, `KinematicWorld`, snapshots, `Vector2`, or rendering primitives.
 
-Both renderers construct their transform internally from their existing viewport constructor arguments.
+Both renderers construct and retain their transform internally. Renderer methods expose semantic viewport operations without leaking the transform object itself.
 
-The transform was extracted only after SVG and Canvas independently demonstrated the same coordinate-mapping responsibility.
+The transform was extracted only after SVG and Canvas independently demonstrated the same coordinate-mapping responsibility. The mutable center extends that existing viewport responsibility rather than introducing a separate camera object.
 
 ---
 
@@ -577,6 +577,19 @@ sequenceDiagram
 Variable browser frame delta is used as scheduling input, not as the numerical integration timestep.
 
 The renderer remains unaware of `requestAnimationFrame` and of simulation stepping.
+
+The host also owns pointer-drag orchestration for panning. It tracks the active pointer, uses browser pointer capture, converts movement from CSS pixels into Canvas drawing-buffer units, and calls `CanvasKinematicRenderer.panViewportBy(...)`. The renderer therefore remains independent from DOM pointer-event APIs.
+
+```mermaid
+flowchart LR
+    POINTER["Pointer Events"]
+    HOST["Canvas example / host"]
+    DELTA["display-space delta"]
+    RENDERER["CanvasKinematicRenderer"]
+    TRANSFORM["ViewportTransform"]
+
+    POINTER --> HOST --> DELTA --> RENDERER --> TRANSFORM
+```
 
 ---
 
@@ -661,6 +674,10 @@ It is useful to keep these categories separate.
 ✓ shared ViewportTransform
 ✓ shared world-to-display coordinate mapping
 ✓ shared continuous visible world bounds
+✓ mutable world-space viewport center
+✓ programmatic viewport centering in Canvas and SVG
+✓ Canvas display-space panning operation
+✓ pointer-drag panning in the Canvas browser host
 ✓ equivalent SVG and Canvas spatial references
 ✓ Canvas integer grid
 ✓ Canvas world axes
@@ -688,9 +705,8 @@ It is useful to keep these categories separate.
 Possible future capabilities include:
 
 ```text
-? programmatic viewport panning through a non-origin world center
-? interactive pan and zoom
-? inverse display-to-world mapping
+? inverse display-to-world mapping and pointer world-coordinate readout
+? zoom
 ? experiment orchestration
 ? synchronized multiple worlds
 ? UI controls
@@ -728,13 +744,13 @@ The shared transform owns:
 
 - viewport width and height;
 - pixels per world unit;
-- placement of the world origin at the viewport center;
+- a mutable world-space position mapped to the viewport center;
 - inversion between mathematical positive Y and display positive Y;
 - conversion from world coordinates into display coordinates.
 
 The renderers retain responsibility for rendering-specific behavior.
 
-The transform is intentionally immutable and is created internally by each renderer.
+Viewport dimensions and scale remain immutable, while the world-space center is mutable so the visible region can move without reconstructing the renderer. The transform is created internally by each renderer.
 
 It is not currently an injected strategy because the project has not demonstrated a need to substitute transformation behavior independently from renderer construction.
 
@@ -753,7 +769,7 @@ minWorldY
 maxWorldY
 ```
 
-With the current centered viewport, these bounds are derived from viewport dimensions and scale without allocating a separate bounds object.
+These bounds are derived from viewport dimensions, scale, and the current world-space center without allocating a separate bounds object.
 
 The responsibility boundary is:
 
@@ -775,9 +791,11 @@ flowchart TD
 
 Continuous extent belongs to viewport geometry. Discrete grid selection remains renderer behavior: each renderer decides which integer coordinates to draw, reserves zero for the world axes, applies presentation styling, and uses its own drawing technology.
 
-This keeps `ViewportTransform` useful beyond grid rendering while avoiding a grid-aware viewport abstraction. It also prepares the Canvas-first viewport model for panning, where visible bounds will no longer be symmetric around the world origin.
+This keeps `ViewportTransform` useful beyond grid rendering while avoiding a grid-aware viewport abstraction. Panning now changes the world-space center, so visible bounds are no longer required to be symmetric around the world origin.
 
-No `WorldBounds` value type, inverse display-to-world mapping, renderer hierarchy, camera model, transformation matrix framework, pan interaction, or zoom system has been introduced.
+`CanvasKinematicRenderer.panViewportBy(...)` translates display-space drag displacement into a center change. The browser host owns Pointer Events and CSS-pixel conversion, preserving the renderer's independence from DOM input mechanics.
+
+No `WorldBounds` value type, inverse display-to-world mapping, renderer hierarchy, camera model, transformation matrix framework, or zoom system has been introduced.
 
 ---
 

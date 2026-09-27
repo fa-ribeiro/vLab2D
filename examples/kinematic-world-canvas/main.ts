@@ -28,6 +28,61 @@ world.createBody(new KinematicState(new Vector2(4, 2), new Vector2(-1, 2)));
 
 const renderer = new CanvasKinematicRenderer(context, canvas.width, canvas.height, 40, 6);
 
+renderer.setViewportCenter(3, 2);
+
+let activePointerId: number | undefined;
+let previousPointerX = 0;
+let previousPointerY = 0;
+
+canvas.addEventListener("pointerdown", (event) => {
+  if (event.button !== 0 || activePointerId !== undefined) {
+    return;
+  }
+
+  activePointerId = event.pointerId;
+  previousPointerX = event.clientX;
+  previousPointerY = event.clientY;
+
+  canvas.setPointerCapture(event.pointerId);
+});
+
+canvas.addEventListener("pointermove", (event) => {
+  if (event.pointerId !== activePointerId) {
+    return;
+  }
+
+  const deltaClientX = event.clientX - previousPointerX;
+  const deltaClientY = event.clientY - previousPointerY;
+
+  previousPointerX = event.clientX;
+  previousPointerY = event.clientY;
+
+  const bounds = canvas.getBoundingClientRect();
+
+  const deltaDisplayX = (deltaClientX * canvas.width) / bounds.width;
+  const deltaDisplayY = (deltaClientY * canvas.height) / bounds.height;
+
+  renderer.panViewportBy(deltaDisplayX, deltaDisplayY);
+});
+
+function endPointerDrag(pointerId: number): void {
+  if (pointerId === activePointerId) {
+    activePointerId = undefined;
+  }
+}
+
+canvas.addEventListener("pointerup", (event) => {
+  endPointerDrag(event.pointerId);
+});
+
+canvas.addEventListener("pointercancel", (event) => {
+  endPointerDrag(event.pointerId);
+});
+
+canvas.addEventListener("lostpointercapture", (event) => {
+  endPointerDrag(event.pointerId);
+});
+
 const FIXED_TIMESTEP = 1 / 60;
 const MAX_FRAME_DELTA = 0.25;
 

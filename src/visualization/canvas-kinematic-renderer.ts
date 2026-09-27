@@ -27,12 +27,6 @@ interface CanvasDrawingContext {
   globalAlpha: number;
 }
 
-function assertPositiveFinite(value: number, name: string): void {
-  if (!Number.isFinite(value) || value <= 0) {
-    throw new RangeError(`${name} must be a positive finite number.`);
-  }
-}
-
 /**
  * Renders kinematic body snapshots into a Canvas 2D drawing context.
  *
@@ -40,7 +34,7 @@ function assertPositiveFinite(value: number, name: string): void {
  * advance, or mutate simulation state.
  *
  * Mathematical world coordinates are mapped to Canvas display coordinates with
- * the world origin at the center of the viewport:
+ * the configured viewport world position at the center of the display.
  *
  * - positive world X maps right;
  * - positive world Y maps up;
@@ -65,6 +59,38 @@ export class CanvasKinematicRenderer {
     this.#context = context;
     this.#transform = transform;
     this.#bodyRadius = bodyRadius;
+  }
+
+  /**
+   * Changes the world position shown at the center of the viewport.
+   *
+   * @param worldX The world X coordinate to place at the viewport center.
+   * @param worldY The world Y coordinate to place at the viewport center.
+   * @throws {RangeError} If either coordinate is not finite.
+   */
+  public setViewportCenter(worldX: number, worldY: number): void {
+    this.#transform.setCenter(worldX, worldY);
+  }
+
+  /**
+   * Pans the viewport by a displacement expressed in display units.
+   *
+   * Positive X moves the displayed world to the right.
+   * Positive Y moves the displayed world downward.
+   *
+   * @param deltaX Horizontal display-space movement.
+   * @param deltaY Vertical display-space movement.
+   * @throws {RangeError} If either delta is not finite.
+   */
+  public panViewportBy(deltaX: number, deltaY: number): void {
+    if (!Number.isFinite(deltaX) || !Number.isFinite(deltaY)) {
+      throw new RangeError("Viewport pan delta must be finite.");
+    }
+
+    this.#transform.setCenter(
+      this.#transform.centerWorldX - deltaX / this.#transform.pixelsPerUnit,
+      this.#transform.centerWorldY + deltaY / this.#transform.pixelsPerUnit,
+    );
   }
 
   /**
@@ -154,5 +180,11 @@ export class CanvasKinematicRenderer {
     this.#context.moveTo(x1, y1);
     this.#context.lineTo(x2, y2);
     this.#context.stroke();
+  }
+}
+
+function assertPositiveFinite(value: number, name: string): void {
+  if (!Number.isFinite(value) || value <= 0) {
+    throw new RangeError(`${name} must be a positive finite number.`);
   }
 }

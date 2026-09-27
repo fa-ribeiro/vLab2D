@@ -5,12 +5,6 @@ const ORIGIN_MARKER_HALF_SIZE = 5;
 const GRID_OPACITY = 0.15;
 const AXIS_OPACITY = 0.45;
 
-function assertPositiveFinite(value: number, name: string): void {
-  if (!Number.isFinite(value) || value <= 0) {
-    throw new RangeError(`${name} must be a positive finite number.`);
-  }
-}
-
 /**
  * Renders kinematic body snapshots and spatial reference information into an
  * SVG document.
@@ -50,6 +44,17 @@ export class SvgKinematicRenderer {
 
     this.#transform = transform;
     this.#bodyRadius = bodyRadius;
+  }
+
+  /**
+   * Changes the world position shown at the center of the viewport.
+   *
+   * @param worldX The world X coordinate to place at the viewport center.
+   * @param worldY The world Y coordinate to place at the viewport center.
+   * @throws {RangeError} If either coordinate is not finite.
+   */
+  public setViewportCenter(worldX: number, worldY: number): void {
+    this.#transform.setCenter(worldX, worldY);
   }
 
   /**
@@ -143,5 +148,11 @@ export class SvgKinematicRenderer {
       ...lines,
       `  </g>`,
     ].join("\n");
+  }
+}
+
+function assertPositiveFinite(value: number, name: string): void {
+  if (!Number.isFinite(value) || value <= 0) {
+    throw new RangeError(`${name} must be a positive finite number.`);
   }
 }

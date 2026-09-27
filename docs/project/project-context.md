@@ -91,6 +91,8 @@ Canvas and canvas-like interactive rendering are the primary visualization targe
 
 Visualization design should not collapse to the lowest common denominator between Canvas and SVG. If a useful Canvas capability does not map naturally to SVG, prefer the Canvas design and let SVG adapt, provide a reduced/static equivalent, or omit that feature rather than compromising the primary interactive path. Shared abstractions should represent concepts that are genuinely common rather than mechanisms introduced only to force renderer parity.
 
+Viewport geometry includes a movable world-space center shared by the concrete renderers. Browser interaction mechanics such as pointer events, pointer capture, and CSS-pixel conversion belong to host/application code rather than to the renderer or simulation engine; renderers should receive semantic viewport operations or display-space movement rather than DOM event objects.
+
 The same simulation(s) may eventually be represented in different ways, for example:
 
 - one world normally

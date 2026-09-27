@@ -55,3 +55,57 @@ Deno.test("ViewportTransform exposes the visible world extent", () => {
   assertEquals(transform.minWorldY, -1.5);
   assertEquals(transform.maxWorldY, 1.5);
 });
+
+Deno.test("ViewportTransform initially centers the world origin", () => {
+  const transform = new ViewportTransform(200, 100, 10);
+
+  assertEquals(transform.centerWorldX, 0);
+  assertEquals(transform.centerWorldY, 0);
+});
+
+Deno.test("ViewportTransform can change its world-space center", () => {
+  const transform = new ViewportTransform(200, 100, 10);
+
+  transform.setCenter(3, -2);
+
+  assertEquals(transform.centerWorldX, 3);
+  assertEquals(transform.centerWorldY, -2);
+});
+
+Deno.test("ViewportTransform rejects an invalid world-space center atomically", () => {
+  const transform = new ViewportTransform(200, 100, 10);
+
+  transform.setCenter(3, -2);
+
+  assertThrows(
+    () => transform.setCenter(10, Number.NaN),
+    RangeError,
+    "Center world Y must be finite.",
+  );
+
+  assertEquals(transform.centerWorldX, 3);
+  assertEquals(transform.centerWorldY, -2);
+});
+
+Deno.test("ViewportTransform maps its world-space center to the viewport center", () => {
+  const transform = new ViewportTransform(200, 100, 10);
+
+  transform.setCenter(3, -2);
+
+  assertEquals(transform.worldToDisplayX(3), 100);
+  assertEquals(transform.worldToDisplayY(-2), 50);
+
+  assertEquals(transform.worldToDisplayX(5), 120);
+  assertEquals(transform.worldToDisplayY(1), 20);
+});
+
+Deno.test("ViewportTransform visible world extent follows its world-space center", () => {
+  const transform = new ViewportTransform(100, 60, 20);
+
+  transform.setCenter(10, -4);
+
+  assertEquals(transform.minWorldX, 7.5);
+  assertEquals(transform.maxWorldX, 12.5);
+  assertEquals(transform.minWorldY, -5.5);
+  assertEquals(transform.maxWorldY, -2.5);
+});

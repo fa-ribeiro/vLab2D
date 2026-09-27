@@ -113,3 +113,38 @@ Deno.test("SvgKinematicRenderer leaves zero-coordinate lines to the world axes",
 
   assert(!svg.includes('<line x1="0" y1="30" x2="100" y2="30" />'));
 });
+
+Deno.test("SvgKinematicRenderer renders relative to the viewport world center", () => {
+  const renderer = new SvgKinematicRenderer(200, 100, 10, 3);
+
+  renderer.setViewportCenter(3, -2);
+
+  const snapshots: readonly KinematicBodySnapshot[] = [
+    {
+      id: 7,
+      state: new KinematicState(new Vector2(3, -2), new Vector2(0, 0)),
+    },
+  ];
+
+  const svg = renderer.render(snapshots);
+
+  assertStringIncludes(svg, '<circle data-body-id="7" cx="100" cy="50" r="3" />');
+});
+
+Deno.test("SvgKinematicRenderer moves world axes with the viewport center", () => {
+  const renderer = new SvgKinematicRenderer(200, 100, 10);
+
+  renderer.setViewportCenter(3, -2);
+
+  const svg = renderer.render([]);
+
+  assertStringIncludes(
+    svg,
+    '<line data-world-axis="x" x1="0" y1="30" x2="200" y2="30" stroke="currentColor" opacity="0.45" />',
+  );
+
+  assertStringIncludes(
+    svg,
+    '<line data-world-axis="y" x1="70" y1="0" x2="70" y2="100" stroke="currentColor" opacity="0.45" />',
+  );
+});

@@ -10,9 +10,9 @@ Eventually, vLab2D aims to make simulations not only runnable, but **observable*
 
 ## Project status
 
-**Current checkpoint:** a multi-body `KinematicWorld` owns authoritative simulation state and exposes detached observations that can be visualized through the primary live Canvas 2D path or the secondary static SVG path. `ViewportTransform` now owns both world-to-display conversion and the continuous visible world bounds consumed by both grid renderers.
+**Current checkpoint:** a multi-body `KinematicWorld` owns authoritative simulation state and exposes detached observations that can be visualized through the primary live Canvas 2D path or the secondary static SVG path. `ViewportTransform` now owns world-to-display conversion, continuous visible world bounds, and a mutable world-space viewport center. Both renderers can reposition that center programmatically, and the live Canvas example supports pointer-drag panning.
 
-**Next step:** introduce a programmatic world-space viewport center so the Canvas view can pan away from the world origin before adding mouse interaction or zoom.
+**Next step:** add inverse display-to-world coordinate mapping and use it for a small Canvas pointer-coordinate readout, giving the first concrete consumer for mapping from display input back into world space.
 
 See the [project documentation](docs/project/README.md) for the authoritative current status, project context, decisions, workflow, and continuity information.
 
@@ -58,7 +58,9 @@ The project currently has two concrete visualization paths:
 - `CanvasKinematicRenderer` is the primary visualization target and draws detached engine observations into a browser Canvas 2D context for live visualization;
 - `SvgKinematicRenderer` is a secondary companion renderer for static inspection, snapshots, exports, debugging captures, and documentation.
 
-Both renderers use the shared `ViewportTransform` for world-to-display coordinate mapping and continuous visible-world geometry while retaining rendering-technology-specific drawing behavior.
+Both renderers use the shared `ViewportTransform` for world-to-display coordinate mapping, continuous visible-world geometry, and the mutable world-space viewport center while retaining rendering-technology-specific drawing behavior. Both expose programmatic viewport centering, while Canvas additionally accepts display-space pan deltas for interactive dragging.
+
+The browser Canvas example owns pointer-event orchestration and converts CSS-pixel drag movement into Canvas display units before asking the renderer to pan. The renderer remains unaware of DOM pointer events.
 
 Canvas and canvas-like interactive rendering drive visualization design. SVG should remain working where support is natural and reasonably inexpensive, but Canvas features should not be compromised merely to preserve SVG parity.
 

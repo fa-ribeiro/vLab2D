@@ -20,6 +20,8 @@ for (let step = 0; step < 5; step++) {
 
 const renderer = new SvgKinematicRenderer(800, 600, 40, 6);
 
+renderer.setViewportCenter(3, 2);
+
 const svg = renderer.render(world.getBodySnapshots());
 
 await Deno.mkdir("generated", {

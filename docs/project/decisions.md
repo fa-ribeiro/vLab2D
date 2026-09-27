@@ -474,7 +474,7 @@ That concrete duplication is now extracted into `ViewportTransform`.
 - viewport width;
 - viewport height;
 - display units per world unit;
-- placement of the world origin at the viewport center;
+- initial placement of the world origin at the viewport center, later generalized by D-052 into a mutable world-space viewport center;
 - conversion of world X coordinates into display X coordinates;
 - inversion and conversion of mathematical world Y coordinates into display Y coordinates;
 - validation of viewport dimensions and scale.
@@ -522,4 +522,20 @@ Integer-grid selection remains renderer behavior. SVG and Canvas independently a
 
 No separate `WorldBounds` value object is introduced yet because the current immutable scalar getters express the demonstrated requirement without per-frame allocation or additional structure.
 
-This extraction is Canvas-led viewport evolution that also remains naturally useful to SVG. It does not introduce inverse display-to-world mapping, panning, zoom, a camera abstraction, or a transformation-matrix framework.
+This extraction is Canvas-led viewport evolution that also remains naturally useful to SVG. The D-051 extraction itself did not introduce inverse display-to-world mapping, panning, zoom, a camera abstraction, or a transformation-matrix framework. D-052 later introduces viewport panning by generalizing the fixed origin-centered view into a mutable world-space center.
+
+## D-052 — Viewport position is represented by a mutable world-space center
+
+**Status:** Accepted
+
+`ViewportTransform` represents which part of the world is being viewed through a mutable world-space center while retaining immutable viewport dimensions and display scale.
+
+The configured `(centerWorldX, centerWorldY)` position maps to the center of the display. World-to-display conversion and continuous visible-world bounds are derived from that center, so bodies, grids, axes, and origin markers remain spatially coherent as the view moves.
+
+Center changes occur through `setCenter(...)`. Both coordinates are validated before either stored value changes, preserving the center as one logical pair when an update is rejected.
+
+Renderers continue to own their `ViewportTransform` internally rather than exposing or injecting it. `CanvasKinematicRenderer` and `SvgKinematicRenderer` expose semantic `setViewportCenter(...)` operations where programmatic centering is useful. Canvas additionally exposes `panViewportBy(...)`, which accepts finite display-space deltas and translates them into a world-center change.
+
+Interactive pointer mechanics remain browser-host responsibility. The Canvas example owns pointer events, pointer capture, and CSS-pixel-to-Canvas-unit conversion; the renderer receives only display-space pan deltas and remains independent from DOM input APIs.
+
+This establishes panning without introducing a camera abstraction, transformation matrices, zoom, or inverse display-to-world mapping. Those capabilities should still require concrete use cases before being added.

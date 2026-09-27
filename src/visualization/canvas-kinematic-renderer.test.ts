@@ -181,3 +181,74 @@ Deno.test("CanvasKinematicRenderer marks the world origin at the viewport center
     true,
   );
 });
+
+Deno.test("CanvasKinematicRenderer renders relative to the viewport world center", () => {
+  const context = new RecordingCanvasContext();
+  const renderer = new CanvasKinematicRenderer(context, 200, 100, 10, 3);
+
+  renderer.setViewportCenter(3, -2);
+
+  const snapshots: readonly KinematicBodySnapshot[] = [
+    {
+      id: 7,
+      state: new KinematicState(new Vector2(3, -2), new Vector2(0, 0)),
+    },
+  ];
+
+  renderer.render(snapshots);
+
+  const arcCalls = context.calls.filter(([name]) => name === "arc");
+
+  assertEquals(arcCalls, [["arc", 100, 50, 3, 0, Math.PI * 2]]);
+});
+
+Deno.test("CanvasKinematicRenderer moves world axes with the viewport center", () => {
+  const context = new RecordingCanvasContext();
+  const renderer = new CanvasKinematicRenderer(context, 200, 100, 10);
+
+  renderer.setViewportCenter(3, -2);
+  renderer.render([]);
+
+  const moveToCalls = context.calls.filter(([name]) => name === "moveTo");
+  const lineToCalls = context.calls.filter(([name]) => name === "lineTo");
+
+  assertEquals(
+    moveToCalls.some((call) => call[1] === 0 && call[2] === 30),
+    true,
+  );
+
+  assertEquals(
+    lineToCalls.some((call) => call[1] === 200 && call[2] === 30),
+    true,
+  );
+
+  assertEquals(
+    moveToCalls.some((call) => call[1] === 70 && call[2] === 0),
+    true,
+  );
+
+  assertEquals(
+    lineToCalls.some((call) => call[1] === 70 && call[2] === 100),
+    true,
+  );
+});
+
+Deno.test("CanvasKinematicRenderer pans by display-space displacement", () => {
+  const context = new RecordingCanvasContext();
+  const renderer = new CanvasKinematicRenderer(context, 200, 100, 10, 3);
+
+  renderer.panViewportBy(20, 10);
+
+  const snapshots: readonly KinematicBodySnapshot[] = [
+    {
+      id: 7,
+      state: new KinematicState(new Vector2(-2, 1), new Vector2(0, 0)),
+    },
+  ];
+
+  renderer.render(snapshots);
+
+  const arcCalls = context.calls.filter(([name]) => name === "arc");
+
+  assertEquals(arcCalls, [["arc", 100, 50, 3, 0, Math.PI * 2]]);
+});
