@@ -252,3 +252,16 @@ Deno.test("CanvasKinematicRenderer pans by display-space displacement", () => {
 
   assertEquals(arcCalls, [["arc", 100, 50, 3, 0, Math.PI * 2]]);
 });
+
+Deno.test("CanvasKinematicRenderer maps display coordinates into world coordinates", () => {
+  const context = new RecordingCanvasContext();
+  const renderer = new CanvasKinematicRenderer(context, 200, 100, 10);
+
+  renderer.setViewportCenter(3, -2);
+
+  assertEquals(renderer.displayToWorldX(100), 3);
+  assertEquals(renderer.displayToWorldY(50), -2);
+
+  assertEquals(renderer.displayToWorldX(120), 5);
+  assertEquals(renderer.displayToWorldY(20), 1);
+});

@@ -6,17 +6,25 @@ import {
 } from "../../src/engine/mod.ts";
 import { CanvasKinematicRenderer } from "../../src/visualization/canvas-kinematic-renderer.ts";
 
-const canvas = document.querySelector<HTMLCanvasElement>("#simulation");
-
-if (canvas === null) {
+const canvasElement = document.querySelector<HTMLCanvasElement>("#simulation");
+if (canvasElement === null) {
   throw new Error("Simulation canvas was not found.");
 }
+const canvas: HTMLCanvasElement = canvasElement;
 
 const context = canvas.getContext("2d");
 
 if (context === null) {
   throw new Error("Canvas 2D rendering is not available.");
 }
+
+const coordinateOutputElement = document.querySelector<HTMLOutputElement>(
+  "#pointer-world-coordinate",
+);
+if (coordinateOutputElement === null) {
+  throw new Error("Pointer world-coordinate output was not found.");
+}
+const coordinateOutput: HTMLOutputElement = coordinateOutputElement;
 
 const world = new KinematicWorld(new Vector2(0, -1), new SemiImplicitEulerIntegrator());
 
@@ -81,6 +89,44 @@ canvas.addEventListener("pointercancel", (event) => {
 
 canvas.addEventListener("lostpointercapture", (event) => {
   endPointerDrag(event.pointerId);
+});
+
+function pointerToDisplayCoordinates(event: PointerEvent): { x: number; y: number } {
+  const bounds = canvas.getBoundingClientRect();
+
+  return {
+    x: ((event.clientX - bounds.left) * canvas.width) / bounds.width,
+    y: ((event.clientY - bounds.top) * canvas.height) / bounds.height,
+  };
+}
+
+function updatePointerWorldCoordinate(event: PointerEvent): void {
+  const display = pointerToDisplayCoordinates(event);
+
+  const worldX = renderer.displayToWorldX(display.x);
+  const worldY = renderer.displayToWorldY(display.y);
+
+  coordinateOutput.value = `World: (${worldX.toFixed(2)}, ${worldY.toFixed(2)})`;
+}
+
+canvas.addEventListener("pointermove", (event) => {
+  if (event.pointerId === activePointerId) {
+    const deltaClientX = event.clientX - previousPointerX;
+    const deltaClientY = event.clientY - previousPointerY;
+
+    previousPointerX = event.clientX;
+    previousPointerY = event.clientY;
+
+    const bounds = canvas.getBoundingClientRect();
+
+    const deltaDisplayX = (deltaClientX * canvas.width) / bounds.width;
+
+    const deltaDisplayY = (deltaClientY * canvas.height) / bounds.height;
+
+    renderer.panViewportBy(deltaDisplayX, deltaDisplayY);
+  }
+
+  updatePointerWorldCoordinate(event);
 });
 
 const FIXED_TIMESTEP = 1 / 60;

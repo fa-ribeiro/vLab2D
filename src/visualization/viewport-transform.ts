@@ -103,6 +103,23 @@ export class ViewportTransform {
   public worldToDisplayY(worldY: number): number {
     return this.height / 2 - (worldY - this.#centerWorldY) * this.pixelsPerUnit;
   }
+
+  /**
+   * Maps a display X coordinate into world space.
+   */
+  public displayToWorldX(displayX: number): number {
+    return this.#centerWorldX + (displayX - this.width / 2) / this.pixelsPerUnit;
+  }
+
+  /**
+   * Maps a display Y coordinate into world space.
+   *
+   * Display positive Y points downward, so the coordinate is inverted when
+   * mapped into mathematical world space where positive Y points upward.
+   */
+  public displayToWorldY(displayY: number): number {
+    return this.#centerWorldY - (displayY - this.height / 2) / this.pixelsPerUnit;
+  }
 }
 
 function assertFinite(value: number, name: string): void {

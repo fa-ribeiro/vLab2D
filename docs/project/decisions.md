@@ -538,7 +538,7 @@ Renderers continue to own their `ViewportTransform` internally rather than expos
 
 Interactive pointer mechanics remain browser-host responsibility. The Canvas example owns pointer events, pointer capture, and CSS-pixel-to-Canvas-unit conversion; the renderer receives only display-space pan deltas and remains independent from DOM input APIs.
 
-This establishes panning without introducing a camera abstraction, transformation matrices, zoom, or inverse display-to-world mapping. Those capabilities should still require concrete use cases before being added.
+This establishes panning without introducing a camera abstraction, transformation matrices, zoom, or inverse display-to-world mapping. D-054 later introduces inverse mapping after pointer-coordinate inspection provides a concrete use case; the remaining capabilities stay deferred until similarly justified.
 
 ## D-053 — Milestone tags use semantic versions
 
@@ -558,3 +558,19 @@ While vLab2D remains in initial development:
 `v1.0.0` is reserved for a deliberate future point where the project has a coherent first mature laboratory shape and its public contracts are stable enough for compatibility to become an explicit promise. It is not tied to a milestone count or schedule.
 
 Published version tags are immutable historical markers: do not move or reuse an existing version tag for different code. The detailed tagging criteria and process live in `workflow.md`.
+
+## D-054 — Inverse display-to-world mapping belongs to the viewport transform
+
+**Status:** Accepted
+
+`ViewportTransform` owns inverse display-to-world coordinate mapping in addition to forward world-to-display conversion.
+
+The inverse API remains scalar and allocation-free through `displayToWorldX(...)` and `displayToWorldY(...)`. The calculations account for the current world-space viewport center, display scale, and the opposite Y-axis orientation between mathematical world space and display space.
+
+The capability was introduced only after pointer-coordinate inspection created a concrete need to translate display input back into world coordinates.
+
+`CanvasKinematicRenderer` exposes thin scalar delegation methods because the live Canvas host needs the mapping for interaction and inspection. The renderer continues to own its `ViewportTransform` internally rather than exposing the transform object. `SvgKinematicRenderer` does not currently expose equivalent inverse methods because no concrete SVG consumer requires them.
+
+Browser-specific conversion from Pointer Event client coordinates into Canvas drawing-buffer coordinates remains host responsibility. UI formatting and presentation of the resulting world coordinate also remain host concerns. `ViewportTransform` therefore stays independent from DOM APIs, CSS layout, renderer output, and engine-domain types such as `Vector2`.
+
+This adds bidirectional coordinate conversion without introducing a point value type, camera abstraction, transformation matrices, body picking, selection, or zoom.

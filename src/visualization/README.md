@@ -13,7 +13,7 @@ The project currently has two concrete visualization implementations:
 
 Both consume detached `KinematicBodySnapshot` values exposed by the simulation engine.
 
-`ViewportTransform` provides the world-to-display coordinate mapping, continuous visible-world geometry, and mutable world-space viewport center shared by both renderers.
+`ViewportTransform` provides bidirectional world/display coordinate mapping, continuous visible-world geometry, and the mutable world-space viewport center shared by the visualization layer.
 
 Neither renderer advances simulation time or performs physics calculations.
 
@@ -39,7 +39,7 @@ It currently renders:
 4. a world-origin marker;
 5. body markers above the spatial reference elements.
 
-The SVG renderer also exposes `setViewportCenter(...)` for the shared programmatic world-space centering capability.
+The SVG renderer also exposes `setViewportCenter(...)` for the shared programmatic world-space centering capability. Although `ViewportTransform` now supports inverse display-to-world mapping, the SVG renderer does not expose that query because no concrete SVG consumer currently needs it.
 
 The SVG renderer is useful as a:
 
@@ -89,9 +89,9 @@ flowchart LR
 
 The grid omits zero-coordinate lines because those positions are represented by the world axes.
 
-Spatial references and body positions use the shared `ViewportTransform`. `setViewportCenter(...)` changes which world position occupies the display center, while `panViewportBy(...)` accepts finite Canvas display-space deltas and converts them into world-center movement.
+Spatial references and body positions use the shared `ViewportTransform`. `setViewportCenter(...)` changes which world position occupies the display center, while `panViewportBy(...)` accepts finite Canvas display-space deltas and converts them into world-center movement. `displayToWorldX(...)` and `displayToWorldY(...)` expose inverse scalar mapping for interaction without exposing the transform object itself.
 
-The live browser host owns pointer dragging. It tracks one active pointer, uses pointer capture, converts CSS-pixel movement into Canvas drawing-buffer units, and forwards only display-space deltas to `panViewportBy(...)`. The renderer itself does not depend on Pointer Events or other DOM input APIs.
+The live browser host owns pointer interaction. It tracks one active pointer for dragging, uses pointer capture, converts browser CSS coordinates into Canvas drawing-buffer coordinates, and forwards display-space deltas to `panViewportBy(...)`. The same drawing-buffer coordinates can be queried through the inverse mapping to report the world coordinate underneath the pointer. The renderer itself does not depend on Pointer Events or other DOM input APIs, and presentation formatting remains host/UI responsibility.
 
 Clearing the previous frame remains deliberate. Trails should become an explicit visualization capability rather than appearing accidentally because old frames were left on the canvas.
 
@@ -127,12 +127,16 @@ The engine uses mathematical world coordinates:
 
 SVG and Canvas use display coordinate systems where positive Y points downward.
 
-The shared `ViewportTransform` owns the conversion between those coordinate systems:
+The shared `ViewportTransform` owns conversion in both directions between those coordinate systems:
 
 ```text
 displayX = viewportWidth / 2 + (worldX - centerWorldX) × pixelsPerUnit
 
 displayY = viewportHeight / 2 - (worldY - centerWorldY) × pixelsPerUnit
+
+worldX = centerWorldX + (displayX - viewportWidth / 2) / pixelsPerUnit
+
+worldY = centerWorldY - (displayY - viewportHeight / 2) / pixelsPerUnit
 ```
 
 The configured world-space center maps to the center of the viewport. The world origin occupies that position by default.
@@ -145,12 +149,12 @@ flowchart LR
 
     DISPLAY["Display coordinates<br/>+X right<br/>+Y down"]
 
-    WORLD --> TRANSFORM --> DISPLAY
+    WORLD <--> TRANSFORM <--> DISPLAY
 ```
 
 `ViewportTransform` contains no rendering behavior.
 
-It stores immutable viewport dimensions and scale together with a mutable world-space center, exposes numeric coordinate conversion operations, and describes the continuous world-space extent visible through the viewport:
+It stores immutable viewport dimensions and scale together with a mutable world-space center, exposes scalar forward and inverse coordinate-conversion operations, and describes the continuous world-space extent visible through the viewport:
 
 ```text
 minWorldX
@@ -201,8 +205,8 @@ The two concrete implementations should continue to teach us which concepts are 
 
 ## Direction
 
-Programmatic viewport centering is now supported by both concrete renderers, and the Canvas browser example supports pointer-drag panning.
+Programmatic viewport centering is supported by both concrete renderers. The Canvas browser example supports pointer-drag panning and live inspection of the world coordinate underneath the pointer through the shared inverse transform.
 
-The next visualization step is inverse display-to-world mapping with a concrete Canvas use case: report the world coordinate underneath the pointer. This should extend `ViewportTransform` only with the smallest inverse scalar operations required by that feature.
+The next visualization step is programmatic zoom at the viewport-geometry level. `ViewportTransform` should gain the smallest validated way to change display scale while keeping forward mapping, inverse mapping, and visible bounds coherent. The first version should remain testable and programmatic before wheel, trackpad, or pinch interaction is introduced.
 
-The browser host should remain responsible for converting DOM pointer coordinates into Canvas drawing-buffer coordinates before world-space conversion. Body picking, selection, zoom, cameras, renderer interfaces, richer diagnostics, and generalized rendering abstractions remain deferred until concrete requirements establish their shape.
+The browser host should continue to own DOM input and CSS-to-Canvas coordinate conversion. Body picking, selection, cameras, renderer interfaces, richer diagnostics, and generalized rendering abstractions remain deferred until concrete requirements establish their shape.

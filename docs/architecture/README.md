@@ -468,7 +468,7 @@ CanvasKinematicRenderer
     body drawing
 ```
 
-Both renderers use `ViewportTransform` for coordinate placement while retaining rendering-technology-specific drawing behavior. Both expose programmatic viewport centering. Canvas additionally accepts display-space pan deltas, while browser pointer-event orchestration remains outside the renderer in host/example code.
+Both renderers use `ViewportTransform` for coordinate placement while retaining rendering-technology-specific drawing behavior. Both expose programmatic viewport centering. Canvas additionally accepts display-space pan deltas and exposes inverse display-to-world scalar queries for interaction, while browser pointer-event orchestration remains outside the renderer in host/example code.
 
 Canvas and canvas-like interactive rendering are the primary visualization target. SVG remains a secondary static companion where maintaining support is natural and reasonably inexpensive. Shared abstractions should represent genuinely common concepts; SVG compatibility must not force Canvas into a weaker or less useful design.
 
@@ -487,7 +487,7 @@ The engine uses mathematical world coordinates:
 
 The current display technologies use coordinates where positive Y points downward.
 
-World-to-display conversion is owned by the shared `ViewportTransform`.
+Bidirectional conversion between world and display coordinates is owned by the shared `ViewportTransform`.
 
 ```mermaid
 flowchart TD
@@ -497,12 +497,12 @@ flowchart TD
     SVG["SvgKinematicRenderer"]
     CANVAS["CanvasKinematicRenderer"]
 
-    WORLD --> TRANSFORM
+    WORLD <--> TRANSFORM
     TRANSFORM --> SVG
-    TRANSFORM --> CANVAS
+    TRANSFORM <--> CANVAS
 ```
 
-The current mapping is:
+The forward mapping is:
 
 ```text
 displayX = width / 2 + (worldX - centerWorldX) × pixelsPerUnit
@@ -510,9 +510,17 @@ displayX = width / 2 + (worldX - centerWorldX) × pixelsPerUnit
 displayY = height / 2 - (worldY - centerWorldY) × pixelsPerUnit
 ```
 
+The inverse mapping is:
+
+```text
+worldX = centerWorldX + (displayX - width / 2) / pixelsPerUnit
+
+worldY = centerWorldY - (displayY - height / 2) / pixelsPerUnit
+```
+
 The configured world-space center therefore appears at the center of the viewport; `(0, 0)` remains the default center.
 
-`ViewportTransform` owns viewport dimensions, scale, mutable world-space center, validation, numeric coordinate conversion, and the continuous world-space extent visible through the viewport.
+`ViewportTransform` owns viewport dimensions, scale, mutable world-space center, validation, scalar forward/inverse coordinate conversion, and the continuous world-space extent visible through the viewport.
 
 The visible extent is exposed through scalar values equivalent to:
 
@@ -578,17 +586,19 @@ Variable browser frame delta is used as scheduling input, not as the numerical i
 
 The renderer remains unaware of `requestAnimationFrame` and of simulation stepping.
 
-The host also owns pointer-drag orchestration for panning. It tracks the active pointer, uses browser pointer capture, converts movement from CSS pixels into Canvas drawing-buffer units, and calls `CanvasKinematicRenderer.panViewportBy(...)`. The renderer therefore remains independent from DOM pointer-event APIs.
+The host also owns pointer interaction. It tracks the active pointer, uses browser pointer capture for dragging, and converts Pointer Event client coordinates from CSS space into Canvas drawing-buffer coordinates. Display-space deltas are passed to `CanvasKinematicRenderer.panViewportBy(...)`; absolute display coordinates are passed through the renderer's inverse mapping queries to produce the live world-coordinate readout. The renderer therefore remains independent from DOM pointer-event APIs and UI formatting.
 
 ```mermaid
 flowchart LR
     POINTER["Pointer Events"]
     HOST["Canvas example / host"]
-    DELTA["display-space delta"]
+    DISPLAY["Canvas display coordinates"]
     RENDERER["CanvasKinematicRenderer"]
     TRANSFORM["ViewportTransform"]
+    OUTPUT["World-coordinate output"]
 
-    POINTER --> HOST --> DELTA --> RENDERER --> TRANSFORM
+    POINTER --> HOST --> DISPLAY --> RENDERER --> TRANSFORM
+    TRANSFORM --> RENDERER --> HOST --> OUTPUT
 ```
 
 ---
@@ -623,7 +633,7 @@ External engine consumers are expected to import from `src/engine/mod.ts`.
 
 ### Abstractions are introduced from concrete needs
 
-`ViewportTransform` was introduced only after SVG and Canvas independently demonstrated the same viewport geometry and coordinate-conversion responsibility. Its visible-world bounds were added only after both grid implementations independently derived the same continuous viewport extent.
+`ViewportTransform` was introduced only after SVG and Canvas independently demonstrated the same viewport geometry and coordinate-conversion responsibility. Its visible-world bounds were added only after both grid implementations independently derived the same continuous viewport extent. Inverse mapping was added only after pointer-coordinate inspection created a concrete display-to-world consumer.
 
 ### Canvas drives visualization evolution
 
@@ -673,11 +683,13 @@ It is useful to keep these categories separate.
 ✓ independent Canvas 2D visualization
 ✓ shared ViewportTransform
 ✓ shared world-to-display coordinate mapping
+✓ shared display-to-world coordinate mapping
 ✓ shared continuous visible world bounds
 ✓ mutable world-space viewport center
 ✓ programmatic viewport centering in Canvas and SVG
 ✓ Canvas display-space panning operation
 ✓ pointer-drag panning in the Canvas browser host
+✓ Canvas pointer world-coordinate inspection
 ✓ equivalent SVG and Canvas spatial references
 ✓ Canvas integer grid
 ✓ Canvas world axes
@@ -705,8 +717,8 @@ It is useful to keep these categories separate.
 Possible future capabilities include:
 
 ```text
-? inverse display-to-world mapping and pointer world-coordinate readout
-? zoom
+? programmatic viewport zoom
+? wheel / trackpad / pinch zoom
 ? experiment orchestration
 ? synchronized multiple worlds
 ? UI controls
@@ -735,9 +747,9 @@ flowchart TD
     SVG["SvgKinematicRenderer"]
     CANVAS["CanvasKinematicRenderer"]
 
-    WORLD --> TRANSFORM
+    WORLD <--> TRANSFORM
     TRANSFORM --> SVG
-    TRANSFORM --> CANVAS
+    TRANSFORM <--> CANVAS
 ```
 
 The shared transform owns:
@@ -746,7 +758,8 @@ The shared transform owns:
 - pixels per world unit;
 - a mutable world-space position mapped to the viewport center;
 - inversion between mathematical positive Y and display positive Y;
-- conversion from world coordinates into display coordinates.
+- conversion from world coordinates into display coordinates;
+- inverse conversion from display coordinates into world coordinates.
 
 The renderers retain responsibility for rendering-specific behavior.
 
@@ -754,7 +767,7 @@ Viewport dimensions and scale remain immutable, while the world-space center is 
 
 It is not currently an injected strategy because the project has not demonstrated a need to substitute transformation behavior independently from renderer construction.
 
-The abstraction also remains independent from engine-domain values such as `Vector2`; its coordinate operations accept and return numbers.
+The abstraction also remains independent from engine-domain values such as `Vector2`; its coordinate operations accept and return numbers. The inverse API stays scalar as well, avoiding a new point type or per-query allocation before a concrete need justifies one.
 
 ### Continuous visible world bounds
 
@@ -795,7 +808,27 @@ This keeps `ViewportTransform` useful beyond grid rendering while avoiding a gri
 
 `CanvasKinematicRenderer.panViewportBy(...)` translates display-space drag displacement into a center change. The browser host owns Pointer Events and CSS-pixel conversion, preserving the renderer's independence from DOM input mechanics.
 
-No `WorldBounds` value type, inverse display-to-world mapping, renderer hierarchy, camera model, transformation matrix framework, or zoom system has been introduced.
+### Inverse display-to-world mapping
+
+Pointer-coordinate inspection created the first concrete need to map a display position back into mathematical world space. The inverse equations belong to `ViewportTransform` because they are the reverse of the same viewport geometry already used for rendering.
+
+`ViewportTransform` exposes scalar `displayToWorldX(...)` and `displayToWorldY(...)` operations. They account for the current world-space center, display scale, and inverted display Y axis. `CanvasKinematicRenderer` delegates these queries so its browser host can use the mapping without receiving the transform object itself. SVG does not expose a renderer-level inverse query because it currently has no consumer for one.
+
+Browser client coordinates are not Canvas drawing-buffer coordinates. The host therefore converts Pointer Event coordinates using the Canvas bounding rectangle and drawing-buffer dimensions before invoking the renderer's inverse mapping. The host also owns presentation of the result, including decimal formatting and the DOM `<output>` element.
+
+```mermaid
+flowchart LR
+    CLIENT["Pointer client coordinates"]
+    HOST["Browser host conversion"]
+    DISPLAY["Canvas drawing-buffer coordinates"]
+    RENDERER["CanvasKinematicRenderer"]
+    TRANSFORM["ViewportTransform inverse mapping"]
+    WORLD["World coordinates"]
+
+    CLIENT --> HOST --> DISPLAY --> RENDERER --> TRANSFORM --> WORLD
+```
+
+No `WorldBounds` value type, renderer hierarchy, camera model, transformation matrix framework, point abstraction, body-picking system, or zoom system has been introduced.
 
 ---
 

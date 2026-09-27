@@ -6,7 +6,7 @@ vLab2D now has a small multi-body simulation engine, reproducible SVG visualizat
 
 Canvas is the primary visualization target. SVG remains a useful secondary renderer for static snapshots, debugging captures, exports, and documentation where maintaining it remains reasonable.
 
-Both renderers share `ViewportTransform` for world-to-display coordinate conversion and continuous visible-world geometry.
+Both renderers share `ViewportTransform` for viewport geometry and world-to-display coordinate conversion. The transform now also provides inverse display-to-world mapping for interaction and inspection.
 
 ### Simulation engine
 
@@ -40,12 +40,20 @@ It stores immutable configuration:
 
 It also owns a mutable world-space viewport center. The configured world position `(centerWorldX, centerWorldY)` maps to the center of the display; the world origin is centered by default.
 
-The mapping is now:
+The forward mapping is:
 
 ```text
 displayX = width / 2 + (worldX - centerWorldX) × pixelsPerUnit
 
 displayY = height / 2 - (worldY - centerWorldY) × pixelsPerUnit
+```
+
+The inverse mapping is:
+
+```text
+worldX = centerWorldX + (displayX - width / 2) / pixelsPerUnit
+
+worldY = centerWorldY - (displayY - height / 2) / pixelsPerUnit
 ```
 
 The transform exposes the continuous world-space extent currently visible through the viewport:
@@ -90,35 +98,40 @@ origin
 bodies
 ```
 
-The renderer exposes two viewport operations:
+The renderer exposes focused viewport operations and queries:
 
 - `setViewportCenter(worldX, worldY)` delegates world-space centering to `ViewportTransform`;
-- `panViewportBy(deltaX, deltaY)` accepts a displacement in Canvas display units and converts it into the corresponding world-center change.
+- `panViewportBy(deltaX, deltaY)` accepts a displacement in Canvas display units and converts it into the corresponding world-center change;
+- `displayToWorldX(displayX)` and `displayToWorldY(displayY)` expose the transform's inverse scalar mapping without leaking the transform object itself.
 
 The integer grid, axes, origin marker, and body positions all consume the same transform, so changing the viewport center moves the complete world view coherently.
 
-The live browser example adds pointer-drag panning. Browser input remains host responsibility: the example tracks one active pointer, uses pointer capture, converts CSS-pixel movement into Canvas drawing-buffer units, and sends only display-space deltas to the renderer.
+The live browser example adds pointer-drag panning and pointer-coordinate inspection. Browser input remains host responsibility: the example tracks one active pointer, uses pointer capture, and converts browser CSS coordinates into Canvas drawing-buffer coordinates before calling renderer viewport operations or queries.
 
 ```mermaid
 flowchart LR
-    POINTER["Pointer drag"]
+    POINTER["Pointer position / drag"]
     HOST["Browser host"]
-    DELTA["Canvas display-space delta"]
+    DISPLAY["Canvas display coordinates"]
     RENDERER["CanvasKinematicRenderer"]
     TRANSFORM["ViewportTransform"]
+    OUTPUT["World-coordinate output"]
 
-    POINTER --> HOST --> DELTA --> RENDERER --> TRANSFORM
+    POINTER --> HOST --> DISPLAY --> RENDERER --> TRANSFORM
+    TRANSFORM --> RENDERER --> HOST --> OUTPUT
 ```
+
+The world-coordinate readout is ordinary DOM presentation owned by the host. Formatting such as decimal precision does not enter `ViewportTransform` or the renderer.
 
 The renderer remains unaware of DOM pointer events and performs no simulation calculations or engine-state mutation.
 
-Canvas regression tests cover coordinate mapping, spatial references, viewport centering, display-space panning, frame clearing, and validation behavior.
+Canvas regression tests cover forward and inverse coordinate mapping, spatial references, viewport centering, display-space panning, frame clearing, and validation behavior.
 
 ### SVG visualization
 
 `SvgKinematicRenderer` remains the secondary static visualization path.
 
-It renders the same basic spatial references and consumes the same continuous visible bounds, while retaining SVG-specific output behavior. `setViewportCenter(...)` exposes the same programmatic world-space centering where that shared viewport model maps naturally to SVG. Focused SVG regression tests verify displaced body and axis mapping.
+It renders the same basic spatial references and consumes the same continuous visible bounds, while retaining SVG-specific output behavior. `setViewportCenter(...)` exposes the same programmatic world-space centering where that shared viewport model maps naturally to SVG. The shared transform has inverse coordinate mathematics, but the SVG renderer does not expose an inverse query because no concrete SVG consumer currently needs it. Focused SVG regression tests verify displaced body and axis mapping.
 
 SVG remains useful for reproducible snapshots, debugging captures, exports, and documentation images. Future visualization work should preserve SVG support when doing so remains natural and reasonably inexpensive, but SVG compatibility must not constrain useful Canvas capabilities.
 
@@ -155,21 +168,19 @@ Interpolation between fixed simulation states remains deliberately deferred.
 
 ## Next step
 
-Introduce inverse display-to-world coordinate mapping as the next small Canvas-first capability.
+Introduce the smallest Canvas-first zoom capability by allowing the viewport display scale to change programmatically.
 
-The first concrete consumer should be a lightweight pointer-coordinate readout in the live Canvas example:
+The first zoom step should remain geometry-focused rather than gesture-driven:
 
-- convert a Canvas display X coordinate into world X;
-- convert a Canvas display Y coordinate into world Y;
-- preserve the current viewport center and Y-axis inversion;
-- convert browser pointer coordinates into Canvas drawing-buffer coordinates in the host before invoking the world-space mapping;
-- display the resulting world coordinate without coupling pointer events to `ViewportTransform`.
-
-This gives inverse mapping a real interaction use case rather than adding it speculatively.
+- allow `ViewportTransform` to change its display units per world unit through a validated operation;
+- keep world-to-display and display-to-world mapping mutually coherent after a scale change;
+- update continuous visible-world bounds from the current center and scale;
+- prove the behavior with focused transform and Canvas tests;
+- preserve the current viewport center unless a later interaction requirement demonstrates a need for anchor-aware zoom.
 
 Do not yet introduce:
 
-- zoom;
+- mouse-wheel, trackpad, or pinch zoom;
 - body picking or selection;
 - a camera class;
 - transformation matrices;

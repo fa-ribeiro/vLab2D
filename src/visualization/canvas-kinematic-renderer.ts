@@ -94,6 +94,26 @@ export class CanvasKinematicRenderer {
   }
 
   /**
+   * Maps a horizontal Canvas display coordinate into world space.
+   *
+   * @param displayX The X coordinate in Canvas drawing-buffer units.
+   * @returns The corresponding world X coordinate.
+   */
+  public displayToWorldX(displayX: number): number {
+    return this.#transform.displayToWorldX(displayX);
+  }
+
+  /**
+   * Maps a vertical Canvas display coordinate into world space.
+   *
+   * @param displayY The Y coordinate in Canvas drawing-buffer units.
+   * @returns The corresponding world Y coordinate.
+   */
+  public displayToWorldY(displayY: number): number {
+    return this.#transform.displayToWorldY(displayY);
+  }
+
+  /**
    * Clears the viewport and renders the supplied body snapshots.
    *
    * @param snapshots The detached body observations to render.

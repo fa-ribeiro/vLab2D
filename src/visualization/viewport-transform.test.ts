@@ -109,3 +109,15 @@ Deno.test("ViewportTransform visible world extent follows its world-space center
   assertEquals(transform.minWorldY, -5.5);
   assertEquals(transform.maxWorldY, -2.5);
 });
+
+Deno.test("ViewportTransform maps display coordinates into world coordinates", () => {
+  const transform = new ViewportTransform(200, 100, 10);
+
+  transform.setCenter(3, -2);
+
+  assertEquals(transform.displayToWorldX(100), 3);
+  assertEquals(transform.displayToWorldY(50), -2);
+
+  assertEquals(transform.displayToWorldX(120), 5);
+  assertEquals(transform.displayToWorldY(20), 1);
+});
