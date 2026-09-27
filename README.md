@@ -10,9 +10,9 @@ Eventually, vLab2D aims to make simulations not only runnable, but **observable*
 
 ## Project status
 
-**Current checkpoint:** a multi-body `KinematicWorld` owns and advances authoritative body state and exposes detached observations that can now be visualized both as reproducible static SVG output and as live browser animation through Canvas 2D.
+**Current checkpoint:** a multi-body `KinematicWorld` owns authoritative simulation state and exposes detached observations that can be visualized as static SVG output or live Canvas 2D animation. The browser animation loop now advances the simulation with a fixed timestep independently from display refresh rate.
 
-**Next step:** separate fixed simulation time from browser rendering cadence so Canvas animation behaves consistently across different display refresh rates.
+**Next step:** extract the shared world-to-display transformation now demonstrated independently by both SVG and Canvas.
 
 See the [project documentation](docs/project/README.md) for the authoritative current status, project context, decisions, workflow, and continuity information.
 
@@ -84,6 +84,9 @@ deno task doc:html      # generate searchable API docs under generated/api
 deno task canvas:build  # bundle the browser Canvas example
 deno task canvas:serve  # serve the generated Canvas example locally
 deno task verify        # run the normal quality gate
+deno task canvas:build  # bundle the browser Canvas example
+deno task canvas:watch  # rebuild the Canvas example when source changes
+deno task canvas:serve  # serve the generated Canvas example locally
 ```
 
 Generated documentation, browser bundles, visualization output, coverage reports, and other derived artifacts are not committed to the repository.

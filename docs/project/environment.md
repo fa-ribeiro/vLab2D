@@ -50,6 +50,10 @@ browser
 
 The project currently uses Canvas 2D because it is a built-in browser API and provides a natural immediate-mode drawing model for live simulation visualization without introducing an external rendering dependency.
 
+During interactive development, `deno task canvas:watch` keeps the generated browser bundle synchronized with source changes. `deno task canvas:serve` serves the generated output locally; browser refresh remains manual.
+
+Browser frame scheduling uses `requestAnimationFrame`, while simulation advancement uses a fixed timestep driven by an elapsed-time accumulator rather than one simulation step per rendered frame.
+
 SVG remains useful alongside Canvas for static rendering and reproducible output.
 
 ## Tooling notes

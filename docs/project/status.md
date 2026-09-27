@@ -2,7 +2,7 @@
 
 ## Current checkpoint
 
-vLab2D now has a small multi-body simulation engine and two concrete visualization paths: reproducible static SVG output and live browser animation through Canvas 2D.
+vLab2D now has a small multi-body simulation engine, static SVG visualization, and live browser animation through Canvas 2D with simulation time decoupled from display refresh rate.
 
 ### Simulation engine
 
@@ -11,108 +11,152 @@ The public engine API currently provides:
 - `Vector2`, an immutable two-dimensional vector value.
 - `KinematicState`, representing position and velocity at a particular instant.
 - `KinematicIntegrator`, a narrow strategy contract for advancing kinematic state.
-- `ExplicitEulerIntegrator`, which advances position using the velocity at the beginning of the timestep.
-- `SemiImplicitEulerIntegrator`, which updates velocity first and then advances position using the updated velocity.
-- `KinematicSimulation`, the earlier single-state runtime used to establish controlled mutation, validation, and injected integration behavior.
-- `BodyId`, an opaque world-local identifier for a simulated body.
-- `KinematicBodySnapshot`, a detached observation of one body's identity and kinematic state.
-- `KinematicWorld`, which owns and advances the kinematic state of multiple identified bodies.
+- `ExplicitEulerIntegrator`.
+- `SemiImplicitEulerIntegrator`.
+- `KinematicSimulation`, the earlier single-state runtime.
+- `BodyId`, an opaque world-local identifier.
+- `KinematicBodySnapshot`, a detached observation of body identity and state.
+- `KinematicWorld`, which owns and advances multiple identified body states.
 
-`KinematicWorld` owns authoritative body state, applies a shared world acceleration, and advances every body using an injected `KinematicIntegrator`.
+`KinematicWorld` owns authoritative body state and advances every body using an injected `KinematicIntegrator`.
 
-External consumers observe detached state rather than receiving references to the world's internal storage.
+External consumers receive detached observations rather than references to internal world storage.
 
-World stepping remains transactional: candidate states for every body are computed and validated before any authoritative state is replaced.
+World stepping remains atomic: candidate states for all bodies are calculated and validated before any authoritative state is replaced.
 
 ### Visualization
 
-Visualization remains outside the simulation engine and consumes detached observations exposed through the engine's public API.
+Visualization remains outside the simulation engine.
 
-Two concrete rendering paths now exist.
+Two concrete rendering paths now consume detached engine observations.
 
 #### SVG
 
-`SvgKinematicRenderer` produces a complete SVG document containing:
+`SvgKinematicRenderer` produces static SVG output containing:
 
 - simulated bodies;
-- a coordinate grid;
+- an integer-coordinate grid;
 - X and Y axes;
 - a world-origin marker.
 
-The SVG path is useful for static visualization, reproducible snapshots, debugging captures, exports, and documentation images.
+SVG remains useful for snapshots, debugging captures, exports, and documentation images.
 
 #### Canvas
 
-`CanvasKinematicRenderer` draws detached `KinematicBodySnapshot` values into a Canvas 2D drawing context.
+`CanvasKinematicRenderer` draws body snapshots into a Canvas 2D drawing context.
 
-The initial Canvas renderer deliberately remains small:
+It:
 
-- it clears the previous frame;
-- maps mathematical world coordinates into Canvas coordinates;
-- renders observed bodies as circles;
+- clears each previous frame;
+- converts mathematical world positions into display coordinates;
+- draws observed bodies;
 - performs no simulation calculations;
 - does not own or mutate engine state.
 
-A browser example composes `KinematicWorld` and `CanvasKinematicRenderer` and repeatedly redraws the current snapshots using `requestAnimationFrame`.
+The browser example under:
 
-The current live path is:
+```text
+examples/kinematic-world-canvas/
+```
+
+provides the first live visualization path.
+
+### Fixed-timestep browser loop
+
+Browser rendering is driven by `requestAnimationFrame`, but simulation advancement is no longer tied to the number of rendered frames.
+
+The browser callback timestamp is used to measure real elapsed time.
+
+That elapsed time is accumulated and consumed in fixed simulation steps:
 
 ```mermaid
 flowchart LR
-    IC[Initial conditions] --> W[KinematicWorld]
-    I[KinematicIntegrator] --> W
+    RAF["requestAnimationFrame(timestamp)"]
+    DELTA["Frame delta"]
+    ACC["Time accumulator"]
+    STEP["0..N fixed world steps"]
+    SNAP["Detached snapshots"]
+    RENDER["Canvas render"]
 
-    W -->|step| W
-    W -->|detached snapshots| C[CanvasKinematicRenderer]
-
-    C --> CANVAS[Canvas 2D]
-    CANVAS --> FRAME[Browser frame]
-    FRAME -->|requestAnimationFrame| W
+    RAF --> DELTA --> ACC --> STEP --> SNAP --> RENDER
+    RENDER --> RAF
 ```
 
-SVG and Canvas currently implement their world-to-display coordinate mapping independently.
+The current simulation timestep is:
 
-This is the first concrete duplication suggesting that a reusable viewport/world-to-display transform may be valuable. No abstraction has yet been extracted.
+```text
+1 / 60 second
+```
 
-### Browser/tooling path
+A fast display may render frames in which no simulation step occurs. A slow display may require multiple fixed simulation steps before one render.
 
-The project now includes a browser-targeted Canvas example.
+The world itself remains unaware of browser timing and rendering cadence.
 
-Deno is used to bundle the browser entry point, while a simple local file server provides the generated browser assets during development.
+The browser host also limits how much delayed real time may be added to the accumulator from one frame. This prevents a long-suspended or heavily delayed browser tab from attempting an excessive simulation catch-up when it resumes.
 
-This keeps the first browser visualization path dependency-light and avoids introducing a frontend framework or application bundler.
+Interpolation between fixed simulation states is deliberately not implemented yet.
 
-### Documentation
+### Browser development workflow
 
-Documentation is organized into section-level indexes:
+The Canvas example is bundled for the browser using Deno.
 
-- `docs/project/README.md` for project context, status, workflow, decisions, environment, and continuity;
-- `docs/architecture/README.md` for implemented software structure, boundaries, ownership, dependencies, and runtime flows.
+The available tasks now include:
 
-The architecture documentation now has a second real visualization implementation to describe rather than a hypothetical future renderer.
+```text
+canvas:build
+canvas:watch
+canvas:serve
+```
+
+`canvas:watch` automatically rebuilds the browser bundle when TypeScript source changes, while the generated files remain ignored derived artifacts.
+
+A typical development setup is:
+
+```text
+source edit
+    ↓
+deno task canvas:watch
+    ↓
+automatic browser bundle
+    ↓
+deno task canvas:serve
+    ↓
+browser refresh
+```
+
+### Emerging visualization duplication
+
+SVG and Canvas now independently implement the same essential world-to-display mapping:
+
+```text
+displayX = viewportWidth / 2 + worldX × pixelsPerUnit
+
+displayY = viewportHeight / 2 - worldY × pixelsPerUnit
+```
+
+This is no longer hypothetical duplication: two concrete renderers now require the same transformation semantics.
+
+No generic renderer abstraction has been introduced.
 
 ## Next step
 
-Make simulation time independent from display refresh rate.
+Review the duplicated SVG and Canvas coordinate transformations and extract the smallest reusable world-to-display / viewport transformation that both renderers genuinely need.
 
-The current Canvas example deliberately advances the world once for each `requestAnimationFrame` callback using a fixed simulation timestep.
+The first shared transformation should cover only requirements already demonstrated by the two renderers, such as:
 
-That proved the animation path, but it means a higher-refresh-rate display advances more simulation steps per real second than a lower-refresh-rate display.
+- viewport width and height;
+- pixels per world unit;
+- world origin placement;
+- mathematical-to-display Y-axis inversion;
+- conversion of world coordinates into display coordinates.
 
-The next small goal should introduce a proper fixed-timestep browser loop that separates:
+It should not yet introduce:
 
-- **simulation time** — advanced in deterministic fixed-size steps;
-- **rendering time** — driven by browser display frames.
-
-The feature should teach and demonstrate the accumulator/fixed-timestep pattern without yet adding:
-
-- play/pause controls;
-- interpolation;
-- pan or zoom;
-- diagnostic overlays;
+- pan;
+- zoom;
+- cameras;
 - renderer interfaces;
-- application frameworks.
+- scene graphs;
+- generalized drawing primitives.
 
-After the animation loop is stable, review the duplicated SVG and Canvas world-to-display transformations and consider extracting the first shared viewport transformation abstraction.
-
-That transformation can then provide the foundation for later pan and zoom.
+Once SVG and Canvas both use the shared transformation successfully, pan and zoom can become a later extension built on a proven coordinate boundary.

@@ -24,27 +24,19 @@ At the current checkpoint, vLab2D has three important runtime areas:
 
 ```mermaid
 flowchart LR
-    HOST["Host / Example<br/>examples/"]
+    HOST["Host / Example"]
 
-    subgraph ENGINE["Simulation Engine — src/engine/"]
-        API["Public API<br/>mod.ts"]
-        WORLD["KinematicWorld"]
-        INTEGRATOR["KinematicIntegrator"]
-        STATE["Kinematic state"]
-    end
+    WORLD["KinematicWorld"]
+    SNAP["Detached snapshots"]
 
-    subgraph VIS["Visualization — src/visualization/"]
-        SVG["SvgKinematicRenderer"]
-    end
+    SVG["SvgKinematicRenderer"]
+    CANVAS["CanvasKinematicRenderer"]
 
-    HOST --> API
-    HOST --> SVG
+    HOST --> WORLD
+    WORLD --> SNAP
 
-    API --> WORLD
-    WORLD --> INTEGRATOR
-    WORLD --> STATE
-
-    SVG -->|"public snapshot types"| API
+    SNAP --> SVG
+    SNAP --> CANVAS
 ```
 
 The most important dependency rule is:
@@ -691,30 +683,24 @@ Putting the pieces together:
 
 ```mermaid
 sequenceDiagram
-    participant Host as Example / Host
+    participant Browser
+    participant Host
     participant World as KinematicWorld
-    participant Integrator as KinematicIntegrator
-    participant Renderer as SvgKinematicRenderer
-    participant Output as SVG file
+    participant Renderer as CanvasKinematicRenderer
 
-    Host->>World: createBody(initialState)
-    Host->>World: createBody(initialState)
-    Host->>World: createBody(initialState)
+    Browser->>Host: requestAnimationFrame(timestamp)
+    Host->>Host: calculate frame delta
+    Host->>Host: add delta to accumulator
 
-    loop simulation steps
-        Host->>World: step(dt)
-        World->>Integrator: integrate each body
-        Integrator-->>World: candidate states
-        World->>World: validate and commit
+    loop while accumulator >= fixed timestep
+        Host->>World: step(fixed timestep)
+        Host->>Host: subtract fixed timestep
     end
 
     Host->>World: getBodySnapshots()
     World-->>Host: detached snapshots
-
     Host->>Renderer: render(snapshots)
-    Renderer-->>Host: SVG text
-
-    Host->>Output: write SVG
+    Host->>Browser: request next frame
 ```
 
 This represents the first complete vertical slice through vLab2D:
@@ -815,6 +801,11 @@ It is useful to keep these categories separate.
 ✓ independent SVG visualization
 ✓ world-to-SVG coordinate mapping
 ✓ external host/example composition
+✓ independent Canvas 2D visualization
+✓ browser requestAnimationFrame host
+✓ fixed-timestep accumulator loop
+✓ simulation/render cadence separation
+✓ duplicated SVG/Canvas world-to-display mapping
 ```
 
 ### Established architectural principles
@@ -834,7 +825,6 @@ It is useful to keep these categories separate.
 Possible future capabilities include:
 
 ```text
-? Canvas renderer
 ? reusable viewport/world-to-display transform
 ? pan and zoom
 ? experiment orchestration
@@ -851,68 +841,44 @@ These are directions, not promises about concrete class or folder structure.
 
 ---
 
-## 19. Near-term architectural pressure: a second renderer
+## 19. Architectural pressure: shared world-to-display transformation
 
-The next visualization milestone is expected to introduce a minimal Canvas renderer.
+SVG and Canvas now independently implement the same world-to-display transformation.
 
-That will create an interesting architectural moment:
+This duplication is concrete evidence rather than a predicted future requirement:
 
 ```mermaid
 flowchart TD
-    WORLD["World snapshots"]
+    SNAP["Detached world snapshots"]
 
-    SVG["SVG renderer"]
-    CANVAS["Canvas renderer"]
+    SVG["SvgKinematicRenderer"]
+    CANVAS["CanvasKinematicRenderer"]
 
     SVGTRANS["SVG world/display mapping"]
     CANVASTRANS["Canvas world/display mapping"]
 
-    WORLD --> SVG
-    WORLD --> CANVAS
+    SNAP --> SVG
+    SNAP --> CANVAS
 
     SVG --> SVGTRANS
     CANVAS --> CANVASTRANS
 ```
 
-If both renderers independently need the same concepts:
+Both renderers currently need the same concepts:
 
-- viewport dimensions;
-- world origin placement;
+- viewport width and height;
 - pixels per world unit;
-- Y-axis inversion;
+- the world origin mapped to the viewport center;
+- inversion between mathematical positive Y and display positive Y;
+- conversion from world coordinates to display coordinates.
 
-then duplication will provide evidence for extracting a shared transform.
+The duplication now justifies reviewing whether those concepts belong in a small shared transformation component.
 
-The architecture may then evolve toward:
+The extraction should remain narrower than a generic rendering abstraction. SVG and Canvas still have different rendering mechanisms and output models, and the project has not demonstrated a need for a renderer interface, drawing backend, scene graph, or camera framework.
 
-```mermaid
-flowchart TD
-    SNAP["World snapshots"]
+A shared transformation should first represent only the coordinate behavior already required by both concrete renderers.
 
-    TRANSFORM["World-to-display transform"]
-
-    SVG["SVG renderer"]
-    CANVAS["Canvas renderer"]
-
-    SNAP --> SVG
-    SNAP --> CANVAS
-
-    TRANSFORM --> SVG
-    TRANSFORM --> CANVAS
-```
-
-That transform may later become the natural home for:
-
-```text
-pan
-zoom
-world ↔ display conversion
-visible world bounds
-```
-
-Importantly, that abstraction is not being created yet.
-
-The second consumer should demonstrate its shape first.
+Pan and zoom may later extend that boundary once the basic shared transformation has been proven.
 
 ---
 

@@ -83,6 +83,27 @@ flowchart LR
 
 The browser's animation callback controls repeated execution. The renderer itself has no knowledge of `requestAnimationFrame`.
 
+## Animation timing
+
+The browser host separates rendering cadence from simulation cadence.
+
+`requestAnimationFrame` provides frame timestamps, which are converted into elapsed seconds and accumulated. The host consumes that accumulated time through fixed-size world steps before rendering the latest body snapshots.
+
+```mermaid
+flowchart LR
+    F[Browser frame]
+    D[Elapsed frame time]
+    A[Accumulator]
+    S[Fixed simulation steps]
+    R[Canvas render]
+
+    F --> D --> A --> S --> R
+```
+
+The renderer itself remains unaware of this timing mechanism. `CanvasKinematicRenderer` only draws the snapshots it receives.
+
+Variable frame delta is therefore a scheduling input rather than the numerical integration timestep.
+
 ## Coordinate systems
 
 The engine uses mathematical world coordinates:
@@ -128,24 +149,8 @@ The two concrete implementations should continue to teach us which concepts are 
 
 ## Direction
 
-Near-term visualization work should proceed in small steps:
+SVG and Canvas now provide two concrete implementations of the same world-to-display coordinate conversion.
 
-1. make browser simulation time independent from display refresh rate;
-2. review and likely extract the duplicated world-to-display transformation;
-3. use that transform as the foundation for future pan and zoom.
+The next visualization step is to inspect that demonstrated duplication and extract the smallest reusable viewport/world-to-display transformation needed by both renderers.
 
-Later visualization capabilities may include:
-
-- coordinate references in Canvas;
-- body labels;
-- velocity and acceleration vectors;
-- trails;
-- collision bounds;
-- contact points and normals;
-- state-based styling;
-- side-by-side world views;
-- overlaid world views.
-
-The SVG renderer should remain useful for static output even as the live Canvas path grows.
-
-New shared abstractions should continue to appear only when concrete implementations demonstrate their need.
+Pan, zoom, renderer interfaces, richer diagnostics, and other visualization abstractions remain deferred until concrete requirements establish their shape.

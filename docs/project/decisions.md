@@ -439,3 +439,24 @@ The purpose is to keep the architecture documentation trustworthy for contributo
 Architecture documentation should use diagrams where they materially improve understanding of structural relationships, dependency direction, ownership, or runtime data flow.
 
 As the architecture grows, `docs/architecture/README.md` remains the section entry point. Focused architecture documents should be extracted only when the amount of real implemented architecture makes that split useful.
+
+## D-048 — Browser rendering cadence is decoupled from simulation cadence
+
+**Status:** Accepted
+
+The browser host advances simulation time using a fixed timestep rather than using the variable time between rendered frames directly as the physics timestep.
+
+`requestAnimationFrame` timestamps measure elapsed real time. The host accumulates that elapsed time and performs zero or more fixed-size `KinematicWorld.step(...)` calls before rendering the latest committed world state.
+
+This keeps:
+
+- simulation timestep stable;
+- numerical integration behavior independent from display refresh rate;
+- browser scheduling concerns outside the simulation engine;
+- rendering frequency independent from simulation frequency.
+
+The browser host may cap unusually large frame deltas before adding them to the accumulator. This prevents a suspended or heavily delayed browser tab from attempting an excessive backlog of simulation steps when execution resumes.
+
+Rendering currently uses the latest completed fixed-step state. Interpolation between simulation states is intentionally deferred until a concrete need justifies the additional state and presentation complexity.
+
+The current loop remains application/example code rather than being extracted into a reusable runtime abstraction. A dedicated simulation-loop abstraction should be introduced only if additional hosts or runtime requirements demonstrate that need.

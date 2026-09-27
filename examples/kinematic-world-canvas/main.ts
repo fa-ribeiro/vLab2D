@@ -28,10 +28,30 @@ world.createBody(new KinematicState(new Vector2(4, 2), new Vector2(-1, 2)));
 
 const renderer = new CanvasKinematicRenderer(context, canvas.width, canvas.height, 40, 6);
 
-const timestep = 1 / 60;
+const FIXED_TIMESTEP = 1 / 60;
+const MAX_FRAME_DELTA = 0.25;
 
-function frame(): void {
-  world.step(timestep);
+let previousTimestamp: number | undefined;
+let accumulator = 0;
+
+function frame(timestamp: number): void {
+  if (previousTimestamp === undefined) {
+    previousTimestamp = timestamp;
+    requestAnimationFrame(frame);
+    return;
+  }
+
+  const frameDelta = (timestamp - previousTimestamp) / 1000;
+  previousTimestamp = timestamp;
+
+  // Avoid attempting to simulate a very large backlog after the browser
+  // suspends or heavily delays animation frames.
+  accumulator += Math.min(frameDelta, MAX_FRAME_DELTA);
+
+  while (accumulator >= FIXED_TIMESTEP) {
+    world.step(FIXED_TIMESTEP);
+    accumulator -= FIXED_TIMESTEP;
+  }
 
   renderer.render(world.getBodySnapshots());
 
