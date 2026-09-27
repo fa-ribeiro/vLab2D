@@ -394,3 +394,26 @@ A body snapshot combines the body's world-local identity with its observed kinem
 The order of snapshots returned by the world is not part of the public contract. Consumers should use `BodyId` when identity matters rather than depending on iteration or storage order.
 
 This keeps the public observation model independent from the world's internal storage representation and allows that representation to evolve without affecting external renderers, debuggers, inspectors, or other consumers.
+
+## D-046 — Documentation is organized into indexed sections
+
+**Status:** Accepted
+
+As project documentation grows, related documents should be grouped into coherent sections under `docs/`.
+
+Each documentation section should normally provide a `README.md` that acts as its entry point and index.
+
+The section README should:
+
+- explain the purpose and scope of the section;
+- guide readers toward the appropriate focused documents;
+- provide useful reading paths where appropriate;
+- avoid duplicating detailed information whose authoritative home is another document.
+
+The repository `README.md` remains the overall project front door and should link to section-level documentation entry points rather than becoming a flat catalog of every documentation file.
+
+`docs/project/README.md` is the first implementation of this structure and indexes the project's context, status, decisions, conceptual map, environment, workflow, and handoff documentation.
+
+Future documentation areas, such as software architecture, should follow the same pattern when their scope becomes substantial enough to justify a dedicated section.
+
+This keeps documentation navigable as the project grows while preserving the existing principle that each piece of information should have one authoritative home.

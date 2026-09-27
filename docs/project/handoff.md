@@ -1,10 +1,18 @@
 # New Chat Handoff
 
-Prefer attaching or making the entire source repository available. The continuity pack lives inside the repository at `docs/project/`. If only the continuity pack is available, also provide the current source files needed for the task.
+Prefer attaching or making the entire source repository available.
 
-Then say:
+The project-documentation entry point is [`README.md`](README.md). It indexes the continuity documents stored in `docs/project/` and explains their responsibilities.
 
-> We are continuing the vLab2D project. Read `project-context.md` first, then `status.md`, `decisions.md`, `environment.md`, `workflow.md`, and `project-map.md`. Treat them as the source of truth. Continue from the recorded state rather than redesigning the project. Update the continuity documentation whenever materially relevant project information changes.
+For a fresh development context:
+
+1. identify the latest commit explicitly confirmed by the project owner as the authoritative baseline;
+2. read `README.md` in this directory for project-documentation orientation;
+3. read `project-context.md` for stable project identity and direction;
+4. read `status.md` for the current checkpoint and next goal;
+5. consult `decisions.md`, `workflow.md`, `environment.md`, and `project-map.md` as required by the task.
+
+If only the project documentation is available, also provide the current source files required for the work.
 
 ## Why the source repository is also necessary
 

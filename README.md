@@ -12,9 +12,9 @@ Eventually, vLab2D aims to make simulations not only runnable, but **observable*
 
 **Current checkpoint:** a multi-body `KinematicWorld` owns and advances authoritative body state, exposes detached observations through its public API, and can be visualized through a static SVG renderer with a coordinate grid, X/Y axes, and world-origin reference.
 
-**Next step:** improve the documentation structure with section-level indexes before beginning the first animated Canvas renderer.
+**Next step:** improve the project documentation structure before beginning the first animated Canvas renderer.
 
-See [`docs/project/status.md`](docs/project/status.md) for the authoritative current checkpoint and next goal.
+See the [project documentation](docs/project/README.md) for the authoritative current status, project context, decisions, workflow, and continuity information.
 
 ## Environment
 
@@ -32,7 +32,7 @@ Project functionality is implemented from scratch when doing so contributes to t
 vLab2D/
 ├── .vscode/
 ├── docs/
-│   └── project/          # project context, decisions, workflow and status
+│   └── project/          # project context, decisions, workflow and continuity
 ├── examples/             # runnable examples and visual experiments
 ├── src/
 │   ├── engine/           # self-contained simulation engine
@@ -76,19 +76,13 @@ deno task verify       # run the normal quality gate
 
 Generated documentation, visualization output, coverage reports, and other derived artifacts are not committed to the repository.
 
-## Project documentation
+## Documentation
 
-The detailed project documentation currently lives under [`docs/project/`](docs/project/):
+Project-level documentation is organized under:
 
-- [`project-context.md`](docs/project/project-context.md) — project identity, goals, constraints, and architectural principles
-- [`project-map.md`](docs/project/project-map.md) — visual map of the project and its possible evolution
-- [`status.md`](docs/project/status.md) — current implementation state and next activity
-- [`decisions.md`](docs/project/decisions.md) — durable architectural and project decisions
-- [`environment.md`](docs/project/environment.md) — development environment, versions, and tooling constraints
-- [`workflow.md`](docs/project/workflow.md) — development process, learning approach, testing standards, and working agreement
-- [`handoff.md`](docs/project/handoff.md) — continuity instructions for resuming the project in a new context
+- [Project documentation](docs/project/README.md) — project identity, current status, decisions, environment, workflow, conceptual map, and continuity information.
 
-The documentation structure will next evolve toward section-level `README.md` indexes so the root README can remain a concise project front door while dedicated sections provide deeper navigation and architectural explanation.
+As the project grows, other documentation areas can receive their own section-level indexes. In particular, a future architecture section will explain how the major runtime and visualization components fit together.
 
 ## License
 

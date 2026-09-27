@@ -68,7 +68,9 @@ Documentation should help a future version of the user answer: “Why did I writ
 
 Prefer a **single authoritative home** for each kind of project information. Other documents may provide a short summary or link when that helps navigation, but should not reproduce the same detailed information.
 
-- `README.md` — project front door: concise presentation, environment summary, structure, normal commands, current-status summary, and links to deeper documentation.
+- root `README.md` — repository front door: concise project presentation, environment summary, structure, normal commands, current-status summary, and links to documentation sections.
+- section `README.md` files — entry points and indexes for coherent documentation areas. They explain what the section contains and route readers to focused documents without duplicating those documents.
+- `docs/project/README.md` — index and orientation for project-level documentation.
 - `project-context.md` — stable project identity, goals, constraints, architectural principles, and repository identity.
 - `status.md` — only the current checkpoint and the next small goal; it is not a changelog or commit history.
 - `decisions.md` — durable accepted/rejected architectural and workflow decisions with rationale.
@@ -77,6 +79,8 @@ Prefer a **single authoritative home** for each kind of project information. Oth
 - `project-map.md` — visual conceptual map where diagrams materially improve understanding.
 - `handoff.md` — how to resume the project; it should point to authoritative files rather than repeat their current contents.
 - `deno.json` — authoritative project task definitions.
+
+As documentation grows, prefer grouping related material into dedicated sections under `docs/`, each with its own `README.md` index. The repository README should link to those section indexes rather than becoming a flat catalog of every documentation file.
 
 The Git commit history remains the source for historical implementation chronology. Do not duplicate that history in `status.md` or other continuity files unless a historical reference is specifically needed to explain a durable decision.
 
