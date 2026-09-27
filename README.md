@@ -10,9 +10,9 @@ Eventually, vLab2D aims to make simulations not only runnable, but **observable*
 
 ## Project status
 
-**Current checkpoint:** project bootstrap complete; immutable `Vector2` is the first completed engine primitive.
+**Current checkpoint:** a multi-body `KinematicWorld` owns and advances authoritative body state, exposes detached observations through its public API, and can now be visualized through the first SVG renderer.
 
-**Next step:** choose and design the next smallest useful engine feature before writing more code.
+**Next step:** make the visualization easier to interpret by adding simple spatial references such as the world origin and coordinate axes.
 
 See [`docs/project/status.md`](docs/project/status.md) for the authoritative current checkpoint and next goal.
 
@@ -33,6 +33,7 @@ vLab2D/
 ├── .vscode/
 ├── docs/
 │   └── project/          # project context, decisions, workflow and status
+├── examples/             # runnable examples and visual experiments
 ├── src/
 │   ├── engine/           # self-contained simulation engine
 │   └── visualization/    # rendering and diagnostic visualization
@@ -44,6 +45,8 @@ vLab2D/
 ```
 
 The simulation engine is designed as a **self-contained module**. External systems such as renderers, debuggers, inspectors, user interfaces, and experiment runners should interact with the engine through its public API rather than directly modifying its internal state.
+
+Visualization remains outside the engine boundary. The current SVG renderer consumes detached body snapshots exposed by the engine and is responsible for transforming mathematical world coordinates into display coordinates.
 
 Feature-level unit tests are normally colocated with the code they exercise:
 
@@ -69,7 +72,7 @@ deno task doc:html     # generate searchable API docs under generated/api
 deno task verify       # run the normal quality gate
 ```
 
-Generated documentation, coverage reports, and other derived artifacts are not committed to the repository.
+Generated documentation, visualization output, coverage reports, and other derived artifacts are not committed to the repository.
 
 ## Project documentation
 
