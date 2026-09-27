@@ -11,6 +11,7 @@
 export class ViewportTransform {
   #centerWorldX = 0;
   #centerWorldY = 0;
+  #pixelsPerUnit: number;
 
   /**
    * Creates a world-to-display coordinate transform.
@@ -23,11 +24,13 @@ export class ViewportTransform {
   public constructor(
     public readonly width: number,
     public readonly height: number,
-    public readonly pixelsPerUnit: number,
+    pixelsPerUnit: number,
   ) {
     assertPositiveFinite(width, "Width");
     assertPositiveFinite(height, "Height");
     assertPositiveFinite(pixelsPerUnit, "Pixels per unit");
+
+    this.#pixelsPerUnit = pixelsPerUnit;
   }
 
   /**
@@ -72,6 +75,10 @@ export class ViewportTransform {
     return this.#centerWorldY;
   }
 
+  public get pixelsPerUnit(): number {
+    return this.#pixelsPerUnit;
+  }
+
   /**
    * Changes the world position mapped to the center of the viewport.
    *
@@ -85,6 +92,45 @@ export class ViewportTransform {
 
     this.#centerWorldX = worldX;
     this.#centerWorldY = worldY;
+  }
+
+  /**
+   * Changes the number of display units representing one world unit.
+   *
+   * Increasing the value zooms in while preserving the current world-space
+   * viewport center.
+   *
+   * @param pixelsPerUnit The new positive finite display scale.
+   * @throws {RangeError} If the scale is not positive and finite.
+   */
+  public setPixelsPerUnit(pixelsPerUnit: number): void {
+    assertPositiveFinite(pixelsPerUnit, "Pixels per unit");
+
+    this.#pixelsPerUnit = pixelsPerUnit;
+  }
+
+  public setPixelsPerUnitAroundDisplayPoint(
+    pixelsPerUnit: number,
+    displayX: number,
+    displayY: number,
+  ): void {
+    assertPositiveFinite(pixelsPerUnit, "Pixels per unit");
+    assertFinite(displayX, "Display X");
+    assertFinite(displayY, "Display Y");
+
+    const anchorWorldX = this.displayToWorldX(displayX);
+    const anchorWorldY = this.displayToWorldY(displayY);
+
+    const centerWorldX = anchorWorldX - (displayX - this.width / 2) / pixelsPerUnit;
+
+    const centerWorldY = anchorWorldY + (displayY - this.height / 2) / pixelsPerUnit;
+
+    assertFinite(centerWorldX, "Center world X");
+    assertFinite(centerWorldY, "Center world Y");
+
+    this.#pixelsPerUnit = pixelsPerUnit;
+    this.#centerWorldX = centerWorldX;
+    this.#centerWorldY = centerWorldY;
   }
 
   /**

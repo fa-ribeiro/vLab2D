@@ -574,3 +574,19 @@ The capability was introduced only after pointer-coordinate inspection created a
 Browser-specific conversion from Pointer Event client coordinates into Canvas drawing-buffer coordinates remains host responsibility. UI formatting and presentation of the resulting world coordinate also remain host concerns. `ViewportTransform` therefore stays independent from DOM APIs, CSS layout, renderer output, and engine-domain types such as `Vector2`.
 
 This adds bidirectional coordinate conversion without introducing a point value type, camera abstraction, transformation matrices, body picking, selection, or zoom.
+
+## D-055 — Viewport scale is mutable geometry while zoom interaction policy belongs to the host
+
+**Status:** Accepted
+
+`ViewportTransform` treats display scale (`pixelsPerUnit`) as mutable viewport state alongside the mutable world-space center, while viewport width and height remain immutable.
+
+A validated `setPixelsPerUnit(...)` operation changes magnification while preserving the current world-space viewport center. Forward world-to-display mapping, inverse display-to-world mapping, and continuous visible-world bounds all derive from the current scale.
+
+For interactive zoom, `setPixelsPerUnitAroundDisplayPoint(...)` changes scale and center together so the world coordinate underneath a supplied display-space anchor remains fixed. The requested scale, anchor coordinates, and candidate center are validated before the new scale and center are committed, preserving the viewport update atomically.
+
+`CanvasKinematicRenderer` exposes semantic viewport operations rather than exposing its transform object. It supports programmatic scale changes, read-only observation of the current scale, and scale changes around a Canvas display-space anchor. `SvgKinematicRenderer` exposes the naturally shared programmatic scale operation but does not mirror Canvas-specific interaction APIs without a concrete SVG consumer.
+
+Browser wheel and trackpad semantics remain host/application responsibility. The Canvas example owns browser client-to-Canvas coordinate conversion, wheel-delta normalization, zoom sensitivity, minimum and maximum scale policy, suppression of page scrolling during Canvas zoom, and conversion from wheel input into an absolute requested viewport scale.
+
+The transform therefore owns zoom geometry and viewport invariants, while the host owns interaction policy. This adds pointer-anchored zoom without introducing wheel-event knowledge into the renderer or transform, and without introducing a camera abstraction, transformation matrices, or gesture framework.

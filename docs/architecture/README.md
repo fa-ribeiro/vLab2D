@@ -586,18 +586,20 @@ Variable browser frame delta is used as scheduling input, not as the numerical i
 
 The renderer remains unaware of `requestAnimationFrame` and of simulation stepping.
 
-The host also owns pointer interaction. It tracks the active pointer, uses browser pointer capture for dragging, and converts Pointer Event client coordinates from CSS space into Canvas drawing-buffer coordinates. Display-space deltas are passed to `CanvasKinematicRenderer.panViewportBy(...)`; absolute display coordinates are passed through the renderer's inverse mapping queries to produce the live world-coordinate readout. The renderer therefore remains independent from DOM pointer-event APIs and UI formatting.
+The host also owns pointer and wheel interaction. It tracks the active pointer, uses browser pointer capture for dragging, and converts browser client coordinates from CSS space into Canvas drawing-buffer coordinates. Display-space deltas are passed to `CanvasKinematicRenderer.panViewportBy(...)`; absolute display coordinates are passed through the renderer's inverse mapping queries to produce the live world-coordinate readout.
+
+For wheel/trackpad zoom, the host normalizes wheel deltas, applies zoom sensitivity and minimum/maximum scale policy, prevents page scrolling while the Canvas owns the wheel interaction, and supplies an absolute requested scale together with the pointer's Canvas display-space anchor. `CanvasKinematicRenderer` delegates the anchor-preserving geometry to `ViewportTransform`. The renderer therefore remains independent from DOM pointer/wheel-event APIs and host interaction policy.
 
 ```mermaid
 flowchart LR
-    POINTER["Pointer Events"]
+    INPUT["Pointer / wheel events"]
     HOST["Canvas example / host"]
-    DISPLAY["Canvas display coordinates"]
+    POLICY["CSS conversion + interaction policy"]
     RENDERER["CanvasKinematicRenderer"]
     TRANSFORM["ViewportTransform"]
     OUTPUT["World-coordinate output"]
 
-    POINTER --> HOST --> DISPLAY --> RENDERER --> TRANSFORM
+    INPUT --> HOST --> POLICY --> RENDERER --> TRANSFORM
     TRANSFORM --> RENDERER --> HOST --> OUTPUT
 ```
 
@@ -686,10 +688,13 @@ It is useful to keep these categories separate.
 ✓ shared display-to-world coordinate mapping
 ✓ shared continuous visible world bounds
 ✓ mutable world-space viewport center
+✓ mutable viewport display scale
 ✓ programmatic viewport centering in Canvas and SVG
+✓ programmatic viewport scale in Canvas and SVG
 ✓ Canvas display-space panning operation
 ✓ pointer-drag panning in the Canvas browser host
 ✓ Canvas pointer world-coordinate inspection
+✓ pointer-anchored wheel / trackpad zoom
 ✓ equivalent SVG and Canvas spatial references
 ✓ Canvas integer grid
 ✓ Canvas world axes
@@ -717,8 +722,8 @@ It is useful to keep these categories separate.
 Possible future capabilities include:
 
 ```text
-? programmatic viewport zoom
-? wheel / trackpad / pinch zoom
+? pinch zoom
+? body picking and selection
 ? experiment orchestration
 ? synchronized multiple worlds
 ? UI controls
@@ -754,8 +759,8 @@ flowchart TD
 
 The shared transform owns:
 
-- viewport width and height;
-- pixels per world unit;
+- immutable viewport width and height;
+- mutable pixels per world unit;
 - a mutable world-space position mapped to the viewport center;
 - inversion between mathematical positive Y and display positive Y;
 - conversion from world coordinates into display coordinates;
@@ -763,7 +768,7 @@ The shared transform owns:
 
 The renderers retain responsibility for rendering-specific behavior.
 
-Viewport dimensions and scale remain immutable, while the world-space center is mutable so the visible region can move without reconstructing the renderer. The transform is created internally by each renderer.
+Viewport dimensions remain immutable, while the world-space center and display scale are mutable so the visible region can move and change magnification without reconstructing the renderer. The transform is created internally by each renderer.
 
 It is not currently an injected strategy because the project has not demonstrated a need to substitute transformation behavior independently from renderer construction.
 
@@ -782,7 +787,7 @@ minWorldY
 maxWorldY
 ```
 
-These bounds are derived from viewport dimensions, scale, and the current world-space center without allocating a separate bounds object.
+These bounds are derived from viewport dimensions, the mutable scale, and the current world-space center without allocating a separate bounds object.
 
 The responsibility boundary is:
 
@@ -804,7 +809,7 @@ flowchart TD
 
 Continuous extent belongs to viewport geometry. Discrete grid selection remains renderer behavior: each renderer decides which integer coordinates to draw, reserves zero for the world axes, applies presentation styling, and uses its own drawing technology.
 
-This keeps `ViewportTransform` useful beyond grid rendering while avoiding a grid-aware viewport abstraction. Panning now changes the world-space center, so visible bounds are no longer required to be symmetric around the world origin.
+This keeps `ViewportTransform` useful beyond grid rendering while avoiding a grid-aware viewport abstraction. Panning changes the world-space center, and zoom changes the scale, so visible bounds follow both pieces of mutable viewport state rather than remaining symmetric around the world origin.
 
 `CanvasKinematicRenderer.panViewportBy(...)` translates display-space drag displacement into a center change. The browser host owns Pointer Events and CSS-pixel conversion, preserving the renderer's independence from DOM input mechanics.
 
@@ -828,7 +833,36 @@ flowchart LR
     CLIENT --> HOST --> DISPLAY --> RENDERER --> TRANSFORM --> WORLD
 ```
 
-No `WorldBounds` value type, renderer hierarchy, camera model, transformation matrix framework, point abstraction, body-picking system, or zoom system has been introduced.
+### Mutable scale and anchor-preserving zoom
+
+Programmatic zoom introduced the first need for display scale to change after renderer construction. `ViewportTransform` therefore treats `pixelsPerUnit` as mutable viewport state rather than immutable constructor-only configuration.
+
+`setPixelsPerUnit(...)` changes magnification while preserving the current world-space center. Because forward mapping, inverse mapping, and visible-world bounds all read the same current scale, they remain coherent after the change.
+
+Interactive zoom created a stronger geometric requirement: the world point underneath the pointer should remain underneath the pointer while scale changes. `setPixelsPerUnitAroundDisplayPoint(...)` implements that invariant by:
+
+1. resolving the world coordinate currently underneath the display-space anchor;
+2. calculating the center required to keep that world coordinate at the same display location under the new scale;
+3. validating the requested scale, anchor, and candidate center;
+4. committing the new scale and center only after all candidate values are valid.
+
+```mermaid
+flowchart LR
+    ANCHOR["Display-space anchor"]
+    WORLD["World point under anchor"]
+    SCALE["Requested scale"]
+    CENTER["Candidate viewport center"]
+    COMMIT["Atomic scale + center commit"]
+
+    ANCHOR --> WORLD --> CENTER
+    SCALE --> CENTER --> COMMIT
+```
+
+Both renderers expose programmatic scale changes because mutable scale is shared viewport geometry. Canvas additionally exposes its current scale and an anchor-aware scale operation because the browser host has a concrete interactive consumer for those capabilities.
+
+The browser host owns wheel/trackpad interpretation: browser-coordinate conversion, delta-mode normalization, exponential zoom sensitivity, minimum/maximum scale limits, and cancellation of page scrolling during Canvas zoom. These are interaction policies rather than `ViewportTransform` invariants.
+
+No `WorldBounds` value type, renderer hierarchy, camera model, transformation matrix framework, point abstraction, body-picking system, persistent selection model, or gesture framework has been introduced.
 
 ---
 

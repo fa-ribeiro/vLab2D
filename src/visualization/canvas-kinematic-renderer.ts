@@ -73,6 +73,44 @@ export class CanvasKinematicRenderer {
   }
 
   /**
+   * Changes the viewport display scale.
+   *
+   * Increasing the scale zooms in while preserving the current
+   * world-space viewport center.
+   *
+   * @param pixelsPerUnit The positive finite number of Canvas display units
+   * representing one world unit.
+   * @throws {RangeError} If the scale is not positive and finite.
+   */
+  public setViewportScale(pixelsPerUnit: number): void {
+    this.#transform.setPixelsPerUnit(pixelsPerUnit);
+  }
+
+  /**
+   * The current number of Canvas display units representing one world unit.
+   */
+  public get viewportScale(): number {
+    return this.#transform.pixelsPerUnit;
+  }
+
+  /**
+   * Changes the viewport scale while preserving the world point underneath
+   * a Canvas display-space anchor.
+   *
+   * @param pixelsPerUnit The new positive finite display scale.
+   * @param displayX The horizontal anchor in Canvas drawing-buffer units.
+   * @param displayY The vertical anchor in Canvas drawing-buffer units.
+   * @throws {RangeError} If the scale or anchor coordinates are invalid.
+   */
+  public setViewportScaleAroundDisplayPoint(
+    pixelsPerUnit: number,
+    displayX: number,
+    displayY: number,
+  ): void {
+    this.#transform.setPixelsPerUnitAroundDisplayPoint(pixelsPerUnit, displayX, displayY);
+  }
+
+  /**
    * Pans the viewport by a displacement expressed in display units.
    *
    * Positive X moves the displayed world to the right.

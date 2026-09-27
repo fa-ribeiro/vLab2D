@@ -148,3 +148,21 @@ Deno.test("SvgKinematicRenderer moves world axes with the viewport center", () =
     '<line data-world-axis="y" x1="70" y1="0" x2="70" y2="100" stroke="currentColor" opacity="0.45" />',
   );
 });
+
+Deno.test("SvgKinematicRenderer renders using the changed viewport scale", () => {
+  const renderer = new SvgKinematicRenderer(200, 100, 10, 3);
+
+  renderer.setViewportCenter(3, -2);
+  renderer.setViewportScale(20);
+
+  const snapshots: readonly KinematicBodySnapshot[] = [
+    {
+      id: 7,
+      state: new KinematicState(new Vector2(4, -1), new Vector2(0, 0)),
+    },
+  ];
+
+  const svg = renderer.render(snapshots);
+
+  assertStringIncludes(svg, '<circle data-body-id="7" cx="120" cy="30" r="3" />');
+});

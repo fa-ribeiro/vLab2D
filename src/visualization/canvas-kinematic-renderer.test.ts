@@ -265,3 +265,45 @@ Deno.test("CanvasKinematicRenderer maps display coordinates into world coordinat
   assertEquals(renderer.displayToWorldX(120), 5);
   assertEquals(renderer.displayToWorldY(20), 1);
 });
+
+Deno.test("CanvasKinematicRenderer renders using the changed viewport scale", () => {
+  const context = new RecordingCanvasContext();
+  const renderer = new CanvasKinematicRenderer(context, 200, 100, 10, 3);
+
+  renderer.setViewportCenter(3, -2);
+  renderer.setViewportScale(20);
+
+  const snapshots: readonly KinematicBodySnapshot[] = [
+    {
+      id: 7,
+      state: new KinematicState(new Vector2(4, -1), new Vector2(0, 0)),
+    },
+  ];
+
+  renderer.render(snapshots);
+
+  const arcCalls = context.calls.filter(([name]) => name === "arc");
+
+  assertEquals(arcCalls, [["arc", 120, 30, 3, 0, Math.PI * 2]]);
+});
+
+Deno.test("CanvasKinematicRenderer changes scale around a display-space anchor", () => {
+  const context = new RecordingCanvasContext();
+  const renderer = new CanvasKinematicRenderer(context, 200, 100, 10);
+
+  renderer.setViewportCenter(3, -2);
+
+  const displayX = 140;
+  const displayY = 30;
+
+  const worldXBefore = renderer.displayToWorldX(displayX);
+  const worldYBefore = renderer.displayToWorldY(displayY);
+
+  renderer.setViewportScaleAroundDisplayPoint(20, displayX, displayY);
+
+  assertEquals(renderer.viewportScale, 20);
+
+  assertEquals(renderer.displayToWorldX(displayX), worldXBefore);
+
+  assertEquals(renderer.displayToWorldY(displayY), worldYBefore);
+});

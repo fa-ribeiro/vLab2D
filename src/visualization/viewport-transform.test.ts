@@ -121,3 +121,80 @@ Deno.test("ViewportTransform maps display coordinates into world coordinates", (
   assertEquals(transform.displayToWorldX(120), 5);
   assertEquals(transform.displayToWorldY(20), 1);
 });
+
+Deno.test("ViewportTransform can change its display scale", () => {
+  const transform = new ViewportTransform(200, 100, 10);
+
+  transform.setPixelsPerUnit(20);
+
+  assertEquals(transform.pixelsPerUnit, 20);
+});
+
+Deno.test("ViewportTransform rejects an invalid display scale without changing it", () => {
+  const transform = new ViewportTransform(200, 100, 10);
+
+  assertThrows(
+    () => transform.setPixelsPerUnit(0),
+    RangeError,
+    "Pixels per unit must be a positive finite number.",
+  );
+
+  assertEquals(transform.pixelsPerUnit, 10);
+});
+
+Deno.test("ViewportTransform scale changes zoom around the world-space center", () => {
+  const transform = new ViewportTransform(200, 100, 10);
+
+  transform.setCenter(3, -2);
+  transform.setPixelsPerUnit(20);
+
+  assertEquals(transform.worldToDisplayX(3), 100);
+  assertEquals(transform.worldToDisplayY(-2), 50);
+
+  assertEquals(transform.worldToDisplayX(5), 140);
+  assertEquals(transform.worldToDisplayY(1), -10);
+
+  assertEquals(transform.minWorldX, -2);
+  assertEquals(transform.maxWorldX, 8);
+  assertEquals(transform.minWorldY, -4.5);
+  assertEquals(transform.maxWorldY, 0.5);
+});
+
+Deno.test("ViewportTransform changes scale around a display-space anchor", () => {
+  const transform = new ViewportTransform(200, 100, 10);
+
+  transform.setCenter(3, -2);
+
+  const displayX = 140;
+  const displayY = 30;
+
+  const worldXBefore = transform.displayToWorldX(displayX);
+  const worldYBefore = transform.displayToWorldY(displayY);
+
+  assertEquals(worldXBefore, 7);
+  assertEquals(worldYBefore, 0);
+
+  transform.setPixelsPerUnitAroundDisplayPoint(20, displayX, displayY);
+
+  assertEquals(transform.pixelsPerUnit, 20);
+
+  assertEquals(transform.displayToWorldX(displayX), worldXBefore);
+
+  assertEquals(transform.displayToWorldY(displayY), worldYBefore);
+});
+
+Deno.test("ViewportTransform rejects invalid anchored scale changes atomically", () => {
+  const transform = new ViewportTransform(200, 100, 10);
+
+  transform.setCenter(3, -2);
+
+  assertThrows(
+    () => transform.setPixelsPerUnitAroundDisplayPoint(20, Number.NaN, 30),
+    RangeError,
+    "Display X must be finite.",
+  );
+
+  assertEquals(transform.pixelsPerUnit, 10);
+  assertEquals(transform.centerWorldX, 3);
+  assertEquals(transform.centerWorldY, -2);
+});

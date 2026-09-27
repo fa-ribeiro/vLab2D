@@ -6,6 +6,13 @@ import {
 } from "../../src/engine/mod.ts";
 import { CanvasKinematicRenderer } from "../../src/visualization/canvas-kinematic-renderer.ts";
 
+const MIN_VIEWPORT_SCALE = 10;
+const MAX_VIEWPORT_SCALE = 200;
+const ZOOM_SENSITIVITY = 0.002;
+
+const FIXED_TIMESTEP = 1 / 60;
+const MAX_FRAME_DELTA = 0.25;
+
 const canvasElement = document.querySelector<HTMLCanvasElement>("#simulation");
 if (canvasElement === null) {
   throw new Error("Simulation canvas was not found.");
@@ -37,6 +44,7 @@ world.createBody(new KinematicState(new Vector2(4, 2), new Vector2(-1, 2)));
 const renderer = new CanvasKinematicRenderer(context, canvas.width, canvas.height, 40, 6);
 
 renderer.setViewportCenter(3, 2);
+renderer.setViewportScale(25);
 
 let activePointerId: number | undefined;
 let previousPointerX = 0;
@@ -100,6 +108,31 @@ function pointerToDisplayCoordinates(event: PointerEvent): { x: number; y: numbe
   };
 }
 
+function clientToDisplayCoordinates(
+  clientX: number,
+  clientY: number,
+): { x: number; y: number } {
+  const bounds = canvas.getBoundingClientRect();
+
+  return {
+    x: ((clientX - bounds.left) * canvas.width) / bounds.width,
+    y: ((clientY - bounds.top) * canvas.height) / bounds.height,
+  };
+}
+
+function normalizeWheelDelta(event: WheelEvent): number {
+  switch (event.deltaMode) {
+    case WheelEvent.DOM_DELTA_LINE:
+      return event.deltaY * 16;
+
+    case WheelEvent.DOM_DELTA_PAGE:
+      return event.deltaY * canvas.getBoundingClientRect().height;
+
+    default:
+      return event.deltaY;
+  }
+}
+
 function updatePointerWorldCoordinate(event: PointerEvent): void {
   const display = pointerToDisplayCoordinates(event);
 
@@ -129,8 +162,28 @@ canvas.addEventListener("pointermove", (event) => {
   updatePointerWorldCoordinate(event);
 });
 
-const FIXED_TIMESTEP = 1 / 60;
-const MAX_FRAME_DELTA = 0.25;
+canvas.addEventListener(
+  "wheel",
+  (event) => {
+    event.preventDefault();
+
+    const display = clientToDisplayCoordinates(event.clientX, event.clientY);
+
+    const wheelDelta = normalizeWheelDelta(event);
+
+    const zoomFactor = Math.exp(-wheelDelta * ZOOM_SENSITIVITY);
+
+    const requestedScale = renderer.viewportScale * zoomFactor;
+
+    const nextScale = Math.min(
+      MAX_VIEWPORT_SCALE,
+      Math.max(MIN_VIEWPORT_SCALE, requestedScale),
+    );
+
+    renderer.setViewportScaleAroundDisplayPoint(nextScale, display.x, display.y);
+  },
+  { passive: false },
+);
 
 let previousTimestamp: number | undefined;
 let accumulator = 0;

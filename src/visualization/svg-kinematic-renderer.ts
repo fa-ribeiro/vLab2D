@@ -58,6 +58,20 @@ export class SvgKinematicRenderer {
   }
 
   /**
+   * Changes the viewport display scale.
+   *
+   * Increasing the scale zooms in while preserving the current
+   * world-space viewport center.
+   *
+   * @param pixelsPerUnit The positive finite number of SVG display units
+   * representing one world unit.
+   * @throws {RangeError} If the scale is not positive and finite.
+   */
+  public setViewportScale(pixelsPerUnit: number): void {
+    this.#transform.setPixelsPerUnit(pixelsPerUnit);
+  }
+
+  /**
    * Renders body snapshots into a complete SVG document.
    *
    * @param snapshots The detached body observations to render.

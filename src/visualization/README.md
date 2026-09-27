@@ -13,7 +13,7 @@ The project currently has two concrete visualization implementations:
 
 Both consume detached `KinematicBodySnapshot` values exposed by the simulation engine.
 
-`ViewportTransform` provides bidirectional world/display coordinate mapping, continuous visible-world geometry, and the mutable world-space viewport center shared by the visualization layer.
+`ViewportTransform` provides bidirectional world/display coordinate mapping, continuous visible-world geometry, mutable world-space centering, mutable display scale, and anchor-preserving zoom geometry shared by the visualization layer.
 
 Neither renderer advances simulation time or performs physics calculations.
 
@@ -39,7 +39,7 @@ It currently renders:
 4. a world-origin marker;
 5. body markers above the spatial reference elements.
 
-The SVG renderer also exposes `setViewportCenter(...)` for the shared programmatic world-space centering capability. Although `ViewportTransform` now supports inverse display-to-world mapping, the SVG renderer does not expose that query because no concrete SVG consumer currently needs it.
+The SVG renderer exposes `setViewportCenter(...)` for shared programmatic world-space centering and `setViewportScale(...)` for shared programmatic scale changes. Although `ViewportTransform` also supports inverse display-to-world mapping and anchor-aware scale changes, the SVG renderer does not expose those Canvas-oriented interaction queries because no concrete SVG consumer currently needs them.
 
 The SVG renderer is useful as a:
 
@@ -89,9 +89,11 @@ flowchart LR
 
 The grid omits zero-coordinate lines because those positions are represented by the world axes.
 
-Spatial references and body positions use the shared `ViewportTransform`. `setViewportCenter(...)` changes which world position occupies the display center, while `panViewportBy(...)` accepts finite Canvas display-space deltas and converts them into world-center movement. `displayToWorldX(...)` and `displayToWorldY(...)` expose inverse scalar mapping for interaction without exposing the transform object itself.
+Spatial references and body positions use the shared `ViewportTransform`. `setViewportCenter(...)` changes which world position occupies the display center, `setViewportScale(...)` changes magnification while preserving that center, and `panViewportBy(...)` accepts finite Canvas display-space deltas and converts them into world-center movement. `displayToWorldX(...)` and `displayToWorldY(...)` expose inverse scalar mapping for interaction without exposing the transform object itself. `viewportScale` exposes the current scale read-only, and `setViewportScaleAroundDisplayPoint(...)` delegates anchor-preserving scale changes for interactive zoom.
 
-The live browser host owns pointer interaction. It tracks one active pointer for dragging, uses pointer capture, converts browser CSS coordinates into Canvas drawing-buffer coordinates, and forwards display-space deltas to `panViewportBy(...)`. The same drawing-buffer coordinates can be queried through the inverse mapping to report the world coordinate underneath the pointer. The renderer itself does not depend on Pointer Events or other DOM input APIs, and presentation formatting remains host/UI responsibility.
+The live browser host owns pointer and wheel interaction. It tracks one active pointer for dragging, uses pointer capture, converts browser CSS coordinates into Canvas drawing-buffer coordinates, and forwards display-space deltas to `panViewportBy(...)`. The same drawing-buffer coordinates can be queried through the inverse mapping to report the world coordinate underneath the pointer or used as the anchor for wheel/trackpad zoom.
+
+Wheel normalization, zoom sensitivity, minimum and maximum scale, and suppression of browser page scrolling during Canvas zoom are host policy. The renderer itself does not depend on Pointer Events, Wheel Events, or other DOM input APIs, and presentation formatting remains host/UI responsibility.
 
 Clearing the previous frame remains deliberate. Trails should become an explicit visualization capability rather than appearing accidentally because old frames were left on the canvas.
 
@@ -154,7 +156,7 @@ flowchart LR
 
 `ViewportTransform` contains no rendering behavior.
 
-It stores immutable viewport dimensions and scale together with a mutable world-space center, exposes scalar forward and inverse coordinate-conversion operations, and describes the continuous world-space extent visible through the viewport:
+It stores immutable viewport dimensions together with mutable world-space center and display scale, exposes scalar forward and inverse coordinate-conversion operations, and describes the continuous world-space extent visible through the viewport:
 
 ```text
 minWorldX
@@ -163,7 +165,7 @@ minWorldY
 maxWorldY
 ```
 
-These bounds move with the world-space center and remain viewport geometry rather than grid policy. Each renderer remains responsible for choosing its discrete grid coordinates by applying `ceil` / `floor`, skipping zero where the world axes own that coordinate, and drawing with renderer-specific primitives.
+These bounds move with the world-space center and change with the display scale while remaining viewport geometry rather than grid policy. Each renderer remains responsible for choosing its discrete grid coordinates by applying `ceil` / `floor`, skipping zero where the world axes own that coordinate, and drawing with renderer-specific primitives.
 
 ```mermaid
 flowchart TD
@@ -205,8 +207,8 @@ The two concrete implementations should continue to teach us which concepts are 
 
 ## Direction
 
-Programmatic viewport centering is supported by both concrete renderers. The Canvas browser example supports pointer-drag panning and live inspection of the world coordinate underneath the pointer through the shared inverse transform.
+Programmatic viewport centering and scale changes are supported by both concrete renderers. The Canvas browser example adds pointer-drag panning, live world-coordinate inspection, and bounded pointer-anchored wheel/trackpad zoom.
 
-The next visualization step is programmatic zoom at the viewport-geometry level. `ViewportTransform` should gain the smallest validated way to change display scale while keeping forward mapping, inverse mapping, and visible bounds coherent. The first version should remain testable and programmatic before wheel, trackpad, or pinch interaction is introduced.
+Anchor-preserving zoom is geometry owned by `ViewportTransform`; wheel interpretation, scale limits, sensitivity, browser event cancellation, and CSS-to-Canvas coordinate conversion remain host policy. This keeps DOM interaction outside the visualization geometry and renderer internals.
 
-The browser host should continue to own DOM input and CSS-to-Canvas coordinate conversion. Body picking, selection, cameras, renderer interfaces, richer diagnostics, and generalized rendering abstractions remain deferred until concrete requirements establish their shape.
+The next likely visualization/inspection step is the smallest useful form of body picking using the existing inverse coordinate mapping. Persistent selection state, selected-body UI, drag manipulation, cameras, renderer interfaces, richer diagnostics, and generalized rendering abstractions remain deferred until concrete requirements establish their shape.
