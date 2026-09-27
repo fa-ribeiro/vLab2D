@@ -22,8 +22,9 @@ function assertPositiveFinite(value: number, name: string): void {
  * - positive world Y maps up;
  * - positive SVG Y maps down.
  *
- * The world X and Y axes span the visible viewport, and the world origin is
- * rendered as a small crosshair at its mapped display position.
+ * A low-opacity grid marks integer world coordinates. The world X and Y axes
+ * span the visible viewport, and the world origin is rendered as a small
+ * crosshair at its mapped display position.
  */
 export class SvgKinematicRenderer {
   readonly #width: number;
@@ -67,6 +68,7 @@ export class SvgKinematicRenderer {
       `  width="${this.#width}"`,
       `  height="${this.#height}"`,
       `  viewBox="0 0 ${this.#width} ${this.#height}">`,
+      this.#renderGrid(),
       this.#renderAxes(),
       this.#renderOrigin(),
       bodies,
@@ -104,8 +106,47 @@ export class SvgKinematicRenderer {
     const originY = this.#worldToDisplayY(0);
 
     return [
-      `  <line data-world-axis="x" x1="0" y1="${originY}" x2="${this.#width}" y2="${originY}" stroke="currentColor" />`,
-      `  <line data-world-axis="y" x1="${originX}" y1="0" x2="${originX}" y2="${this.#height}" stroke="currentColor" />`,
+      `  <line data-world-axis="x" x1="0" y1="${originY}" x2="${this.#width}" y2="${originY}" stroke="currentColor" opacity="0.45" />`,
+      `  <line data-world-axis="y" x1="${originX}" y1="0" x2="${originX}" y2="${this.#height}" stroke="currentColor" opacity="0.45" />`,
+    ].join("\n");
+  }
+
+  #renderGrid(): string {
+    const lines: string[] = [];
+
+    const halfWorldWidth = this.#width / (2 * this.#pixelsPerUnit);
+    const halfWorldHeight = this.#height / (2 * this.#pixelsPerUnit);
+
+    const minWorldX = Math.ceil(-halfWorldWidth);
+    const maxWorldX = Math.floor(halfWorldWidth);
+
+    const minWorldY = Math.ceil(-halfWorldHeight);
+    const maxWorldY = Math.floor(halfWorldHeight);
+
+    for (let worldX = minWorldX; worldX <= maxWorldX; worldX++) {
+      if (worldX === 0) {
+        continue;
+      }
+
+      const x = this.#worldToDisplayX(worldX);
+
+      lines.push(`    <line x1="${x}" y1="0" x2="${x}" y2="${this.#height}" />`);
+    }
+
+    for (let worldY = minWorldY; worldY <= maxWorldY; worldY++) {
+      if (worldY === 0) {
+        continue;
+      }
+
+      const y = this.#worldToDisplayY(worldY);
+
+      lines.push(`    <line x1="0" y1="${y}" x2="${this.#width}" y2="${y}" />`);
+    }
+
+    return [
+      `  <g data-world-grid="" stroke="currentColor" stroke-opacity="0.15">`,
+      ...lines,
+      `  </g>`,
     ].join("\n");
   }
 

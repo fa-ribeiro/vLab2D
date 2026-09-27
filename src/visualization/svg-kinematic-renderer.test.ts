@@ -1,4 +1,4 @@
-import { assertStringIncludes, assertThrows } from "@std/assert";
+import { assert, assertStringIncludes, assertThrows } from "@std/assert";
 
 import { type KinematicBodySnapshot, KinematicState, Vector2 } from "../engine/mod.ts";
 import { SvgKinematicRenderer } from "./svg-kinematic-renderer.ts";
@@ -76,11 +76,40 @@ Deno.test("SvgKinematicRenderer renders world axes through the origin", () => {
 
   assertStringIncludes(
     svg,
-    '<line data-world-axis="x" x1="0" y1="50" x2="200" y2="50" stroke="currentColor" />',
+    '<line data-world-axis="x" x1="0" y1="50" x2="200" y2="50" stroke="currentColor" opacity="0.45" />',
   );
 
   assertStringIncludes(
     svg,
-    '<line data-world-axis="y" x1="100" y1="0" x2="100" y2="100" stroke="currentColor" />',
+    '<line data-world-axis="y" x1="100" y1="0" x2="100" y2="100" stroke="currentColor" opacity="0.45" />',
   );
+});
+
+Deno.test("SvgKinematicRenderer renders a grid at integer world coordinates", () => {
+  const renderer = new SvgKinematicRenderer(100, 60, 20);
+
+  const svg = renderer.render([]);
+
+  assertStringIncludes(
+    svg,
+    '<g data-world-grid="" stroke="currentColor" stroke-opacity="0.15">',
+  );
+
+  assertStringIncludes(svg, '<line x1="30" y1="0" x2="30" y2="60" />');
+
+  assertStringIncludes(svg, '<line x1="70" y1="0" x2="70" y2="60" />');
+
+  assertStringIncludes(svg, '<line x1="0" y1="10" x2="100" y2="10" />');
+
+  assertStringIncludes(svg, '<line x1="0" y1="50" x2="100" y2="50" />');
+});
+
+Deno.test("SvgKinematicRenderer leaves zero-coordinate lines to the world axes", () => {
+  const renderer = new SvgKinematicRenderer(100, 60, 20);
+
+  const svg = renderer.render([]);
+
+  assert(!svg.includes('<line x1="50" y1="0" x2="50" y2="60" />'));
+
+  assert(!svg.includes('<line x1="0" y1="30" x2="100" y2="30" />'));
 });

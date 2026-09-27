@@ -10,9 +10,9 @@ Eventually, vLab2D aims to make simulations not only runnable, but **observable*
 
 ## Project status
 
-**Current checkpoint:** a multi-body `KinematicWorld` owns and advances authoritative body state, exposes detached observations through its public API, and can be visualized through an SVG renderer that now includes a visible marker for the world origin.
+**Current checkpoint:** a multi-body `KinematicWorld` owns and advances authoritative body state, exposes detached observations through its public API, and can be visualized through a static SVG renderer with a coordinate grid, X/Y axes, and world-origin reference.
 
-**Next step:** add simple X and Y axes to the SVG viewer so the simulation's mathematical coordinate system is visually explicit.
+**Next step:** improve the documentation structure with section-level indexes before beginning the first animated Canvas renderer.
 
 See [`docs/project/status.md`](docs/project/status.md) for the authoritative current checkpoint and next goal.
 
@@ -48,7 +48,7 @@ The simulation engine is designed as a **self-contained module**. External syste
 
 Visualization remains outside the engine boundary. The current SVG renderer consumes detached body snapshots exposed by the engine and is responsible for transforming mathematical world coordinates into display coordinates.
 
-The SVG renderer also provides simple spatial reference information such as the world-origin marker. Generated SVG output can be used as a lightweight static visualization and documentation snapshot mechanism.
+The SVG renderer provides a coordinate grid, X/Y axes, and origin reference in addition to simulated body positions. Generated SVG output can serve as a lightweight visual workbench, reproducible static snapshot, and source of documentation illustrations.
 
 Feature-level unit tests are normally colocated with the code they exercise:
 
@@ -78,7 +78,7 @@ Generated documentation, visualization output, coverage reports, and other deriv
 
 ## Project documentation
 
-The detailed project documentation lives under [`docs/project/`](docs/project/):
+The detailed project documentation currently lives under [`docs/project/`](docs/project/):
 
 - [`project-context.md`](docs/project/project-context.md) — project identity, goals, constraints, and architectural principles
 - [`project-map.md`](docs/project/project-map.md) — visual map of the project and its possible evolution
@@ -88,7 +88,7 @@ The detailed project documentation lives under [`docs/project/`](docs/project/):
 - [`workflow.md`](docs/project/workflow.md) — development process, learning approach, testing standards, and working agreement
 - [`handoff.md`](docs/project/handoff.md) — continuity instructions for resuming the project in a new context
 
-These documents are maintained alongside the source code so that the project can be resumed without relying on previous conversation history.
+The documentation structure will next evolve toward section-level `README.md` indexes so the root README can remain a concise project front door while dedicated sections provide deeper navigation and architectural explanation.
 
 ## License
 
