@@ -2,7 +2,7 @@
 
 ## Current checkpoint
 
-vLab2D now has a small multi-body simulation engine, a useful static visualization workbench, and the first level of structured project documentation.
+vLab2D now has a small multi-body simulation engine, a useful static visualization workbench, and structured project and architecture documentation.
 
 ### Simulation engine
 
@@ -45,9 +45,9 @@ The example in `examples/kinematic-world-svg.ts` advances a small `KinematicWorl
 generated/kinematic-world.svg
 ```
 
-The generated SVG is useful as a static simulation view, debugging snapshot, reproducible visual artifact, and potential source image for project documentation.
+The generated SVG is useful as a static simulation view, debugging snapshot, reproducible visual artifact, and source image for project documentation.
 
-The current end-to-end path is:
+The current end-to-end runtime path is:
 
 ```mermaid
 flowchart LR
@@ -60,82 +60,120 @@ flowchart LR
 
 ### Documentation structure
 
-Project-level documentation now has its own entry point:
+Documentation is now organized into indexed sections under `docs/`.
+
+The repository currently has:
 
 ```text
-docs/project/README.md
+docs/
+├── architecture/
+│   └── README.md
+│
+└── project/
+    ├── README.md
+    ├── project-context.md
+    ├── status.md
+    ├── decisions.md
+    ├── project-map.md
+    ├── environment.md
+    ├── workflow.md
+    └── handoff.md
 ```
 
-The repository README links to documentation sections rather than acting as a flat index of every individual document.
+`docs/project/README.md` is the entry point for project identity, status, decisions, workflow, environment, and continuity information.
 
-`docs/project/README.md` explains the purpose of the project documentation, provides suggested reading paths, and routes readers to focused documents for:
+`docs/architecture/README.md` is the entry point for understanding how the implemented software fits together.
 
-- project context;
-- current status;
-- decisions;
-- conceptual maps;
-- environment;
-- workflow;
-- continuity and handoff.
+The repository README links to those section-level entry points rather than maintaining a flat list of every documentation file.
 
-The intended documentation hierarchy is:
+### Architecture documentation
+
+The first architecture overview now documents the system that exists in the repository today.
+
+It explains and visualizes:
+
+- repository and subsystem boundaries;
+- dependency direction;
+- the public engine boundary through `src/engine/mod.ts`;
+- authoritative world-state ownership;
+- observation versus control;
+- detached snapshots;
+- world-owned bodies identified through `BodyId`;
+- injected numerical integration behavior;
+- atomic world stepping;
+- the current kinematic state model;
+- the relationship between `KinematicSimulation` and `KinematicWorld`;
+- the visualization boundary;
+- world-to-display coordinate conversion;
+- host/example composition;
+- the complete runtime data flow.
+
+The architecture overview uses Mermaid diagrams to make structural relationships and runtime flows visible.
+
+It deliberately distinguishes between:
+
+1. architecture implemented in the current code;
+2. established architectural principles;
+3. possible future directions.
+
+This prevents future ideas from being presented as though they already exist.
+
+The high-level implemented dependency direction is:
 
 ```mermaid
 flowchart TD
-    ROOT[Repository README]
-    PROJECT[Project documentation]
-    CONTEXT[Context]
-    STATUS[Status]
-    DECISIONS[Decisions]
-    MAP[Project map]
-    ENV[Environment]
-    WORKFLOW[Workflow]
-    HANDOFF[Handoff]
+    HOST[Example / future application]
+    VIS[Visualization]
+    API[Engine public API]
+    WORLD[World]
+    KIN[Kinematics]
+    MATH[Math]
 
-    ROOT --> PROJECT
-    PROJECT --> CONTEXT
-    PROJECT --> STATUS
-    PROJECT --> DECISIONS
-    PROJECT --> MAP
-    PROJECT --> ENV
-    PROJECT --> WORKFLOW
-    PROJECT --> HANDOFF
+    HOST --> VIS
+    HOST --> API
+    VIS --> API
+
+    API --> WORLD
+    API --> KIN
+    API --> MATH
+
+    WORLD --> KIN
+    WORLD --> MATH
+
+    KIN --> MATH
 ```
 
-This establishes a pattern that future documentation areas can follow without allowing the repository README to grow into an unstructured documentation catalog.
+The engine remains independent from visualization and host/application concerns.
 
 ## Next step
 
-Create the first dedicated architecture-documentation section.
+Return to visualization and establish the first minimal animated rendering path.
 
-The goal is to explain the current architecture of vLab2D to both contributors and curious readers without turning the documentation into a speculative final-system design.
+The next feature should introduce a browser-based Canvas renderer capable of repeatedly drawing observed body positions.
 
-The next small step should introduce:
+The first Canvas increment should remain intentionally small.
 
-```text
-docs/architecture/
-└── README.md
-```
+It should prove:
 
-The architecture entry point should explain the architecture that is supported by the implementation today, including the major boundaries between:
+- browser-hosted Canvas rendering;
+- repeated redraw;
+- consumption of engine observations rather than engine internals;
+- preservation of the simulation/visualization boundary;
+- the same mathematical coordinate orientation already established by SVG.
 
-- simulation engine;
-- authoritative world state;
-- integration policies;
-- public observation and control boundaries;
-- visualization;
-- examples or host/application code.
+It should not yet add:
 
-It should use diagrams where they help show dependencies and data flow.
+- pan or zoom;
+- playback controls;
+- trails;
+- vectors;
+- body inspection;
+- rich styling;
+- a generic renderer interface;
+- a generalized application framework.
 
-The document should clearly distinguish:
+The existing SVG renderer should remain the static rendering, export, documentation, and snapshot mechanism.
 
-- implemented architecture;
-- architectural principles already accepted by the project;
-- future possibilities that have not yet been implemented.
+Once SVG and Canvas both contain genuine world-to-display transformation needs, the project should review their duplication and consider extracting a reusable viewport/world-to-display transform.
 
-The root `README.md` can then link to both the project-documentation and architecture-documentation sections.
-
-After this architecture checkpoint, development can return to visualization with the first minimal animated Canvas renderer.
-
-That Canvas implementation should initially prove live repeated rendering only. Once both SVG and Canvas require the same world-to-display behavior, extracting a reusable viewport transform will be justified and can later support interactive pan and zoom.
+That transform is expected to become the foundation for later interactive pan and zoom.

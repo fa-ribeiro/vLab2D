@@ -10,11 +10,13 @@ Eventually, vLab2D aims to make simulations not only runnable, but **observable*
 
 ## Project status
 
-**Current checkpoint:** a multi-body `KinematicWorld` owns and advances authoritative body state, exposes detached observations through its public API, and can be visualized through a static SVG renderer with a coordinate grid, X/Y axes, and world-origin reference.
+**Current checkpoint:** a multi-body `KinematicWorld` owns and advances authoritative body state, exposes detached observations through its public API, and can be visualized through a static SVG renderer with a coordinate grid, X/Y axes, and world-origin reference. The implemented system and its boundaries are now described in dedicated architecture documentation.
 
-**Next step:** improve the project documentation structure before beginning the first animated Canvas renderer.
+**Next step:** establish the first minimal animated Canvas rendering path.
 
 See the [project documentation](docs/project/README.md) for the authoritative current status, project context, decisions, workflow, and continuity information.
+
+See the [architecture documentation](docs/architecture/README.md) for the current software structure, boundaries, dependencies, state ownership, and runtime data flow.
 
 ## Environment
 
@@ -32,6 +34,7 @@ Project functionality is implemented from scratch when doing so contributes to t
 vLab2D/
 ├── .vscode/
 ├── docs/
+│   ├── architecture/     # implemented architecture, boundaries and data flow
 │   └── project/          # project context, decisions, workflow and continuity
 ├── examples/             # runnable examples and visual experiments
 ├── src/
@@ -78,11 +81,12 @@ Generated documentation, visualization output, coverage reports, and other deriv
 
 ## Documentation
 
-Project-level documentation is organized under:
+Documentation is organized into section-level entry points:
 
 - [Project documentation](docs/project/README.md) — project identity, current status, decisions, environment, workflow, conceptual map, and continuity information.
+- [Architecture](docs/architecture/README.md) — current software structure, boundaries, dependencies, state ownership, and runtime data flow.
 
-As the project grows, other documentation areas can receive their own section-level indexes. In particular, a future architecture section will explain how the major runtime and visualization components fit together.
+Additional documentation sections should be introduced only when their scope becomes substantial enough to justify a dedicated entry point.
 
 ## License
 

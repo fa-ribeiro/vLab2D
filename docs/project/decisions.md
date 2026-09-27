@@ -417,3 +417,25 @@ The repository `README.md` remains the overall project front door and should lin
 Future documentation areas, such as software architecture, should follow the same pattern when their scope becomes substantial enough to justify a dedicated section.
 
 This keeps documentation navigable as the project grows while preserving the existing principle that each piece of information should have one authoritative home.
+
+## D-047 — Architecture documentation describes implemented architecture first
+
+**Status:** Accepted
+
+Architecture documentation should primarily explain structures, dependencies, ownership rules, and runtime flows that can be demonstrated by the current implementation.
+
+Architectural principles that guide future work may also be documented, but they should be distinguishable from concrete implemented structure.
+
+Possible future components and architectural directions must be identified explicitly as future possibilities rather than presented as though they already exist.
+
+This gives architecture documentation three useful categories:
+
+1. **implemented architecture** — structures and relationships visible in the current source;
+2. **established architectural principles** — accepted rules that guide new work;
+3. **future directions** — plausible capabilities or abstractions that have not yet been implemented.
+
+The purpose is to keep the architecture documentation trustworthy for contributors and readers while still explaining how the project may evolve.
+
+Architecture documentation should use diagrams where they materially improve understanding of structural relationships, dependency direction, ownership, or runtime data flow.
+
+As the architecture grows, `docs/architecture/README.md` remains the section entry point. Focused architecture documents should be extracted only when the amount of real implemented architecture makes that split useful.
