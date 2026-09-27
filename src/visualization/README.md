@@ -4,36 +4,36 @@
 
 Visualization is intentionally outside the engine boundary. Renderers and diagnostic views observe information exposed by the engine's public API rather than reaching into engine internals or mutating authoritative simulation state.
 
-## Current implementation
+## Current implementations
 
-The first visualization component is `SvgKinematicRenderer`.
+The project currently has two concrete visualization implementations:
 
-It renders detached `KinematicBodySnapshot` values as simple SVG circles and provides a basic Cartesian reference frame.
+- `SvgKinematicRenderer` for static SVG output;
+- `CanvasKinematicRenderer` for browser Canvas 2D rendering.
 
-The renderer is responsible for converting between the engine's mathematical world coordinate system and SVG display coordinates:
+Both consume detached `KinematicBodySnapshot` values exposed by the simulation engine.
 
-- positive world X points right;
-- positive world Y points up;
-- SVG positive Y points down;
-- the world origin is currently mapped to the center of the SVG viewport.
+Neither renderer advances simulation time or performs physics calculations.
 
-The SVG reference frame contains:
+## SVG renderer
+
+`SvgKinematicRenderer` produces a complete SVG document.
+
+It currently renders:
 
 1. a low-opacity coordinate grid at visible integer world coordinates;
-2. a horizontal world X axis through world `y = 0`;
-3. a vertical world Y axis through world `x = 0`;
-4. a small marker at world coordinate `(0, 0)`;
-5. body markers rendered above the spatial reference elements.
+2. a horizontal world X axis;
+3. a vertical world Y axis;
+4. a world-origin marker;
+5. body markers above the spatial reference elements.
 
-Each grid square represents one world unit at the renderer's current scale.
+The SVG renderer is useful as a:
 
-The grid deliberately omits lines at world `x = 0` and `y = 0`. Those positions belong to the coordinate axes and are rendered separately with stronger visual emphasis.
-
-The axes remain partially transparent so they are distinct from the weaker grid while still allowing some visibility of the origin marker at their intersection.
-
-Grid positions, axes, the origin marker, and simulated bodies all use the same world-to-display mapping.
-
-The renderer contains no simulation or integration behavior.
+- static visual workbench;
+- reproducible snapshot;
+- debugging capture;
+- export format;
+- source image for project documentation.
 
 A runnable example is available at:
 
@@ -41,33 +41,102 @@ A runnable example is available at:
 examples/kinematic-world-svg.ts
 ```
 
-It advances a small `KinematicWorld`, obtains detached body snapshots through the engine's public API, and writes:
+It writes:
 
 ```text
 generated/kinematic-world.svg
 ```
 
-The generated SVG can serve as a lightweight visual workbench, static export, reproducible snapshot, and source image for project documentation.
+## Canvas renderer
 
-The current visualization path is:
+`CanvasKinematicRenderer` is the first live rendering implementation.
+
+It receives a Canvas 2D drawing context and renders detached body snapshots directly into that context.
+
+Each render:
+
+1. clears the previous frame;
+2. maps body positions from world coordinates to display coordinates;
+3. draws the current bodies.
+
+Clearing the previous frame is deliberate. Trails should become an explicit visualization capability rather than appearing accidentally because old frames were left on the canvas.
+
+The first browser example is located under:
+
+```text
+examples/kinematic-world-canvas/
+```
+
+The browser host creates the simulation, advances it, obtains detached body snapshots, and supplies those snapshots to the Canvas renderer.
 
 ```mermaid
 flowchart LR
-    W[KinematicWorld] -->|body snapshots| R[SvgKinematicRenderer]
-    R --> T[World-to-display mapping]
-    T --> G[Grid]
-    G --> A[Axes and origin]
-    A --> SVG[SVG output]
+    W[KinematicWorld]
+    S[Detached snapshots]
+    R[CanvasKinematicRenderer]
+    C[Canvas 2D]
+
+    W -->|getBodySnapshots| S
+    S --> R
+    R --> C
 ```
+
+The browser's animation callback controls repeated execution. The renderer itself has no knowledge of `requestAnimationFrame`.
+
+## Coordinate systems
+
+The engine uses mathematical world coordinates:
+
+- positive X points right;
+- positive Y points up.
+
+Both SVG and Canvas use display coordinate systems where positive Y points downward.
+
+The two current renderers therefore independently perform equivalent mappings:
+
+```text
+displayX = viewportWidth / 2 + worldX × pixelsPerUnit
+
+displayY = viewportHeight / 2 - worldY × pixelsPerUnit
+```
+
+The duplicated transformation is now a real architectural signal.
+
+A shared viewport/world-to-display abstraction should be considered after the initial Canvas animation loop has been made stable. It should be extracted from the demonstrated needs of both renderers rather than designed as a speculative rendering framework.
+
+## Rendering roles
+
+The current renderers have intentionally different output models.
+
+```mermaid
+flowchart TD
+    S[Kinematic body snapshots]
+
+    SVG[SvgKinematicRenderer]
+    CANVAS[CanvasKinematicRenderer]
+
+    DOC[SVG document text]
+    CTX[Canvas 2D context]
+
+    S --> SVG --> DOC
+    S --> CANVAS --> CTX
+```
+
+This is why the project does not yet define a generic renderer interface.
+
+The two concrete implementations should continue to teach us which concepts are genuinely shared and which belong to particular rendering technologies.
 
 ## Direction
 
-The SVG renderer has reached a useful first static-visualization checkpoint.
+Near-term visualization work should proceed in small steps:
 
-It is expected to remain valuable as a static visualization, export, documentation illustration, and snapshot mechanism even after animated rendering is introduced.
+1. make browser simulation time independent from display refresh rate;
+2. review and likely extract the duplicated world-to-display transformation;
+3. use that transform as the foundation for future pan and zoom.
 
-Potential later SVG or diagnostic capabilities include:
+Later visualization capabilities may include:
 
+- coordinate references in Canvas;
 - body labels;
 - velocity and acceleration vectors;
 - trails;
@@ -77,10 +146,6 @@ Potential later SVG or diagnostic capabilities include:
 - side-by-side world views;
 - overlaid world views.
 
-The next major visualization direction is a minimal interactive/browser rendering path using Canvas.
+The SVG renderer should remain useful for static output even as the live Canvas path grows.
 
-The first Canvas renderer should remain simple and validate live repeated rendering before introducing richer viewer behavior.
-
-Once SVG and Canvas provide two concrete consumers of world-to-display coordinate conversion, a reusable viewport transform should be considered. That transform can later provide the natural foundation for pan, zoom, and other interactive camera behavior.
-
-New visualization abstractions should continue to be introduced only when concrete requirements demonstrate their need.
+New shared abstractions should continue to appear only when concrete implementations demonstrate their need.

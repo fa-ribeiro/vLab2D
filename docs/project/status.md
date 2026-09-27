@@ -2,7 +2,7 @@
 
 ## Current checkpoint
 
-vLab2D now has a small multi-body simulation engine, a useful static visualization workbench, and structured project and architecture documentation.
+vLab2D now has a small multi-body simulation engine and two concrete visualization paths: reproducible static SVG output and live browser animation through Canvas 2D.
 
 ### Simulation engine
 
@@ -18,162 +18,101 @@ The public engine API currently provides:
 - `KinematicBodySnapshot`, a detached observation of one body's identity and kinematic state.
 - `KinematicWorld`, which owns and advances the kinematic state of multiple identified bodies.
 
-`KinematicWorld` can create and observe bodies, apply a shared world acceleration, and advance every body using an injected `KinematicIntegrator`.
+`KinematicWorld` owns authoritative body state, applies a shared world acceleration, and advances every body using an injected `KinematicIntegrator`.
 
-The world's authoritative body state remains private. External consumers observe detached state rather than receiving references to the world's internal storage.
+External consumers observe detached state rather than receiving references to the world's internal storage.
 
-World stepping is transactional: all candidate body states are computed and validated before any authoritative state is replaced. A failed step leaves every body at its previous state.
+World stepping remains transactional: candidate states for every body are computed and validated before any authoritative state is replaced.
 
 ### Visualization
 
-`SvgKinematicRenderer` provides the first concrete visualization path outside the engine.
+Visualization remains outside the simulation engine and consumes detached observations exposed through the engine's public API.
 
-It consumes detached `KinematicBodySnapshot` values and renders:
+Two concrete rendering paths now exist.
 
-- simulated bodies as SVG circles;
-- a low-opacity grid at integer world coordinates;
-- world X and Y axes;
-- the world origin.
+#### SVG
 
-The renderer maps the engine's mathematical coordinate system into SVG display coordinates while keeping simulation and presentation concerns separate.
+`SvgKinematicRenderer` produces a complete SVG document containing:
 
-The visual hierarchy currently uses a faint grid, partially transparent axes, the origin marker, and body markers rendered above the reference frame.
+- simulated bodies;
+- a coordinate grid;
+- X and Y axes;
+- a world-origin marker.
 
-The example in `examples/kinematic-world-svg.ts` advances a small `KinematicWorld` and writes:
+The SVG path is useful for static visualization, reproducible snapshots, debugging captures, exports, and documentation images.
 
-```text
-generated/kinematic-world.svg
-```
+#### Canvas
 
-The generated SVG is useful as a static simulation view, debugging snapshot, reproducible visual artifact, and source image for project documentation.
+`CanvasKinematicRenderer` draws detached `KinematicBodySnapshot` values into a Canvas 2D drawing context.
 
-The current end-to-end runtime path is:
+The initial Canvas renderer deliberately remains small:
+
+- it clears the previous frame;
+- maps mathematical world coordinates into Canvas coordinates;
+- renders observed bodies as circles;
+- performs no simulation calculations;
+- does not own or mutate engine state.
+
+A browser example composes `KinematicWorld` and `CanvasKinematicRenderer` and repeatedly redraws the current snapshots using `requestAnimationFrame`.
+
+The current live path is:
 
 ```mermaid
 flowchart LR
     IC[Initial conditions] --> W[KinematicWorld]
     I[KinematicIntegrator] --> W
+
     W -->|step| W
-    W -->|detached snapshots| R[SvgKinematicRenderer]
-    R --> SVG[Static SVG visualization]
+    W -->|detached snapshots| C[CanvasKinematicRenderer]
+
+    C --> CANVAS[Canvas 2D]
+    CANVAS --> FRAME[Browser frame]
+    FRAME -->|requestAnimationFrame| W
 ```
 
-### Documentation structure
+SVG and Canvas currently implement their world-to-display coordinate mapping independently.
 
-Documentation is now organized into indexed sections under `docs/`.
+This is the first concrete duplication suggesting that a reusable viewport/world-to-display transform may be valuable. No abstraction has yet been extracted.
 
-The repository currently has:
+### Browser/tooling path
 
-```text
-docs/
-├── architecture/
-│   └── README.md
-│
-└── project/
-    ├── README.md
-    ├── project-context.md
-    ├── status.md
-    ├── decisions.md
-    ├── project-map.md
-    ├── environment.md
-    ├── workflow.md
-    └── handoff.md
-```
+The project now includes a browser-targeted Canvas example.
 
-`docs/project/README.md` is the entry point for project identity, status, decisions, workflow, environment, and continuity information.
+Deno is used to bundle the browser entry point, while a simple local file server provides the generated browser assets during development.
 
-`docs/architecture/README.md` is the entry point for understanding how the implemented software fits together.
+This keeps the first browser visualization path dependency-light and avoids introducing a frontend framework or application bundler.
 
-The repository README links to those section-level entry points rather than maintaining a flat list of every documentation file.
+### Documentation
 
-### Architecture documentation
+Documentation is organized into section-level indexes:
 
-The first architecture overview now documents the system that exists in the repository today.
+- `docs/project/README.md` for project context, status, workflow, decisions, environment, and continuity;
+- `docs/architecture/README.md` for implemented software structure, boundaries, ownership, dependencies, and runtime flows.
 
-It explains and visualizes:
-
-- repository and subsystem boundaries;
-- dependency direction;
-- the public engine boundary through `src/engine/mod.ts`;
-- authoritative world-state ownership;
-- observation versus control;
-- detached snapshots;
-- world-owned bodies identified through `BodyId`;
-- injected numerical integration behavior;
-- atomic world stepping;
-- the current kinematic state model;
-- the relationship between `KinematicSimulation` and `KinematicWorld`;
-- the visualization boundary;
-- world-to-display coordinate conversion;
-- host/example composition;
-- the complete runtime data flow.
-
-The architecture overview uses Mermaid diagrams to make structural relationships and runtime flows visible.
-
-It deliberately distinguishes between:
-
-1. architecture implemented in the current code;
-2. established architectural principles;
-3. possible future directions.
-
-This prevents future ideas from being presented as though they already exist.
-
-The high-level implemented dependency direction is:
-
-```mermaid
-flowchart TD
-    HOST[Example / future application]
-    VIS[Visualization]
-    API[Engine public API]
-    WORLD[World]
-    KIN[Kinematics]
-    MATH[Math]
-
-    HOST --> VIS
-    HOST --> API
-    VIS --> API
-
-    API --> WORLD
-    API --> KIN
-    API --> MATH
-
-    WORLD --> KIN
-    WORLD --> MATH
-
-    KIN --> MATH
-```
-
-The engine remains independent from visualization and host/application concerns.
+The architecture documentation now has a second real visualization implementation to describe rather than a hypothetical future renderer.
 
 ## Next step
 
-Return to visualization and establish the first minimal animated rendering path.
+Make simulation time independent from display refresh rate.
 
-The next feature should introduce a browser-based Canvas renderer capable of repeatedly drawing observed body positions.
+The current Canvas example deliberately advances the world once for each `requestAnimationFrame` callback using a fixed simulation timestep.
 
-The first Canvas increment should remain intentionally small.
+That proved the animation path, but it means a higher-refresh-rate display advances more simulation steps per real second than a lower-refresh-rate display.
 
-It should prove:
+The next small goal should introduce a proper fixed-timestep browser loop that separates:
 
-- browser-hosted Canvas rendering;
-- repeated redraw;
-- consumption of engine observations rather than engine internals;
-- preservation of the simulation/visualization boundary;
-- the same mathematical coordinate orientation already established by SVG.
+- **simulation time** — advanced in deterministic fixed-size steps;
+- **rendering time** — driven by browser display frames.
 
-It should not yet add:
+The feature should teach and demonstrate the accumulator/fixed-timestep pattern without yet adding:
 
+- play/pause controls;
+- interpolation;
 - pan or zoom;
-- playback controls;
-- trails;
-- vectors;
-- body inspection;
-- rich styling;
-- a generic renderer interface;
-- a generalized application framework.
+- diagnostic overlays;
+- renderer interfaces;
+- application frameworks.
 
-The existing SVG renderer should remain the static rendering, export, documentation, and snapshot mechanism.
+After the animation loop is stable, review the duplicated SVG and Canvas world-to-display transformations and consider extracting the first shared viewport transformation abstraction.
 
-Once SVG and Canvas both contain genuine world-to-display transformation needs, the project should review their duplication and consider extracting a reusable viewport/world-to-display transform.
-
-That transform is expected to become the foundation for later interactive pan and zoom.
+That transformation can then provide the foundation for later pan and zoom.

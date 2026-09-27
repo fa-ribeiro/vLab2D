@@ -8,7 +8,9 @@
     "test:watch": "deno test --watch",
     "doc:lint": "deno doc --lint src/engine/mod.ts",
     "doc:html": "deno doc --html --name=\"vLab2D - Interactive Visual Lab Engine\" --output=generated/api src/engine/mod.ts",
-    "verify": "deno task fmt:check && deno task lint && deno task check && deno task doc:lint && deno task test"
+    "verify": "deno task fmt:check && deno task lint && deno task check && deno task doc:lint && deno task test",
+    "canvas:build": "deno bundle --platform=browser --outdir=generated/canvas examples/kinematic-world-canvas/index.html",
+    "canvas:serve": "deno run --allow-net --allow-read jsr:@std/http/file-server generated/canvas"
   },
   "imports": {
     "@std/assert": "jsr:@std/assert@1"
@@ -17,5 +19,8 @@
     "lineWidth": 96,
     "proseWrap": "preserve"
   },
-  "exclude": ["coverage/", "generated/"]
+  "exclude": ["coverage/", "generated/"],
+  "compilerOptions": {
+    "lib": ["dom", "dom.iterable", "dom.asynciterable", "deno.ns"]
+  }
 }
