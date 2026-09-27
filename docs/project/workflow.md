@@ -1,6 +1,6 @@
 # Workflow and Working Arrangement
 
-Last updated: 2026-09-26
+Last updated: 2026-09-27
 
 ## Development style
 
@@ -63,6 +63,40 @@ Documentation should help a future version of the user answer: “Why did I writ
 - Track operational progress in `status.md`.
 - Track tooling/version changes in `environment.md`.
 - Update `project-context.md` if the project's identity, major goals, architecture, or handoff protocol changes.
+
+## Baseline and file-editing protocol
+
+The latest commit explicitly shared and verified in the collaboration is the authoritative repository baseline.
+
+All proposed changes to existing project files must start from the exact contents of that baseline rather than from remembered chat snippets, earlier drafts, or reconstructed approximations.
+
+When repository access is available:
+
+1. verify the shared commit identifier;
+2. retrieve the affected file from that exact commit;
+3. apply only the changes required by the current feature or documentation pass;
+4. preserve unaffected content;
+5. review the resulting complete file against the intended project state.
+
+If the active feature contains explicit uncommitted working changes, treat them as a layer on top of the latest verified baseline. Do not silently assume unrelated local changes.
+
+When a new commit identifier is shared and verified, it becomes the new authoritative baseline and supersedes the previous baseline and earlier project snapshots.
+
+### Documentation-file delivery
+
+When a documentation pass changes Markdown files, prepare each affected file **in full** rather than presenting inline patches or replacement fragments.
+
+For every affected Markdown file:
+
+- derive the complete replacement from the exact baseline file plus the explicitly approved current changes;
+- preserve all unaffected sections and formatting;
+- create a standalone `.md` file using the repository-relative filename/path;
+- share a direct file link that can be opened in the client file panel and downloaded as a drop-in replacement;
+- when several documentation files change together, optionally also provide a ZIP preserving their repository-relative directory structure.
+
+The generated file itself is the review artifact. Avoid wrapping the full Markdown source in chat code fences when a file artifact can be provided instead.
+
+Client-side open/copy/download controls may vary by interface; the collaboration should provide the file artifact and download link without depending on a particular UI control being present.
 
 ## Documentation ownership and duplication rule
 
@@ -174,8 +208,10 @@ Each feature starts from an accepted repository baseline and should introduce th
 The normal lifecycle is:
 
 1. **Establish the baseline**
-   - Start from the latest commit explicitly confirmed as the project baseline.
+   - Start from the latest commit explicitly confirmed and verified as the project baseline.
+   - Retrieve affected existing files from that exact commit before proposing or generating edits.
    - Review `status.md` to understand the current checkpoint and next small goal.
+   - If explicit uncommitted work exists for the active feature, treat it as a known layer on top of the baseline rather than replacing the baseline with an assumed local snapshot.
 
 2. **Understand the problem**
    - Clarify the concepts, terminology, algorithms, and responsibilities involved.
@@ -219,7 +255,9 @@ The normal lifecycle is:
    - Update `decisions.md` only when the feature establishes or changes a durable project decision.
    - Update other project documentation only when its authoritative information has actually changed.
    - Avoid duplicating information between documents.
-   - During review, share the complete updated `status.md`; incremental additions are sufficient for `decisions.md`.
+   - Prepare every affected Markdown file as a complete replacement derived from the exact baseline file plus the explicitly approved current feature changes.
+   - Share each complete `.md` file as an open/download artifact rather than as inline Markdown patches or fenced full-file source.
+   - When several Markdown files change together, a ZIP preserving repository-relative paths may also be provided for convenience.
 
 9. **Perform the pre-commit verification**
    - Run `deno task verify` again after documentation changes.
@@ -232,7 +270,8 @@ The normal lifecycle is:
 
 11. **Establish the new baseline**
     - After the commit is created, the commit identifier is shared explicitly.
-    - Once confirmed, that commit becomes the new authoritative project baseline and supersedes the previous baseline and all earlier project snapshots.
+    - Verify that commit and its relevant files through repository access when available.
+    - Once verified, that commit becomes the new authoritative project baseline and supersedes the previous baseline and all earlier project snapshots.
 
 ```mermaid
 flowchart LR

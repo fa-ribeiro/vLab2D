@@ -2,7 +2,9 @@
 
 ## Current checkpoint
 
-vLab2D now has a small multi-body simulation engine, reproducible SVG visualization, live Canvas 2D animation with fixed simulation timing, and a shared viewport transformation used by both rendering paths.
+vLab2D now has a small multi-body simulation engine, reproducible SVG visualization, and live Canvas 2D animation with fixed simulation timing.
+
+SVG and Canvas share a `ViewportTransform` for mathematical world-to-display coordinate conversion, and both rendering paths now provide spatial reference information through a grid, world axes, and an origin marker.
 
 ### Simulation engine
 
@@ -24,20 +26,9 @@ External consumers receive detached observations rather than references to inter
 
 World stepping remains atomic: candidate states for all bodies are calculated and validated before any authoritative state is replaced.
 
-### Visualization
-
-Visualization remains outside the simulation engine.
-
-Two concrete rendering paths consume detached engine observations:
-
-- `SvgKinematicRenderer` for reproducible static output;
-- `CanvasKinematicRenderer` for live browser rendering.
-
-Neither renderer advances simulation time or mutates engine state.
-
 ### Shared viewport transformation
 
-`ViewportTransform` now owns the world-to-display coordinate mapping shared by SVG and Canvas.
+`ViewportTransform` owns the world-to-display coordinate mapping shared by SVG and Canvas.
 
 It stores immutable viewport configuration:
 
@@ -79,42 +70,54 @@ flowchart TD
 
 The transform contains no rendering behavior and has no dependency on SVG, Canvas, or engine-domain types such as `Vector2`.
 
-Both renderers continue to expose their existing constructors and create their viewport transformation internally.
+Viewport validation for width, height, and scale belongs to `ViewportTransform`.
 
-Viewport validation for width, height, and scale now belongs to `ViewportTransform`. Renderer-specific validation, such as body radius, remains with the renderer that owns that concept.
+### SVG visualization
 
-### SVG
+`SvgKinematicRenderer` produces reproducible static SVG output containing:
 
-`SvgKinematicRenderer` produces static SVG output containing:
+1. an integer-coordinate grid;
+2. world X and Y axes;
+3. a world-origin marker;
+4. simulated bodies.
 
-- simulated bodies;
-- an integer-coordinate grid;
-- X and Y axes;
-- a world-origin marker.
-
-Body positions, grid positions, axes, and origin placement now use `ViewportTransform`.
+Body positions and spatial references use `ViewportTransform`.
 
 SVG remains useful for snapshots, debugging captures, exports, and documentation images.
 
-### Canvas
+### Canvas visualization
 
-`CanvasKinematicRenderer` draws detached body snapshots into a Canvas 2D drawing context.
+`CanvasKinematicRenderer` now provides the same basic spatial context in the live browser view.
 
-It:
-
-- clears each previous frame;
-- maps body positions using `ViewportTransform`;
-- draws observed bodies;
-- performs no simulation calculations;
-- does not own or mutate engine state.
-
-The browser example under:
+Each frame is rendered in this order:
 
 ```text
-examples/kinematic-world-canvas/
+grid
+axes
+origin
+bodies
 ```
 
-provides the live visualization path.
+The grid marks visible non-zero integer world coordinates. The zero-coordinate lines are represented by the world axes instead.
+
+Axes pass through the transformed world origin, and the origin is rendered as a small crosshair.
+
+Bodies remain the foreground layer.
+
+```mermaid
+flowchart TD
+    CLEAR["Clear frame"]
+    GRID["Grid"]
+    AXES["World axes"]
+    ORIGIN["Origin marker"]
+    BODIES["Body snapshots"]
+
+    CLEAR --> GRID --> AXES --> ORIGIN --> BODIES
+```
+
+Canvas spatial references and body positions all use `ViewportTransform`.
+
+The renderer still performs no simulation calculations and does not own or mutate engine state.
 
 ### Fixed-timestep browser loop
 
@@ -143,8 +146,43 @@ The current simulation timestep is:
 
 A fast display may render frames without advancing the simulation. A slower display may require multiple fixed simulation steps before one render.
 
-The world remains unaware of browser timing and rendering cadence.
-
 The browser host limits unusually large frame deltas before adding them to the accumulator so a delayed or suspended tab does not attempt excessive simulation catch-up.
 
-Interpolation between fixed simulation states remains deliberatel
+Interpolation between fixed simulation states remains deliberately deferred.
+
+### Emerging visualization duplication
+
+Both SVG and Canvas now independently determine which integer world coordinates are visible before rendering their grids.
+
+The current calculation derives the visible world extent from:
+
+- viewport width and height;
+- pixels per world unit;
+- the centered world origin.
+
+This is a new concrete duplication created by the second spatial-reference implementation.
+
+It has not yet been extracted.
+
+## Next step
+
+Review the duplicated visible-world-range calculations used by the SVG and Canvas grids.
+
+The next small architectural question is:
+
+> Does continuous visible world extent belong to `ViewportTransform`?
+
+If the answer is supported by the current implementations, extract only the smallest reusable representation needed by both renderers.
+
+Integer-grid policy should remain renderer/grid behavior. A viewport abstraction should describe visible world geometry rather than become responsible for deciding which grid lines to draw.
+
+Do not yet introduce:
+
+- pan;
+- zoom;
+- cameras;
+- transformation matrices;
+- renderer interfaces;
+- generalized drawing backends.
+
+Once visible viewport geometry has a clear home, pan and zoom can be approached from a better-defined coordinate model.

@@ -2,6 +2,8 @@ import type { KinematicBodySnapshot } from "../engine/mod.ts";
 import { ViewportTransform } from "./viewport-transform.ts";
 
 const ORIGIN_MARKER_HALF_SIZE = 5;
+const GRID_OPACITY = 0.15;
+const AXIS_OPACITY = 0.45;
 
 function assertPositiveFinite(value: number, name: string): void {
   if (!Number.isFinite(value) || value <= 0) {
@@ -102,8 +104,8 @@ export class SvgKinematicRenderer {
     const originY = this.#transform.worldToDisplayY(0);
 
     return [
-      `  <line data-world-axis="x" x1="0" y1="${originY}" x2="${this.#transform.width}" y2="${originY}" stroke="currentColor" opacity="0.45" />`,
-      `  <line data-world-axis="y" x1="${originX}" y1="0" x2="${originX}" y2="${this.#transform.height}" stroke="currentColor" opacity="0.45" />`,
+      `  <line data-world-axis="x" x1="0" y1="${originY}" x2="${this.#transform.width}" y2="${originY}" stroke="currentColor" opacity="${AXIS_OPACITY}" />`,
+      `  <line data-world-axis="y" x1="${originX}" y1="0" x2="${originX}" y2="${this.#transform.height}" stroke="currentColor" opacity="${AXIS_OPACITY}" />`,
     ].join("\n");
   }
 
@@ -140,7 +142,7 @@ export class SvgKinematicRenderer {
     }
 
     return [
-      `  <g data-world-grid="" stroke="currentColor" stroke-opacity="0.15">`,
+      `  <g data-world-grid="" stroke="currentColor" stroke-opacity="${GRID_OPACITY}">`,
       ...lines,
       `  </g>`,
     ].join("\n");

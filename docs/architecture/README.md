@@ -29,11 +29,15 @@ flowchart LR
     WORLD["KinematicWorld"]
     SNAP["Detached snapshots"]
 
+    TRANSFORM["ViewportTransform"]
     SVG["SvgKinematicRenderer"]
     CANVAS["CanvasKinematicRenderer"]
 
     HOST --> WORLD
     WORLD --> SNAP
+
+    TRANSFORM --> SVG
+    TRANSFORM --> CANVAS
 
     SNAP --> SVG
     SNAP --> CANVAS
@@ -147,7 +151,6 @@ src/engine/mod.ts
 ```mermaid
 flowchart LR
     EXT["External consumer"]
-
     API["src/engine/mod.ts<br/>public boundary"]
 
     subgraph INTERNAL["Engine implementation"]
@@ -176,13 +179,7 @@ The boundary is therefore both:
 
 Project code outside the engine should prefer `mod.ts`.
 
-The SVG renderer already follows this rule:
-
-```ts
-import type { KinematicBodySnapshot } from "../engine/mod.ts";
-```
-
-That is significant because visualization depends on the **engine contract**, not on the engine's storage implementation.
+Both visualization renderers follow this rule by consuming public snapshot types from the engine boundary rather than depending on world storage internals.
 
 ---
 
@@ -197,13 +194,10 @@ For the multi-body runtime, that authority belongs to `KinematicWorld`.
 ```mermaid
 flowchart TD
     WORLD["KinematicWorld"]
-
     STORE[("private Map&lt;BodyId, KinematicState&gt;")]
 
     COMMANDS["Validated commands<br/>createBody<br/>setAcceleration<br/>step"]
-
     QUERIES["Observation<br/>getBodyState<br/>getBodySnapshots"]
-
     SNAPSHOTS["Detached state / snapshots"]
 
     COMMANDS --> WORLD
@@ -215,17 +209,6 @@ flowchart TD
 ```
 
 Consumers do not receive the world's internal `Map`, and observation APIs do not expose writable references into world storage.
-
-This gives us a clear ownership boundary:
-
-```text
-outside world                     inside world
-
-BodyId  ───────────────────────►  authoritative body state
-                                  private Map
-
-snapshot ◄──────────────────────  copied observation
-```
 
 A renderer can inspect a body snapshot, but changing that snapshot cannot change the world.
 
@@ -263,36 +246,9 @@ world.setAcceleration(...)
 world.step(...)
 ```
 
-The distinction can be visualized as:
+The distinction is expressed through ordinary methods rather than separate command/query framework objects.
 
-```mermaid
-flowchart LR
-    CONSUMER["External consumer"]
-
-    OBS["Observation API"]
-    CTRL["Control API"]
-
-    WORLD["KinematicWorld"]
-    STATE[("Authoritative state")]
-
-    CONSUMER -->|"query"| OBS
-    OBS --> WORLD
-    WORLD --> STATE
-
-    STATE --> WORLD
-    WORLD -->|"detached observations"| OBS
-    OBS --> CONSUMER
-
-    CONSUMER -->|"command"| CTRL
-    CTRL --> WORLD
-    WORLD -->|"validated mutation"| STATE
-```
-
-This separation is currently expressed through ordinary methods rather than through separate framework objects or interfaces.
-
-That is intentional.
-
-The project has not demonstrated a need for a command bus, repository abstraction, event system, or similar infrastructure.
+That is intentional. The project has not demonstrated a need for a command bus, repository abstraction, event system, or similar infrastructure.
 
 ---
 
@@ -311,25 +267,13 @@ BodyId → KinematicState
 
 `BodyId` is an opaque, world-local identifier used by consumers to refer to body state owned by a world.
 
-```mermaid
-flowchart LR
-    ID["BodyId"]
-
-    WORLD["KinematicWorld"]
-
-    STATE["KinematicState<br/>position + velocity"]
-
-    ID -->|"identify"| WORLD
-    WORLD -->|"owns"| STATE
-```
-
 This avoids handing consumers a mutable `Body` object whose state could bypass world invariants.
 
 It also gives the world one clear place to coordinate future operations that affect multiple bodies.
 
 ---
 
-## 8. State and behavior are separate
+## 8. State and integration behavior are separate
 
 `KinematicWorld` owns state, but it does not contain a hard-coded numerical integration algorithm.
 
@@ -365,32 +309,12 @@ classDiagram
     SemiImplicitEulerIntegrator ..|> KinematicIntegrator
 ```
 
-This is a small application of the **Strategy pattern**:
+This is a small application of the Strategy pattern:
 
 - `KinematicWorld` decides **when** bodies are advanced;
 - an integrator decides **how** one kinematic state is numerically advanced.
 
-The world depends on the narrow abstraction:
-
-```ts
-interface KinematicIntegrator {
-  integrate(state: KinematicState, acceleration: Vector2, dt: number): KinematicState;
-}
-```
-
-rather than constructing a particular algorithm internally.
-
-This allows the same world model to use:
-
-```text
-Explicit Euler
-       or
-Semi-Implicit Euler
-```
-
-without changing world ownership semantics.
-
-The interface is deliberately specific to kinematics rather than being a generalized numerical-integration framework.
+The interface remains deliberately specific to kinematics rather than becoming a generalized numerical-integration framework.
 
 ---
 
@@ -398,9 +322,7 @@ The interface is deliberately specific to kinematics rather than being a general
 
 A world step is deliberately transactional.
 
-The world does not update each body immediately after integrating it.
-
-Instead it first calculates every candidate state.
+The world first calculates and validates every candidate state before committing any authoritative replacement.
 
 ```mermaid
 sequenceDiagram
@@ -411,7 +333,6 @@ sequenceDiagram
     participant State as Authoritative state
 
     Host->>World: step(dt)
-
     World->>World: validate dt
 
     loop every body
@@ -425,35 +346,9 @@ sequenceDiagram
     World-->>Host: step complete
 ```
 
-The important invariant is:
+The invariant is:
 
 > Either every body advances successfully, or no authoritative body state is replaced.
-
-Conceptually:
-
-```text
-calculate
-    ↓
-validate all
-    ↓
-commit all
-```
-
-rather than:
-
-```text
-calculate body A
-    ↓
-commit A
-    ↓
-calculate body B
-    ↓
-failure
-    ↓
-partially updated world
-```
-
-This becomes increasingly valuable as world behavior grows more complex.
 
 ---
 
@@ -480,23 +375,14 @@ classDiagram
     KinematicState *-- Vector2 : velocity
 ```
 
-A `KinematicState` contains:
+A `KinematicState` contains only:
 
 ```text
 position
 velocity
 ```
 
-It deliberately does not yet contain concepts such as:
-
-```text
-mass
-force
-shape
-orientation
-angular velocity
-collision state
-```
+It deliberately does not yet contain concepts such as mass, force, shape, orientation, angular velocity, or collision state.
 
 Those should appear only when simulation features create a real requirement for them.
 
@@ -520,26 +406,11 @@ flowchart TD
     KW --> INT
 ```
 
-`KinematicSimulation` came first and established several architectural ideas:
+`KinematicSimulation` came first and established authoritative state ownership, validated state changes, injected integration behavior, and candidate-before-commit stepping.
 
-- authoritative state ownership;
-- validated state changes;
-- injected integration behavior;
-- candidate-before-commit stepping.
+`KinematicWorld` later applied those ideas to multiple identified bodies.
 
-`KinematicWorld` later applies those ideas to multiple identified bodies.
-
-`KinematicSimulation` is currently still part of the public engine API, but it should not be interpreted as evidence that the final architecture requires both concepts permanently.
-
-It is part of the project's evolutionary design history.
-
-A future review may find that:
-
-- both concepts remain useful;
-- `KinematicWorld` subsumes the single-state runtime;
-- or a different runtime boundary emerges from later requirements.
-
-No change is necessary until the implementation provides evidence.
+`KinematicSimulation` remains part of the public engine API, but its presence should not be interpreted as a commitment that both runtime concepts must exist permanently.
 
 ---
 
@@ -558,14 +429,11 @@ SvgKinematicRenderer
 CanvasKinematicRenderer
 ```
 
-Both consume detached engine observations.
-
-Their output mechanisms differ:
+Both consume detached engine observations, but their output mechanisms differ.
 
 ```mermaid
 flowchart LR
     WORLD["KinematicWorld"]
-
     SNAP["readonly KinematicBodySnapshot[]"]
 
     SVG["SvgKinematicRenderer"]
@@ -580,15 +448,27 @@ flowchart LR
     SNAP --> CANVAS --> CTX
 ```
 
-Neither renderer:
+Neither renderer advances simulation time, calculates physics, modifies world state, or inspects private world storage.
 
-- advances simulation time;
-- calculates acceleration;
-- integrates velocity or position;
-- modifies world state;
-- inspects the world's private storage.
+Their rendering responsibilities are currently:
 
-Their responsibility starts after simulation state has already been produced.
+```text
+SvgKinematicRenderer
+    SVG document generation
+    integer grid
+    world axes
+    origin marker
+    body markers
+
+CanvasKinematicRenderer
+    Canvas frame clearing
+    integer grid
+    world axes
+    origin marker
+    body drawing
+```
+
+Both renderers use `ViewportTransform` for coordinate placement while retaining rendering-technology-specific drawing behavior.
 
 The two renderers intentionally retain different output models. Their existence does not currently justify a generic renderer interface.
 
@@ -605,19 +485,17 @@ The engine uses mathematical world coordinates:
 
 The current display technologies use coordinates where positive Y points downward.
 
-World-to-display conversion is therefore owned by the shared `ViewportTransform`.
+World-to-display conversion is owned by the shared `ViewportTransform`.
 
 ```mermaid
 flowchart TD
     WORLD["World coordinates<br/>+X right<br/>+Y up"]
-
     TRANSFORM["ViewportTransform<br/>width<br/>height<br/>pixelsPerUnit"]
 
     SVG["SvgKinematicRenderer"]
     CANVAS["CanvasKinematicRenderer"]
 
     WORLD --> TRANSFORM
-
     TRANSFORM --> SVG
     TRANSFORM --> CANVAS
 ```
@@ -632,20 +510,9 @@ displayY = height / 2 - worldY × pixelsPerUnit
 
 The world origin therefore appears at the center of the viewport.
 
-The minus sign in the Y mapping performs the coordinate-system inversion.
-
 `ViewportTransform` owns only viewport geometry, scale, validation, and numeric coordinate conversion.
 
-It deliberately does not know about:
-
-```text
-SVG
-Canvas
-KinematicWorld
-KinematicBodySnapshot
-Vector2
-rendering primitives
-```
+It deliberately does not know about SVG, Canvas, `KinematicWorld`, snapshots, `Vector2`, or rendering primitives.
 
 Both renderers construct their transform internally from their existing viewport constructor arguments.
 
@@ -655,55 +522,24 @@ The transform was extracted only after SVG and Canvas independently demonstrated
 
 ## 14. Host/application responsibility
 
-The example program currently acts as the composition root.
+Example code currently acts as the composition root.
 
-`examples/kinematic-world-svg.ts` decides:
+The host decides:
 
 - which integrator to use;
 - which acceleration the world has;
 - which bodies to create;
-- how many simulation steps to perform;
+- when the world advances;
 - which renderer to create;
-- where generated output is written.
-
-```mermaid
-flowchart TD
-    HOST["kinematic-world-svg.ts"]
-
-    INT["SemiImplicitEulerIntegrator"]
-    WORLD["KinematicWorld"]
-    BODIES["Initial body states"]
-
-    SNAP["Body snapshots"]
-
-    RENDER["SvgKinematicRenderer"]
-    FILE["generated/kinematic-world.svg"]
-
-    HOST --> INT
-    HOST --> WORLD
-    HOST --> BODIES
-
-    INT --> WORLD
-    BODIES --> WORLD
-
-    WORLD --> SNAP
-    HOST --> RENDER
-    SNAP --> RENDER
-
-    RENDER --> FILE
-```
-
-This is a useful architectural role even though there is not yet an `application/` subsystem.
-
-The host composes otherwise independent pieces.
+- where output is displayed or written.
 
 The engine does not decide which renderer exists, and the renderer does not decide which world or integrator exists.
 
 ---
 
-## 15. Current runtime flow
+## 15. Current browser runtime flow
 
-Putting the pieces together:
+The Canvas example separates simulation cadence from rendering cadence.
 
 ```mermaid
 sequenceDiagram
@@ -727,25 +563,15 @@ sequenceDiagram
     Host->>Browser: request next frame
 ```
 
-This represents the first complete vertical slice through vLab2D:
+Variable browser frame delta is used as scheduling input, not as the numerical integration timestep.
 
-```text
-configuration
-     ↓
-simulation
-     ↓
-observation
-     ↓
-visualization
-     ↓
-visible output
-```
+The renderer remains unaware of `requestAnimationFrame` and of simulation stepping.
 
 ---
 
 ## 16. Architectural principles demonstrated today
 
-Several project principles are no longer merely intentions; the current implementation demonstrates them.
+Several project principles are now demonstrated by the implementation.
 
 ### Simulation and visualization are independent
 
@@ -761,7 +587,7 @@ Consumers receive detached observations.
 
 ### Behavior can be injected
 
-The numerical integration algorithm is supplied to the world through `KinematicIntegrator`.
+The numerical integration algorithm is supplied through `KinematicIntegrator`.
 
 ### Composition is preferred over inheritance
 
@@ -792,18 +618,9 @@ For example:
 - world-owned state and detached observations reinforce **encapsulation**;
 - external composition follows **dependency inversion** where replaceable behavior is involved.
 
-However, vLab2D is not currently claiming to be:
-
-- Clean Architecture;
-- Hexagonal Architecture;
-- an Entity Component System;
-- Domain-Driven Design;
-- an event-driven architecture;
-- a plugin framework.
+However, vLab2D is not currently claiming to be Clean Architecture, Hexagonal Architecture, an Entity Component System, Domain-Driven Design, an event-driven architecture, or a plugin framework.
 
 Those labels would imply structures and constraints the project has not needed.
-
-The project uses architectural ideas selectively when they solve real problems.
 
 ---
 
@@ -828,6 +645,10 @@ It is useful to keep these categories separate.
 ✓ independent Canvas 2D visualization
 ✓ shared ViewportTransform
 ✓ shared world-to-display coordinate mapping
+✓ equivalent SVG and Canvas spatial references
+✓ Canvas integer grid
+✓ Canvas world axes
+✓ Canvas world-origin marker
 ✓ external host/example composition
 ✓ browser requestAnimationFrame host
 ✓ fixed-timestep accumulator loop
@@ -851,7 +672,6 @@ It is useful to keep these categories separate.
 Possible future capabilities include:
 
 ```text
-? Canvas grid, axes and origin reference rendering
 ? pan and zoom
 ? inverse display-to-world mapping
 ? experiment orchestration
@@ -877,14 +697,12 @@ That duplication produced the evidence needed to extract `ViewportTransform`.
 ```mermaid
 flowchart TD
     WORLD["World coordinates"]
-
     TRANSFORM["ViewportTransform"]
 
     SVG["SvgKinematicRenderer"]
     CANVAS["CanvasKinematicRenderer"]
 
     WORLD --> TRANSFORM
-
     TRANSFORM --> SVG
     TRANSFORM --> CANVAS
 ```
@@ -899,31 +717,53 @@ The shared transform owns:
 
 The renderers retain responsibility for rendering-specific behavior.
 
-For example:
-
-```text
-ViewportTransform
-    coordinate geometry
-
-SvgKinematicRenderer
-    SVG document generation
-    grid / axes / origin SVG elements
-    body SVG elements
-
-CanvasKinematicRenderer
-    Canvas frame clearing
-    body drawing
-```
-
 The transform is intentionally immutable and is created internally by each renderer.
 
 It is not currently an injected strategy because the project has not demonstrated a need to substitute transformation behavior independently from renderer construction.
 
 The abstraction also remains independent from engine-domain values such as `Vector2`; its coordinate operations accept and return numbers.
 
-No renderer hierarchy, camera model, transformation matrix framework, pan/zoom system, or inverse coordinate mapping has been introduced.
+### Emerging visible-world-range duplication
 
-Those capabilities remain available for later evolution when concrete requirements make their shape clear.
+Both renderers now also calculate the visible world extent needed to generate their integer-coordinate grids.
+
+Conceptually:
+
+```mermaid
+flowchart TD
+    TRANSFORM["ViewportTransform"]
+
+    SVG["SvgKinematicRenderer"]
+    CANVAS["CanvasKinematicRenderer"]
+
+    SVGRANGE["derive visible world range"]
+    CANVASRANGE["derive visible world range"]
+
+    TRANSFORM --> SVG
+    TRANSFORM --> CANVAS
+
+    SVG --> SVGRANGE
+    CANVAS --> CANVASRANGE
+```
+
+This is the next concrete duplication to review.
+
+The likely shared concept is the continuous world-space extent visible through the viewport, not integer grid selection itself.
+
+For example, a future viewport capability might describe values equivalent to:
+
+```text
+minimum visible world X
+maximum visible world X
+minimum visible world Y
+maximum visible world Y
+```
+
+Whether that becomes properties, methods, a bounds value, or no new abstraction at all should be decided from the implementation rather than predicted here.
+
+Grid renderers should remain responsible for converting continuous visible bounds into the discrete integer coordinates they choose to draw.
+
+No renderer hierarchy, camera model, transformation matrix framework, pan/zoom system, or inverse coordinate mapping has been introduced.
 
 ---
 

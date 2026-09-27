@@ -6,6 +6,8 @@ import { CanvasKinematicRenderer } from "./canvas-kinematic-renderer.ts";
 class RecordingCanvasContext {
   readonly calls: unknown[][] = [];
 
+  globalAlpha = 1;
+
   clearRect(x: number, y: number, width: number, height: number): void {
     this.calls.push(["clearRect", x, y, width, height]);
   }
@@ -14,12 +16,32 @@ class RecordingCanvasContext {
     this.calls.push(["beginPath"]);
   }
 
+  moveTo(x: number, y: number): void {
+    this.calls.push(["moveTo", x, y]);
+  }
+
+  lineTo(x: number, y: number): void {
+    this.calls.push(["lineTo", x, y]);
+  }
+
   arc(x: number, y: number, radius: number, startAngle: number, endAngle: number): void {
     this.calls.push(["arc", x, y, radius, startAngle, endAngle]);
   }
 
   fill(): void {
     this.calls.push(["fill"]);
+  }
+
+  stroke(): void {
+    this.calls.push(["stroke"]);
+  }
+
+  save(): void {
+    this.calls.push(["save"]);
+  }
+
+  restore(): void {
+    this.calls.push(["restore"]);
   }
 }
 
@@ -36,12 +58,9 @@ Deno.test("CanvasKinematicRenderer maps world coordinates to Canvas coordinates"
 
   renderer.render(snapshots);
 
-  assertEquals(context.calls, [
-    ["clearRect", 0, 0, 200, 100],
-    ["beginPath"],
-    ["arc", 120, 20, 3, 0, Math.PI * 2],
-    ["fill"],
-  ]);
+  const arcCalls = context.calls.filter(([name]) => name === "arc");
+
+  assertEquals(arcCalls, [["arc", 120, 20, 3, 0, Math.PI * 2]]);
 });
 
 Deno.test("CanvasKinematicRenderer redraw clears the previous frame", () => {
@@ -51,7 +70,8 @@ Deno.test("CanvasKinematicRenderer redraw clears the previous frame", () => {
   renderer.render([]);
   renderer.render([]);
 
-  assertEquals(context.calls, [
+  const clearRectCalls = context.calls.filter(([name]) => name === "clearRect");
+  assertEquals(clearRectCalls, [
     ["clearRect", 0, 0, 200, 100],
     ["clearRect", 0, 0, 200, 100],
   ]);

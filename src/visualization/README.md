@@ -51,25 +51,17 @@ generated/kinematic-world.svg
 
 ## Canvas renderer
 
-`CanvasKinematicRenderer` is the first live rendering implementation.
+`CanvasKinematicRenderer` provides the live rendering implementation.
 
 It receives a Canvas 2D drawing context and renders detached body snapshots directly into that context.
 
-Each render:
+Each frame is rendered in this order:
 
-1. clears the previous frame;
-2. maps body positions from world coordinates to display coordinates;
-3. draws the current bodies.
-
-Clearing the previous frame is deliberate. Trails should become an explicit visualization capability rather than appearing accidentally because old frames were left on the canvas.
-
-The first browser example is located under:
-
-```text
-examples/kinematic-world-canvas/
-```
-
-The browser host creates the simulation, advances it, obtains detached body snapshots, and supplies those snapshots to the Canvas renderer.
+1. clear the previous frame;
+2. render the integer-coordinate grid;
+3. render the world X and Y axes;
+4. render the world-origin marker;
+5. render the current bodies.
 
 ```mermaid
 flowchart LR
@@ -83,7 +75,13 @@ flowchart LR
     R --> C
 ```
 
-The browser's animation callback controls repeated execution. The renderer itself has no knowledge of `requestAnimationFrame`.
+The grid omits zero-coordinate lines because those positions are represented by the world axes.
+
+Spatial references and body positions use the shared `ViewportTransform`.
+
+Clearing the previous frame remains deliberate. Trails should become an explicit visualization capability rather than appearing accidentally because old frames were left on the canvas.
+
+The browser host controls repeated execution. The renderer itself has no knowledge of `requestAnimationFrame`.
 
 ## Animation timing
 
@@ -168,16 +166,20 @@ The two concrete implementations should continue to teach us which concepts are 
 
 ## Direction
 
-The next visualization step is to bring the spatial reference information already available in SVG into the live Canvas renderer.
+SVG and Canvas now share coordinate conversion through `ViewportTransform` and both render equivalent basic spatial references.
 
-Canvas should gain:
+The next visualization review should examine the duplicated calculation used by both renderers to determine the visible world range for their integer grids.
 
-- an integer-coordinate grid;
-- world X and Y axes;
-- a world-origin marker.
+The distinction to preserve is:
 
-Those elements should use `ViewportTransform` for their coordinate placement.
+```text
+ViewportTransform
+    visible world geometry
 
-This will make the animated view easier to interpret while further exercising the shared viewport boundary.
+Grid rendering
+    which world coordinates should receive grid lines
+```
 
-Pan, zoom, renderer interfaces, richer diagnostics, and other visualization abstractions remain deferred until concrete requirements establish their shape.
+If the current duplication supports it, the smallest useful visible-bounds capability should be added to `ViewportTransform`.
+
+Pan, zoom, cameras, renderer interfaces, richer diagnostics, and generalized rendering abstractions remain deferred until concrete requirements establish their shape.

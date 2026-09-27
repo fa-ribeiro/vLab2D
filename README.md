@@ -10,9 +10,9 @@ Eventually, vLab2D aims to make simulations not only runnable, but **observable*
 
 ## Project status
 
-**Current checkpoint:** a multi-body `KinematicWorld` owns authoritative simulation state and exposes detached observations that can be visualized as static SVG output or live Canvas 2D animation. SVG and Canvas now share a dedicated `ViewportTransform` for mathematical world-to-display coordinate conversion.
+**Current checkpoint:** a multi-body `KinematicWorld` owns authoritative simulation state and exposes detached observations that can be visualized as static SVG output or live Canvas 2D animation. SVG and Canvas share `ViewportTransform` and now both render an integer grid, world axes, an origin marker, and simulated bodies.
 
-**Next step:** add grid, axes, and world-origin references to the live Canvas renderer using the shared viewport transformation.
+**Next step:** review the duplicated visible-world-range calculations used by both grid renderers and determine whether that geometry belongs in `ViewportTransform`.
 
 See the [project documentation](docs/project/README.md) for the authoritative current status, project context, decisions, workflow, and continuity information.
 
@@ -58,7 +58,9 @@ The project currently has two concrete visualization paths:
 - `SvgKinematicRenderer` produces static SVG documents suitable for inspection, snapshots, and documentation;
 - `CanvasKinematicRenderer` draws detached engine observations into a browser Canvas 2D context for live visualization.
 
-No generic renderer hierarchy is currently required. Shared visualization abstractions will be introduced only when concrete implementations demonstrate their need.
+Both renderers use the shared `ViewportTransform` for world-to-display coordinate mapping while retaining rendering-technology-specific drawing behavior.
+
+No generic renderer hierarchy is currently required. Shared visualization abstractions will continue to be introduced only when concrete implementations demonstrate their need.
 
 Feature-level unit tests are normally colocated with the code they exercise:
 
