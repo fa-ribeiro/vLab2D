@@ -539,3 +539,22 @@ Renderers continue to own their `ViewportTransform` internally rather than expos
 Interactive pointer mechanics remain browser-host responsibility. The Canvas example owns pointer events, pointer capture, and CSS-pixel-to-Canvas-unit conversion; the renderer receives only display-space pan deltas and remains independent from DOM input APIs.
 
 This establishes panning without introducing a camera abstraction, transformation matrices, zoom, or inverse display-to-world mapping. Those capabilities should still require concrete use cases before being added.
+
+## D-053 — Milestone tags use semantic versions
+
+**Status:** Accepted
+
+Git commits remain the detailed implementation-history record. Version tags are reserved for selective, complete, coherent, demonstrable project milestones that are useful to name, revisit, compare, or show independently.
+
+Use annotated Git tags whose names follow `vMAJOR.MINOR.PATCH`. The annotation should combine the version with a short milestone label, for example `v0.2.0 - Interactive Canvas`.
+
+While vLab2D remains in initial development:
+
+- `v0.X.0` marks a new meaningful milestone, such as a coherent demonstrable capability or substantial intentional evolution of the still-unstable public design;
+- `v0.x.Y` marks a corrective or refining checkpoint for an existing milestone without establishing a new project capability;
+- an intentional breaking contract change must not be represented only by a patch increment;
+- not every feature, fix, refactor, or commit receives a version tag.
+
+`v1.0.0` is reserved for a deliberate future point where the project has a coherent first mature laboratory shape and its public contracts are stable enough for compatibility to become an explicit promise. It is not tied to a milestone count or schedule.
+
+Published version tags are immutable historical markers: do not move or reuse an existing version tag for different code. The detailed tagging criteria and process live in `workflow.md`.

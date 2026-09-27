@@ -118,6 +118,83 @@ As documentation grows, prefer grouping related material into dedicated sections
 
 The Git commit history remains the source for historical implementation chronology. Do not duplicate that history in `status.md` or other continuity files unless a historical reference is specifically needed to explain a durable decision.
 
+## Milestone versioning and Git tags
+
+Git commit history remains the detailed implementation chronology. Version tags serve a different purpose: they identify selective project states that are meaningful enough to name, revisit, compare, demonstrate, or use as learning checkpoints.
+
+vLab2D uses Semantic Versioning-shaped milestone tags:
+
+```text
+vMAJOR.MINOR.PATCH
+```
+
+Use annotated Git tags rather than lightweight tags. The Git tag name contains only the version, while the annotation gives the milestone a short human-readable label:
+
+```text
+tag:     v0.2.0
+message: v0.2.0 - Interactive Canvas
+```
+
+Do not tag every feature, refactor, fix, or commit. A commit is a good milestone-tag candidate when it is:
+
+- **complete** — implementation, tests, verification, and relevant documentation are synchronized;
+- **coherent** — the tagged commit represents a recognizable project state rather than a partial feature;
+- **demonstrable** — checking out the tag makes a meaningful capability observable or explainable;
+- **worth revisiting** — the state is useful for comparison, learning, screenshots, regression investigation, or showing project evolution;
+- **durable enough to name** — the milestone can be summarized clearly in a short label.
+
+### Version meaning before `1.0.0`
+
+vLab2D is in initial development and is expected to remain in the `0.x.y` range for a substantial period.
+
+Before `1.0.0`:
+
+- increment the **minor** version (`v0.X.0`) for a new meaningful project milestone: a coherent, demonstrable capability or a substantial intentional evolution of the still-unstable public design;
+- increment the **patch** version (`v0.x.Y`) for a corrective or refining checkpoint that improves an existing tagged milestone without establishing a new project capability;
+- bug fixes, validation corrections, small behavioral refinements, documentation corrections, and similar maintenance normally belong to patch-level evolution when they are significant enough to tag;
+- an intentional breaking contract change before `1.0.0` must not be represented only by a patch increment;
+- patch tags are optional checkpoints, not a requirement to tag every corrective commit.
+
+A useful minor-version test is:
+
+> If this tag were shown independently, can the new project capability be described in one short sentence?
+
+If not, the change probably belongs in normal commit history rather than receiving a new minor milestone version.
+
+### Meaning of `1.0.0`
+
+`v1.0.0` is not earned by reaching a particular number of milestones.
+
+Reserve `v1.0.0` for a deliberate point at which vLab2D has a coherent first mature laboratory shape and its public contracts are stable enough that compatibility becomes an explicit promise rather than an exploratory convenience.
+
+After `1.0.0`, follow conventional Semantic Versioning more strictly:
+
+- **major** — incompatible public-contract changes;
+- **minor** — backward-compatible capabilities;
+- **patch** — backward-compatible fixes and refinements.
+
+### Tagging process
+
+Evaluate milestone tagging only after the corresponding commit has completed the normal feature lifecycle and has been verified as a trustworthy repository checkpoint.
+
+For a milestone tag:
+
+1. identify the exact commit that represents the completed milestone;
+2. choose the next semantic version according to the rules above;
+3. create an annotated tag with a short milestone label;
+4. inspect the tag before publishing it;
+5. push the tag explicitly.
+
+Example:
+
+```sh
+git tag -a v0.2.0 <commit> -m "v0.2.0 - Interactive Canvas"
+git show v0.2.0
+git push origin v0.2.0
+```
+
+Published version tags are historical markers. Do not move or reuse an existing published version tag to represent different code. If a tagged milestone needs a later correction that deserves its own checkpoint, create a new version instead.
+
 ## Continuity maintenance trigger
 
 Update the continuity pack after any of the following:
