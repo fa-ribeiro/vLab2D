@@ -112,14 +112,11 @@ export class SvgKinematicRenderer {
   #renderGrid(): string {
     const lines: string[] = [];
 
-    const halfWorldWidth = this.#transform.width / (2 * this.#transform.pixelsPerUnit);
-    const halfWorldHeight = this.#transform.height / (2 * this.#transform.pixelsPerUnit);
+    const minWorldX = Math.ceil(this.#transform.minWorldX);
+    const maxWorldX = Math.floor(this.#transform.maxWorldX);
 
-    const minWorldX = Math.ceil(-halfWorldWidth);
-    const maxWorldX = Math.floor(halfWorldWidth);
-
-    const minWorldY = Math.ceil(-halfWorldHeight);
-    const maxWorldY = Math.floor(halfWorldHeight);
+    const minWorldY = Math.ceil(this.#transform.minWorldY);
+    const maxWorldY = Math.floor(this.#transform.maxWorldY);
 
     for (let worldX = minWorldX; worldX <= maxWorldX; worldX++) {
       if (worldX === 0) {

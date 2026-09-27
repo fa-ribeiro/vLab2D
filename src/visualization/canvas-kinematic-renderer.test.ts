@@ -86,3 +86,98 @@ Deno.test("CanvasKinematicRenderer rejects a non-positive display scale", () => 
     "Pixels per unit must be a positive finite number.",
   );
 });
+
+Deno.test("CanvasKinematicRenderer renders world axes through the origin", () => {
+  const context = new RecordingCanvasContext();
+  const renderer = new CanvasKinematicRenderer(context, 200, 100, 10);
+
+  renderer.render([]);
+
+  const moveToCalls = context.calls.filter(([name]) => name === "moveTo");
+  const lineToCalls = context.calls.filter(([name]) => name === "lineTo");
+
+  assertEquals(
+    moveToCalls.some((call) => call[1] === 0 && call[2] === 50),
+    true,
+  );
+
+  assertEquals(
+    lineToCalls.some((call) => call[1] === 200 && call[2] === 50),
+    true,
+  );
+
+  assertEquals(
+    moveToCalls.some((call) => call[1] === 100 && call[2] === 0),
+    true,
+  );
+
+  assertEquals(
+    lineToCalls.some((call) => call[1] === 100 && call[2] === 100),
+    true,
+  );
+});
+
+Deno.test("CanvasKinematicRenderer renders a grid at integer world coordinates", () => {
+  const context = new RecordingCanvasContext();
+  const renderer = new CanvasKinematicRenderer(context, 100, 60, 20);
+
+  renderer.render([]);
+
+  const moveToCalls = context.calls.filter(([name]) => name === "moveTo");
+  const lineToCalls = context.calls.filter(([name]) => name === "lineTo");
+
+  assertEquals(
+    moveToCalls.some((call) => call[1] === 30 && call[2] === 0),
+    true,
+  );
+
+  assertEquals(
+    lineToCalls.some((call) => call[1] === 30 && call[2] === 60),
+    true,
+  );
+
+  assertEquals(
+    moveToCalls.some((call) => call[1] === 70 && call[2] === 0),
+    true,
+  );
+
+  assertEquals(
+    moveToCalls.some((call) => call[1] === 0 && call[2] === 10),
+    true,
+  );
+
+  assertEquals(
+    moveToCalls.some((call) => call[1] === 0 && call[2] === 50),
+    true,
+  );
+});
+
+Deno.test("CanvasKinematicRenderer marks the world origin at the viewport center", () => {
+  const context = new RecordingCanvasContext();
+  const renderer = new CanvasKinematicRenderer(context, 200, 100, 10);
+
+  renderer.render([]);
+
+  const moveToCalls = context.calls.filter(([name]) => name === "moveTo");
+  const lineToCalls = context.calls.filter(([name]) => name === "lineTo");
+
+  assertEquals(
+    moveToCalls.some((call) => call[1] === 95 && call[2] === 50),
+    true,
+  );
+
+  assertEquals(
+    lineToCalls.some((call) => call[1] === 105 && call[2] === 50),
+    true,
+  );
+
+  assertEquals(
+    moveToCalls.some((call) => call[1] === 100 && call[2] === 45),
+    true,
+  );
+
+  assertEquals(
+    lineToCalls.some((call) => call[1] === 100 && call[2] === 55),
+    true,
+  );
+});

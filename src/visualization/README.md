@@ -8,14 +8,24 @@ Visualization is intentionally outside the engine boundary. Renderers and diagno
 
 The project currently has two concrete visualization implementations:
 
-- `SvgKinematicRenderer` for static SVG output;
-- `CanvasKinematicRenderer` for browser Canvas 2D rendering.
+- `CanvasKinematicRenderer` for browser Canvas 2D rendering;
+- `SvgKinematicRenderer` for static SVG output.
 
 Both consume detached `KinematicBodySnapshot` values exposed by the simulation engine.
 
 `ViewportTransform` provides the world-to-display coordinate mapping shared by both renderers.
 
 Neither renderer advances simulation time or performs physics calculations.
+
+## Visualization priority
+
+Canvas and canvas-like interactive rendering are the primary visualization target. New interactive capabilities should be shaped around what makes sense for that path.
+
+SVG remains a useful secondary companion because it provides reproducible static snapshots, inspectable output, debugging captures, exports, and documentation images. Keep SVG working where the required adaptation remains natural and reasonably inexpensive.
+
+Do not constrain Canvas to the lowest common denominator merely to preserve SVG parity. If a Canvas feature does not map naturally to SVG, prefer the Canvas design; SVG may adapt, provide a reduced/static equivalent, or omit the feature.
+
+Likewise, a visualization abstraction should be shared only when the underlying concept is genuinely common. `ViewportTransform` is shared because viewport geometry is common to both renderers, not because the renderers are required to expose identical rendering semantics.
 
 ## SVG renderer
 
@@ -136,11 +146,32 @@ flowchart LR
 
 `ViewportTransform` contains no rendering behavior.
 
-It stores only immutable viewport geometry and scale and exposes numeric coordinate conversion operations.
+It stores immutable viewport geometry and scale, exposes numeric coordinate conversion operations, and describes the continuous world-space extent visible through the viewport:
+
+```text
+minWorldX
+maxWorldX
+minWorldY
+maxWorldY
+```
+
+These bounds are viewport geometry rather than grid policy. Each renderer remains responsible for choosing its discrete grid coordinates by applying `ceil` / `floor`, skipping zero where the world axes own that coordinate, and drawing with renderer-specific primitives.
+
+```mermaid
+flowchart TD
+    TRANSFORM["ViewportTransform"]
+    BOUNDS["continuous visible world bounds"]
+    CANVAS["Canvas grid policy"]
+    SVG["SVG grid policy"]
+
+    TRANSFORM --> BOUNDS
+    BOUNDS --> CANVAS
+    BOUNDS --> SVG
+```
 
 Both `SvgKinematicRenderer` and `CanvasKinematicRenderer` own a transform internally while retaining their existing public constructor shapes.
 
-This abstraction was introduced only after both concrete renderers independently demonstrated the same coordinate-mapping responsibility.
+The shared viewport responsibilities were introduced only after concrete renderer implementations demonstrated the same geometry requirements.
 
 ## Rendering roles
 
@@ -166,20 +197,10 @@ The two concrete implementations should continue to teach us which concepts are 
 
 ## Direction
 
-SVG and Canvas now share coordinate conversion through `ViewportTransform` and both render equivalent basic spatial references.
+The next visualization step is Canvas-first panning at the viewport-geometry level.
 
-The next visualization review should examine the duplicated calculation used by both renderers to determine the visible world range for their integer grids.
+`ViewportTransform` should first learn to represent a world-space viewport center other than `(0, 0)`. That center should affect both world-to-display mapping and the continuous visible world bounds.
 
-The distinction to preserve is:
+The first version should be programmatic and testable rather than interactive. Canvas should prove the capability first; SVG should consume the same viewport model where doing so remains natural.
 
-```text
-ViewportTransform
-    visible world geometry
-
-Grid rendering
-    which world coordinates should receive grid lines
-```
-
-If the current duplication supports it, the smallest useful visible-bounds capability should be added to `ViewportTransform`.
-
-Pan, zoom, cameras, renderer interfaces, richer diagnostics, and generalized rendering abstractions remain deferred until concrete requirements establish their shape.
+Mouse/pointer panning, zoom, cameras, inverse display-to-world mapping, renderer interfaces, richer diagnostics, and generalized rendering abstractions remain deferred until concrete requirements establish their shape.

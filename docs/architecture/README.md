@@ -470,6 +470,8 @@ CanvasKinematicRenderer
 
 Both renderers use `ViewportTransform` for coordinate placement while retaining rendering-technology-specific drawing behavior.
 
+Canvas and canvas-like interactive rendering are the primary visualization target. SVG remains a secondary static companion where maintaining support is natural and reasonably inexpensive. Shared abstractions should represent genuinely common concepts; SVG compatibility must not force Canvas into a weaker or less useful design.
+
 The two renderers intentionally retain different output models. Their existence does not currently justify a generic renderer interface.
 
 ---
@@ -510,9 +512,18 @@ displayY = height / 2 - worldY × pixelsPerUnit
 
 The world origin therefore appears at the center of the viewport.
 
-`ViewportTransform` owns only viewport geometry, scale, validation, and numeric coordinate conversion.
+`ViewportTransform` owns viewport geometry, scale, validation, numeric coordinate conversion, and the continuous world-space extent visible through the viewport.
 
-It deliberately does not know about SVG, Canvas, `KinematicWorld`, snapshots, `Vector2`, or rendering primitives.
+The visible extent is exposed through scalar values equivalent to:
+
+```text
+minWorldX
+maxWorldX
+minWorldY
+maxWorldY
+```
+
+It deliberately does not know about integer-grid selection, SVG, Canvas, `KinematicWorld`, snapshots, `Vector2`, or rendering primitives.
 
 Both renderers construct their transform internally from their existing viewport constructor arguments.
 
@@ -599,7 +610,11 @@ External engine consumers are expected to import from `src/engine/mod.ts`.
 
 ### Abstractions are introduced from concrete needs
 
-`ViewportTransform` was introduced only after SVG and Canvas independently demonstrated the same viewport geometry and coordinate-conversion responsibility.
+`ViewportTransform` was introduced only after SVG and Canvas independently demonstrated the same viewport geometry and coordinate-conversion responsibility. Its visible-world bounds were added only after both grid implementations independently derived the same continuous viewport extent.
+
+### Canvas drives visualization evolution
+
+Canvas and canvas-like interactive rendering are the primary visualization target. SVG is maintained as a useful secondary renderer when compatibility remains reasonable, but SVG parity does not constrain useful Canvas capabilities.
 
 There is still no generalized renderer hierarchy, camera framework, event bus, entity-component system, or dependency-injection container.
 
@@ -645,6 +660,7 @@ It is useful to keep these categories separate.
 ✓ independent Canvas 2D visualization
 ✓ shared ViewportTransform
 ✓ shared world-to-display coordinate mapping
+✓ shared continuous visible world bounds
 ✓ equivalent SVG and Canvas spatial references
 ✓ Canvas integer grid
 ✓ Canvas world axes
@@ -672,7 +688,8 @@ It is useful to keep these categories separate.
 Possible future capabilities include:
 
 ```text
-? pan and zoom
+? programmatic viewport panning through a non-origin world center
+? interactive pan and zoom
 ? inverse display-to-world mapping
 ? experiment orchestration
 ? synchronized multiple worlds
@@ -723,47 +740,44 @@ It is not currently an injected strategy because the project has not demonstrate
 
 The abstraction also remains independent from engine-domain values such as `Vector2`; its coordinate operations accept and return numbers.
 
-### Emerging visible-world-range duplication
+### Continuous visible world bounds
 
-Both renderers now also calculate the visible world extent needed to generate their integer-coordinate grids.
+SVG and Canvas later independently derived the same continuous world-space extent in order to determine which integer grid coordinates were visible. That duplication established a second viewport responsibility.
 
-Conceptually:
+`ViewportTransform` now exposes the minimum and maximum visible world coordinates on each axis:
+
+```text
+minWorldX
+maxWorldX
+minWorldY
+maxWorldY
+```
+
+With the current centered viewport, these bounds are derived from viewport dimensions and scale without allocating a separate bounds object.
+
+The responsibility boundary is:
 
 ```mermaid
 flowchart TD
     TRANSFORM["ViewportTransform"]
+    BOUNDS["Continuous visible world bounds"]
 
-    SVG["SvgKinematicRenderer"]
-    CANVAS["CanvasKinematicRenderer"]
+    CANVAS["Canvas grid policy"]
+    SVG["SVG grid policy"]
 
-    SVGRANGE["derive visible world range"]
-    CANVASRANGE["derive visible world range"]
+    TRANSFORM --> BOUNDS
+    BOUNDS --> CANVAS
+    BOUNDS --> SVG
 
-    TRANSFORM --> SVG
-    TRANSFORM --> CANVAS
-
-    SVG --> SVGRANGE
-    CANVAS --> CANVASRANGE
+    CANVAS --> CINT["ceil / floor / skip zero / draw"]
+    SVG --> SINT["ceil / floor / skip zero / emit SVG"]
 ```
 
-This is the next concrete duplication to review.
+Continuous extent belongs to viewport geometry. Discrete grid selection remains renderer behavior: each renderer decides which integer coordinates to draw, reserves zero for the world axes, applies presentation styling, and uses its own drawing technology.
 
-The likely shared concept is the continuous world-space extent visible through the viewport, not integer grid selection itself.
+This keeps `ViewportTransform` useful beyond grid rendering while avoiding a grid-aware viewport abstraction. It also prepares the Canvas-first viewport model for panning, where visible bounds will no longer be symmetric around the world origin.
 
-For example, a future viewport capability might describe values equivalent to:
-
-```text
-minimum visible world X
-maximum visible world X
-minimum visible world Y
-maximum visible world Y
-```
-
-Whether that becomes properties, methods, a bounds value, or no new abstraction at all should be decided from the implementation rather than predicted here.
-
-Grid renderers should remain responsible for converting continuous visible bounds into the discrete integer coordinates they choose to draw.
-
-No renderer hierarchy, camera model, transformation matrix framework, pan/zoom system, or inverse coordinate mapping has been introduced.
+No `WorldBounds` value type, inverse display-to-world mapping, renderer hierarchy, camera model, transformation matrix framework, pan interaction, or zoom system has been introduced.
 
 ---
 

@@ -1,6 +1,6 @@
 # Decisions and Architectural Intentions
 
-Last updated: 2026-09-26
+Last updated: 2026-09-27
 
 This file records decisions that should survive chat boundaries. Some entries are architectural intentions rather than implementation commitments; those are labeled accordingly.
 
@@ -490,3 +490,36 @@ Existing renderer constructor shapes are preserved.
 The extraction does not introduce a renderer interface, camera abstraction, matrix framework, scene graph, pan, zoom, or inverse display-to-world mapping.
 
 Those capabilities should be introduced only when concrete visualization or interaction requirements establish their necessary shape.
+
+## D-050 — Canvas is the primary visualization target
+
+**Status:** Accepted
+
+Canvas and canvas-like interactive rendering are the primary visualization target for vLab2D and should drive the design of new interactive visualization capabilities.
+
+SVG remains a valuable secondary companion renderer for reproducible static snapshots, inspectable output, debugging captures, exports, and documentation images. Maintain SVG support when the adaptation is natural and reasonably inexpensive.
+
+Visualization design must not be reduced to the lowest common denominator merely to preserve SVG parity. If a useful Canvas capability does not map naturally to SVG, prefer the Canvas design. SVG may adapt, expose a reduced or static equivalent, or omit that capability rather than forcing compromise into the primary interactive path.
+
+Shared visualization abstractions should represent concepts that are genuinely common to their consumers. They should not be introduced solely to force Canvas and SVG into identical semantics.
+
+## D-051 — Continuous visible world bounds belong to the viewport transform
+
+**Status:** Accepted
+
+`ViewportTransform` owns the continuous world-space extent visible through its viewport in addition to world-to-display coordinate conversion.
+
+The current no-allocation API exposes four derived scalar bounds:
+
+- `minWorldX`;
+- `maxWorldX`;
+- `minWorldY`;
+- `maxWorldY`.
+
+These values describe viewport geometry independently from any particular renderer or grid implementation.
+
+Integer-grid selection remains renderer behavior. SVG and Canvas independently apply `ceil` and `floor` to the continuous bounds, skip zero where the world axes own that coordinate, and render the resulting grid using technology-specific drawing operations and presentation styles.
+
+No separate `WorldBounds` value object is introduced yet because the current immutable scalar getters express the demonstrated requirement without per-frame allocation or additional structure.
+
+This extraction is Canvas-led viewport evolution that also remains naturally useful to SVG. It does not introduce inverse display-to-world mapping, panning, zoom, a camera abstraction, or a transformation-matrix framework.

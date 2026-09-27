@@ -34,6 +34,34 @@ export class ViewportTransform {
   }
 
   /**
+   * The minimum visible world X coordinate.
+   */
+  public get minWorldX(): number {
+    return -this.width / (2 * this.pixelsPerUnit);
+  }
+
+  /**
+   * The maximum visible world X coordinate.
+   */
+  public get maxWorldX(): number {
+    return this.width / (2 * this.pixelsPerUnit);
+  }
+
+  /**
+   * The minimum visible world Y coordinate.
+   */
+  public get minWorldY(): number {
+    return -this.height / (2 * this.pixelsPerUnit);
+  }
+
+  /**
+   * The maximum visible world Y coordinate.
+   */
+  public get maxWorldY(): number {
+    return this.height / (2 * this.pixelsPerUnit);
+  }
+
+  /**
    * Maps a world X coordinate into display space.
    */
   public worldToDisplayX(worldX: number): number {

@@ -42,6 +42,7 @@ The project should remain exploratory: we use known algorithms and established t
 - Treat tests as part of the feature and optimize for confidence in behavior and edge cases rather than coverage percentages.
 - Use Mermaid diagrams and practical analogies when they materially improve understanding of structural or abstract concepts.
 - The physics engine is infrastructure; experiments and observation are the content.
+- Canvas and canvas-like interactive rendering are the primary visualization target. Keep SVG as a useful secondary companion where support remains natural and reasonably inexpensive; do not constrain useful Canvas capabilities merely to preserve SVG parity.
 
 ## 4. Current conceptual architecture
 
@@ -85,6 +86,10 @@ Examples:
 ### Rendering / Visualization
 
 Rendering should remain independent from the physics engine.
+
+Canvas and canvas-like interactive rendering are the primary visualization target and should drive the design of interactive visualization capabilities. SVG remains a valuable secondary renderer for static snapshots, debugging captures, exports, and documentation images where maintaining equivalent or reduced behavior remains reasonable.
+
+Visualization design should not collapse to the lowest common denominator between Canvas and SVG. If a useful Canvas capability does not map naturally to SVG, prefer the Canvas design and let SVG adapt, provide a reduced/static equivalent, or omit that feature rather than compromising the primary interactive path. Shared abstractions should represent concepts that are genuinely common rather than mechanisms introduced only to force renderer parity.
 
 The same simulation(s) may eventually be represented in different ways, for example:
 

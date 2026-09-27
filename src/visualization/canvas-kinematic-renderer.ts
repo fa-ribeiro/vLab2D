@@ -117,15 +117,11 @@ export class CanvasKinematicRenderer {
   }
 
   #renderGrid(): void {
-    const halfWorldWidth = this.#transform.width / (2 * this.#transform.pixelsPerUnit);
+    const minWorldX = Math.ceil(this.#transform.minWorldX);
+    const maxWorldX = Math.floor(this.#transform.maxWorldX);
 
-    const halfWorldHeight = this.#transform.height / (2 * this.#transform.pixelsPerUnit);
-
-    const minWorldX = Math.ceil(-halfWorldWidth);
-    const maxWorldX = Math.floor(halfWorldWidth);
-
-    const minWorldY = Math.ceil(-halfWorldHeight);
-    const maxWorldY = Math.floor(halfWorldHeight);
+    const minWorldY = Math.ceil(this.#transform.minWorldY);
+    const maxWorldY = Math.floor(this.#transform.maxWorldY);
 
     this.#context.save();
     this.#context.globalAlpha = GRID_OPACITY;

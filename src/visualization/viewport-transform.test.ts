@@ -46,3 +46,12 @@ Deno.test("ViewportTransform rejects an invalid display scale", () => {
     "Pixels per unit must be a positive finite number.",
   );
 });
+
+Deno.test("ViewportTransform exposes the visible world extent", () => {
+  const transform = new ViewportTransform(100, 60, 20);
+
+  assertEquals(transform.minWorldX, -2.5);
+  assertEquals(transform.maxWorldX, 2.5);
+  assertEquals(transform.minWorldY, -1.5);
+  assertEquals(transform.maxWorldY, 1.5);
+});
