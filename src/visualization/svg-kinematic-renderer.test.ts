@@ -68,3 +68,19 @@ Deno.test("SvgKinematicRenderer marks the world origin at the viewport center", 
 
   assertStringIncludes(svg, '<line x1="100" y1="45" x2="100" y2="55" stroke="currentColor" />');
 });
+
+Deno.test("SvgKinematicRenderer renders world axes through the origin", () => {
+  const renderer = new SvgKinematicRenderer(200, 100, 10);
+
+  const svg = renderer.render([]);
+
+  assertStringIncludes(
+    svg,
+    '<line data-world-axis="x" x1="0" y1="50" x2="200" y2="50" stroke="currentColor" />',
+  );
+
+  assertStringIncludes(
+    svg,
+    '<line data-world-axis="y" x1="100" y1="0" x2="100" y2="100" stroke="currentColor" />',
+  );
+});

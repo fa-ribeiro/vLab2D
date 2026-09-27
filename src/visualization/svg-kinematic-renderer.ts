@@ -22,8 +22,8 @@ function assertPositiveFinite(value: number, name: string): void {
  * - positive world Y maps up;
  * - positive SVG Y maps down.
  *
- * The world origin is rendered as a small crosshair at its mapped display
- * position.
+ * The world X and Y axes span the visible viewport, and the world origin is
+ * rendered as a small crosshair at its mapped display position.
  */
 export class SvgKinematicRenderer {
   readonly #width: number;
@@ -67,6 +67,7 @@ export class SvgKinematicRenderer {
       `  width="${this.#width}"`,
       `  height="${this.#height}"`,
       `  viewBox="0 0 ${this.#width} ${this.#height}">`,
+      this.#renderAxes(),
       this.#renderOrigin(),
       bodies,
       "</svg>",
@@ -95,6 +96,16 @@ export class SvgKinematicRenderer {
         y + ORIGIN_MARKER_HALF_SIZE
       }" stroke="currentColor" />`,
       `  </g>`,
+    ].join("\n");
+  }
+
+  #renderAxes(): string {
+    const originX = this.#worldToDisplayX(0);
+    const originY = this.#worldToDisplayY(0);
+
+    return [
+      `  <line data-world-axis="x" x1="0" y1="${originY}" x2="${this.#width}" y2="${originY}" stroke="currentColor" />`,
+      `  <line data-world-axis="y" x1="${originX}" y1="0" x2="${originX}" y2="${this.#height}" stroke="currentColor" />`,
     ].join("\n");
   }
 
