@@ -10,9 +10,9 @@ Eventually, vLab2D aims to make simulations not only runnable, but **observable*
 
 ## Project status
 
-**Current checkpoint:** a multi-body `KinematicWorld` owns and advances authoritative body state, exposes detached observations through its public API, and can now be visualized through the first SVG renderer.
+**Current checkpoint:** a multi-body `KinematicWorld` owns and advances authoritative body state, exposes detached observations through its public API, and can be visualized through an SVG renderer that now includes a visible marker for the world origin.
 
-**Next step:** make the visualization easier to interpret by adding simple spatial references such as the world origin and coordinate axes.
+**Next step:** add simple X and Y axes to the SVG viewer so the simulation's mathematical coordinate system is visually explicit.
 
 See [`docs/project/status.md`](docs/project/status.md) for the authoritative current checkpoint and next goal.
 
@@ -47,6 +47,8 @@ vLab2D/
 The simulation engine is designed as a **self-contained module**. External systems such as renderers, debuggers, inspectors, user interfaces, and experiment runners should interact with the engine through its public API rather than directly modifying its internal state.
 
 Visualization remains outside the engine boundary. The current SVG renderer consumes detached body snapshots exposed by the engine and is responsible for transforming mathematical world coordinates into display coordinates.
+
+The SVG renderer also provides simple spatial reference information such as the world-origin marker. Generated SVG output can be used as a lightweight static visualization and documentation snapshot mechanism.
 
 Feature-level unit tests are normally colocated with the code they exercise:
 

@@ -1,5 +1,7 @@
 import type { KinematicBodySnapshot } from "../engine/mod.ts";
 
+const ORIGIN_MARKER_HALF_SIZE = 5;
+
 function assertPositiveFinite(value: number, name: string): void {
   if (!Number.isFinite(value) || value <= 0) {
     throw new RangeError(`${name} must be a positive finite number.`);
@@ -7,7 +9,8 @@ function assertPositiveFinite(value: number, name: string): void {
 }
 
 /**
- * Renders kinematic body snapshots as points in an SVG document.
+ * Renders kinematic body snapshots and spatial reference information into an
+ * SVG document.
  *
  * The renderer operates only on detached engine observations. It does not own,
  * advance, or mutate simulation state.
@@ -18,6 +21,9 @@ function assertPositiveFinite(value: number, name: string): void {
  * - positive world X maps right;
  * - positive world Y maps up;
  * - positive SVG Y maps down.
+ *
+ * The world origin is rendered as a small crosshair at its mapped display
+ * position.
  */
 export class SvgKinematicRenderer {
   readonly #width: number;
@@ -61,6 +67,7 @@ export class SvgKinematicRenderer {
       `  width="${this.#width}"`,
       `  height="${this.#height}"`,
       `  viewBox="0 0 ${this.#width} ${this.#height}">`,
+      this.#renderOrigin(),
       bodies,
       "</svg>",
     ]
@@ -73,6 +80,22 @@ export class SvgKinematicRenderer {
     const y = this.#worldToDisplayY(snapshot.state.position.y);
 
     return `  <circle data-body-id="${snapshot.id}" cx="${x}" cy="${y}" r="${this.#bodyRadius}" />`;
+  }
+
+  #renderOrigin(): string {
+    const x = this.#worldToDisplayX(0);
+    const y = this.#worldToDisplayY(0);
+
+    return [
+      `  <g data-world-origin="">`,
+      `    <line x1="${x - ORIGIN_MARKER_HALF_SIZE}" y1="${y}" x2="${
+        x + ORIGIN_MARKER_HALF_SIZE
+      }" y2="${y}" stroke="currentColor" />`,
+      `    <line x1="${x}" y1="${y - ORIGIN_MARKER_HALF_SIZE}" x2="${x}" y2="${
+        y + ORIGIN_MARKER_HALF_SIZE
+      }" stroke="currentColor" />`,
+      `  </g>`,
+    ].join("\n");
   }
 
   #worldToDisplayX(worldX: number): number {

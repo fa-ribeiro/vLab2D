@@ -38,7 +38,7 @@ World stepping remains transactional: all candidate body states are computed and
 
 ### Visualization
 
-The project now has its first concrete visualization implementation: `SvgKinematicRenderer`.
+The project has its first concrete visualization implementation: `SvgKinematicRenderer`.
 
 The renderer:
 
@@ -49,7 +49,12 @@ The renderer:
 - places the mathematical world origin at the center of the viewport;
 - preserves positive X to the right;
 - converts positive world Y into upward visual motion despite SVG's downward-positive Y axis;
-- renders each observed body as a simple SVG circle.
+- renders each observed body as a simple SVG circle;
+- renders the world origin as a small crosshair at the mapped display position of world coordinate `(0, 0)`.
+
+The origin marker is calculated through the same world-to-display mapping used for body positions rather than being hard-coded directly to the current viewport center.
+
+This keeps the marker conceptually tied to world space and prepares the visualization code for a future reusable transform supporting viewport movement such as pan and zoom.
 
 The example in `examples/kinematic-world-svg.ts` creates a `KinematicWorld`, advances several bodies using `SemiImplicitEulerIntegrator`, observes the resulting world through the public snapshot API, and writes the rendered result to:
 
@@ -57,7 +62,7 @@ The example in `examples/kinematic-world-svg.ts` creates a `KinematicWorld`, adv
 generated/kinematic-world.svg
 ```
 
-The generated SVG provides the project's first visible confirmation that the simulation and visualization boundaries work together as intended.
+The generated SVG now provides both visible body positions and an explicit spatial reference for the world origin.
 
 The current end-to-end flow is:
 
@@ -75,17 +80,17 @@ The simulation engine remains independent from visualization. The renderer depen
 
 ## Next step
 
-Make the first visualization easier to interpret spatially.
+Continue enriching the static SVG viewer with simple spatial reference information.
 
-The next small goal should add simple visual reference information to the SVG renderer, starting with the world origin and coordinate axes.
+The next small goal should render the world X and Y axes through the world origin.
 
-This will make body positions and the world-to-display coordinate transformation visually obvious while keeping the scope small.
+The axes should:
 
-The feature should remain within visualization:
+- use the existing world-to-display mapping;
+- make the mathematical coordinate orientation visually obvious;
+- remain entirely within the visualization subsystem;
+- avoid introducing a generalized transform abstraction before the first minimal Canvas renderer demonstrates its concrete requirements.
 
-- no engine changes unless a concrete requirement emerges;
-- no physics calculations in the renderer;
-- no animation loop yet;
-- no trails, velocity vectors, controls, or richer renderer abstraction yet.
+No engine changes, animation loop, pan/zoom behavior, velocity vectors, trails, or richer renderer abstraction are needed yet.
 
-This keeps the next increment focused while making the visual workbench increasingly useful for inspecting future simulation behavior.
+The SVG renderer remains our static visualization, documentation, and snapshot mechanism while the project moves gradually toward a future animated Canvas renderer.

@@ -56,3 +56,15 @@ Deno.test("SvgKinematicRenderer rejects a non-positive display scale", () => {
     "Pixels per unit must be a positive finite number.",
   );
 });
+
+Deno.test("SvgKinematicRenderer marks the world origin at the viewport center", () => {
+  const renderer = new SvgKinematicRenderer(200, 100, 10);
+
+  const svg = renderer.render([]);
+
+  assertStringIncludes(svg, '<g data-world-origin="">');
+
+  assertStringIncludes(svg, '<line x1="95" y1="50" x2="105" y2="50" stroke="currentColor" />');
+
+  assertStringIncludes(svg, '<line x1="100" y1="45" x2="100" y2="55" stroke="currentColor" />');
+});
