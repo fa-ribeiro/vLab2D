@@ -194,7 +194,9 @@ function frame(timestamp: number): void {
   renderedSnapshots = world.getBodySnapshots();
 
   renderer.render(renderedSnapshots);
+
+  requestAnimationFrame(frame);
 }
 
-renderer.render(world.getBodySnapshots());
+renderer.render(renderedSnapshots);
 requestAnimationFrame(frame);
