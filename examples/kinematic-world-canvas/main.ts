@@ -143,6 +143,15 @@ function refreshPointerInspection(): void {
   updatePointerInspection(pointerClientX, pointerClientY);
 }
 
+function clearPointerInspection(): void {
+  pointerClientX = undefined;
+  pointerClientY = undefined;
+  hoveredBodyId = undefined;
+
+  coordinateOutput.value = "World: —";
+  bodyOutput.value = "Body: —";
+}
+
 canvas.addEventListener("pointermove", (event) => {
   if (event.pointerId === activePointerId) {
     const deltaClientX = event.clientX - previousPointerX;
@@ -161,6 +170,10 @@ canvas.addEventListener("pointermove", (event) => {
   }
 
   updatePointerInspection(event.clientX, event.clientY);
+});
+
+canvas.addEventListener("pointerleave", () => {
+  clearPointerInspection();
 });
 
 canvas.addEventListener(
