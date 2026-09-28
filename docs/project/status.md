@@ -4,6 +4,8 @@
 
 vLab2D now has a small multi-body simulation engine, reproducible SVG visualization, and live Canvas 2D animation with fixed simulation timing.
 
+The project has entered **Phase 1 — Structure and lifecycle refactoring**. Feature growth is intentionally paused while existing behavior is reorganized around the emerging `Body → World → Simulation → Runtime` architecture.
+
 Canvas is the primary visualization target. SVG remains a useful secondary renderer for static snapshots, debugging captures, exports, and documentation where maintaining it remains reasonable.
 
 Both renderers share `ViewportTransform` for viewport geometry, bidirectional world/display coordinate conversion, mutable world-space centering, and mutable display scale. The Canvas path additionally supports anchored interactive zoom, display-space picking of rendered body markers, live hover highlighting, persistent click selection, and live read-only selected-body inspection.
@@ -13,14 +15,31 @@ Both renderers share `ViewportTransform` for viewport geometry, bidirectional wo
 The public engine API currently provides:
 
 - `Vector2`, an immutable two-dimensional vector value.
-- `KinematicState`, representing position and velocity at a particular instant.
+- `Body`, a reusable body definition with no intrinsic properties yet.
+- `BodyInitialConditions`, optional world-specific initial position and velocity.
+- `KinematicState`, currently representing position and velocity at a particular instant.
 - `KinematicIntegrator`, a narrow strategy contract for advancing kinematic state.
 - `ExplicitEulerIntegrator`.
 - `SemiImplicitEulerIntegrator`.
-- `KinematicSimulation`, the earlier single-state runtime.
+- `KinematicSimulation`, the earlier single-state runtime retained while Phase 1 evaluates its future.
 - `BodyId`, an opaque world-local identifier.
 - `KinematicBodySnapshot`, a detached observation of body identity and state.
-- `KinematicWorld`, which owns and advances multiple identified body states.
+- `KinematicWorld`, which owns and advances multiple identified body runtime instances.
+
+The current Body/World lifecycle now distinguishes three categories explicitly:
+
+```text
+Body
+    reusable intrinsic definition
+
+BodyInitialConditions
+    world-specific position / velocity supplied at insertion
+
+KinematicState inside KinematicWorld
+    authoritative evolving runtime state
+```
+
+`KinematicWorld.addBody(...)` may instantiate the same `Body` definition multiple times. Each addition receives an independent world-local `BodyId` and independent runtime state. Position and velocity default to zero, and supplied vectors are copied before they become authoritative world state.
 
 `KinematicWorld` owns authoritative body state and advances every body using an injected `KinematicIntegrator`.
 
@@ -199,24 +218,26 @@ Interpolation between fixed simulation states remains deliberately deferred.
 
 ## Next step
 
-Use the completed selected-body observation path for the first useful visual diagnostic overlay.
+Continue **Phase 1** with the naming/state-model cleanup from the new Body/World lifecycle baseline.
 
-The leading candidate is a velocity vector for the selected body:
+Review the semantics of:
 
-- derive the vector from the selected body's latest detached snapshot;
-- render it as optional Canvas diagnostic presentation rather than simulation state;
-- keep its display scaling/presentation policy explicit and local until a second vector diagnostic creates pressure for abstraction;
-- preserve selection identity and engine authority exactly as they are;
-- keep editable controls and drag manipulation separate.
+- `KinematicWorld`;
+- `KinematicState`;
+- `KinematicBodySnapshot`;
+- `KinematicIntegrator`;
+- the earlier `KinematicSimulation`.
 
-Do not yet introduce:
+The goal is not to rename everything mechanically. Keep names whose current meaning remains accurate, broaden names only when the implemented responsibility has genuinely broadened, and retire concepts only after their replacement is proven.
 
-- editable body state;
-- drag-to-move bodies;
-- a generic diagnostic-overlay framework;
-- a general inspector framework;
-- a general styling/theme system;
-- a camera class;
-- transformation matrices;
-- renderer interfaces;
-- generalized drawing backends.
+After naming/state cleanup, Phase 1 proceeds incrementally toward:
+
+```text
+Body → World → Simulation → Runtime
+```
+
+with Visualization remaining independent.
+
+No new simulation or Canvas features should be added during Phase 1 unless a refactor requires a narrowly scoped compatibility change.
+
+The phased strategy is maintained in [`roadmap.md`](roadmap.md).

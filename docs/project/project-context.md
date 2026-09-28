@@ -1,6 +1,6 @@
 # vLab2D — Project Context
 
-> Canonical stable project-context document. A new chat should read this file first; `handoff.md` defines the resume procedure and `workflow.md` defines the working agreement.
+> Canonical stable project-context document. A new chat should read this file first; `handoff.md` defines the resume procedure, `workflow.md` defines the working agreement, and `roadmap.md` records the current phased development strategy.
 
 ## 1. Project identity
 
@@ -34,6 +34,11 @@ The project should remain exploratory: we use known algorithms and established t
 - Prefer focused responsibilities and clear separation of concerns.
 - Prefer explicit dependency injection for replaceable collaborators/policies rather than hidden construction or global reach-through.
 - Use OOP pragmatically where it clarifies the domain; prefer composition over deep inheritance.
+- Decide relationship cardinality from the domain rather than assuming one-to-one for convenience.
+- Prefer immutable reusable definitions where the concept represents intrinsic properties.
+- Separate intrinsic properties, initial conditions, and runtime state.
+- State-owning contexts own authoritative runtime state; reusable definitions do not become mutable escape hatches into that state.
+- Prefer safe, unsurprising defaults while allowing concrete options to override them.
 - Visual clarity and beauty are part of the project, not merely decoration.
 - Documentation and code comments are part of the learning experience: explain non-obvious behavior, algorithms, assumptions, tradeoffs, and decisions; do not narrate obvious code.
 - Use vanilla TypeScript and keep dependencies minimal; prefer implementing relevant functionality from scratch, with Deno/Deno standard-library tooling as appropriate infrastructure.
@@ -46,104 +51,138 @@ The project should remain exploratory: we use known algorithms and established t
 
 ## 4. Current conceptual architecture
 
-### Simulation / Physics
+The project now uses four conceptual layers as its architectural direction:
 
-The simulation core should be conceptually independent from presentation. It advances worlds and exposes state/events, without knowing how they are displayed.
+```mermaid
+flowchart LR
+    ENGINE["Engine / Domain"]
+    SIM["Simulation / Orchestration"]
+    RUNTIME["Runtime"]
+    VIS["Visualization"]
 
-The engine owns all authoritative mutable simulation state. External systems may observe that state through a read-only/query boundary and request changes through a controlled command/API boundary, but they should not receive writable references to internal objects. Runtime changes such as gravity updates or applied forces should be validated and applied by the engine at a safe/consistent point so simulation invariants remain intact.
+    ENGINE --> SIM --> RUNTIME
+    ENGINE -. detached observations .-> VIS
+    SIM -. coordinated observations .-> VIS
+```
 
-An important open design question is how to separate **world state** from the **behavior/policies that advance it**. A likely direction is that a world represents state while a runtime/simulator composes replaceable policies such as an integrator or collision strategy, but this is intentionally not settled yet. The first concrete implementation should provide evidence before we freeze that boundary.
+These are responsibility boundaries rather than a requirement to build a large framework.
+
+### Engine / Domain
+
+The engine/domain layer owns physical definitions, mathematical values, authoritative world state, and concrete simulation policies.
+
+A foundational lifecycle rule applies to domain concepts:
+
+```text
+intrinsic properties
+    immutable reusable definition
+
+initial conditions
+    supplied when the definition enters a state-owning context
+
+runtime state
+    owned exclusively by that context
+```
+
+For example, `Body` is a reusable definition. World-specific position and velocity are initial conditions supplied when adding that Body to a World. The World then owns the evolving runtime state for each independent body instance.
+
+The same reusable definition may be instantiated multiple times, including across different Worlds, without sharing runtime state.
+
+Potential responsibilities as the engine grows:
+
+- reusable Body definitions;
+- world-local body identity and runtime state;
+- numerical integration;
+- gravity and other environment properties;
+- forces when concrete equations require them;
+- geometry and collision behavior when later phases justify them;
+- deterministic stepping where practical.
+
+### Simulation / Orchestration
+
+Simulation coordinates one or more independent Worlds.
+
+The intended deterministic core operation is conceptually:
+
+```text
+simulation.step(dt)
+```
 
 Potential responsibilities:
 
-- bodies and physical state
-- forces
-- numerical integration
-- collision detection / response
-- constraints, if explored later
-- deterministic stepping where practical
+- coordinate one or more Worlds;
+- synchronize stepping for controlled comparisons;
+- track simulation-level time if/when needed;
+- keep orchestration independent from browser scheduling and visualization.
 
-### Experiment orchestration
+Multiple Worlds are a core experimental requirement rather than a speculative abstraction.
 
-An experiment may contain one or more worlds.
+### Visualization
 
-Potential responsibilities:
-
-- create/clone worlds
-- synchronize stepping
-- keep initial conditions comparable
-- vary one or more parameters between worlds
-- reset / pause / resume / single-step
-- collect comparison metrics
-
-Examples:
-
-- different gravity strengths
-- different integration algorithms
-- tiny differences in initial conditions
-- chaotic systems such as a future double-pendulum experiment
-
-### Rendering / Visualization
-
-Rendering should remain independent from the physics engine.
+Rendering remains independent from authoritative simulation state.
 
 Canvas and canvas-like interactive rendering are the primary visualization target and should drive the design of interactive visualization capabilities. SVG remains a valuable secondary renderer for static snapshots, debugging captures, exports, and documentation images where maintaining equivalent or reduced behavior remains reasonable.
 
-Visualization design should not collapse to the lowest common denominator between Canvas and SVG. If a useful Canvas capability does not map naturally to SVG, prefer the Canvas design and let SVG adapt, provide a reduced/static equivalent, or omit that feature rather than compromising the primary interactive path. Shared abstractions should represent concepts that are genuinely common rather than mechanisms introduced only to force renderer parity.
+Visualization design should not collapse to the lowest common denominator between Canvas and SVG. If a useful Canvas capability does not map naturally to SVG, prefer the Canvas design and let SVG adapt, provide a reduced/static equivalent, or omit that feature rather than compromising the primary interactive path.
 
-Viewport geometry includes a movable world-space center shared by the concrete renderers. Browser interaction mechanics such as pointer events, pointer capture, and CSS-pixel conversion belong to host/application code rather than to the renderer or simulation engine; renderers should receive semantic viewport operations or display-space movement rather than DOM event objects.
+The same simulation state may eventually be represented by multiple views or observers. Visualization consumes detached observations and should not become the owner of engine runtime state.
 
-The same simulation(s) may eventually be represented in different ways, for example:
+Possible indicators include:
 
-- one world normally
-- multiple worlds side by side
-- multiple worlds overlaid
-- presentation-only view
-- debugging/diagnostic view
+- velocity vector;
+- acceleration vector;
+- direction / speed;
+- bounds;
+- collision/contact points;
+- collision normals;
+- centers / pivots;
+- trails;
+- active/inactive/sleeping state;
+- labels or selected-body information.
 
-Visual indicators should be optional and independently configurable where sensible.
+### Runtime
 
-Possible indicators:
+Runtime drives Simulation in a particular host environment.
 
-- velocity vector
-- acceleration vector
-- direction / speed
-- bounding boxes
-- collision/contact points
-- collision normals
-- centers / pivots
-- trails
-- active/inactive/sleeping state
-- labels or selected-body information
+For a browser runtime, likely responsibilities include:
+
+- wall-clock scheduling;
+- `requestAnimationFrame`;
+- fixed-timestep accumulation;
+- calling deterministic simulation steps;
+- coordinating render cadence;
+- host-specific pointer/wheel/event mechanics where appropriate.
+
+`run()` belongs to runtime/application execution rather than to the deterministic Simulation model.
 
 ### UI / Controls
 
-The options/control panel is optional rather than intrinsic to rendering.
+The options/control panel remains optional rather than intrinsic to simulation or visualization.
 
 Possible controls:
 
-- start
-- pause
-- resume
-- single step
-- reset
-- experiment/world selection
-- visualization toggles
-- colors and indicator customization
-- physics/world parameters
+- start;
+- pause;
+- resume;
+- single step;
+- reset;
+- experiment/world selection;
+- visualization toggles;
+- colors and indicator customization;
+- physics/world parameters.
 
 ### Logging / Observation
 
-An optional console/logger should be independent from the renderer and physics algorithms.
+An optional console/logger should remain independent from renderers and physical algorithms.
 
 Possible event categories:
 
-- simulation lifecycle
-- collisions
-- body state changes
-- warnings/errors
-- metrics
-- debugging observations
+- simulation lifecycle;
+- collisions;
+- body state changes;
+- warnings/errors;
+- metrics;
+- debugging observations.
 
 The same information might later feed a console, graph, exporter, or other observer without changing the simulation core.
 
@@ -153,59 +192,62 @@ Multi-world comparison is an important project capability, not merely a future c
 
 Desired properties:
 
-- two or more worlds can start from the same base state
-- one parameter can be changed while keeping others equal
-- worlds can advance synchronously
-- worlds may use different numerical integrators
-- worlds can be rendered side by side or overlaid
-- differences between worlds may be visualized or measured
+- two or more worlds can start from the same reusable definitions and comparable initial conditions;
+- one parameter can be changed while keeping others equal;
+- worlds can advance synchronously;
+- worlds may use different numerical integrators;
+- worlds can be rendered side by side or overlaid;
+- differences between worlds may be visualized or measured.
 
 Important learning themes:
 
-- numerical integration behavior
-- determinism
-- sensitivity to initial conditions
-- chaotic systems / butterfly effect
-- energy drift and stability
+- numerical integration behavior;
+- determinism;
+- sensitivity to initial conditions;
+- chaotic systems / butterfly effect;
+- energy drift and stability.
 
-## 6. Initial repository boundary
+## 6. Repository boundary and architectural migration
 
-The first bootstrap intentionally creates only a few structural boundaries:
+The repository began with deliberately small boundaries:
 
-- `src/engine/` — self-contained simulation engine; `mod.ts` is its public consumer entry point
-- `src/visualization/` — rendering/diagnostic presentation concerns, outside the engine
-- `docs/project/` — continuity, decisions, status, workflow, environment, and project map
-- `tests/` — reserved for project-level/bootstrap tests; feature tests should normally be colocated
+- `src/engine/` — self-contained simulation engine; `mod.ts` is its public consumer entry point;
+- `src/visualization/` — rendering/diagnostic presentation concerns, outside the engine;
+- `docs/project/` — continuity, decisions, status, workflow, environment, roadmap, and project map;
+- `tests/` — reserved for project-level/bootstrap tests; feature tests should normally be colocated.
 
-Do not infer future folders from this bootstrap. Add deeper module structure only when real features require it.
+The project is now incrementally moving toward the four-layer architecture rather than adding empty folders in advance.
 
-## 7. Early project shape
+The likely direction is:
 
-Do not treat this as a binding roadmap. It is only a plausible starting sequence.
+```text
+src/
+├── engine/
+├── simulation/
+├── visualization/
+└── runtime/
+```
 
-- First visible body
-- Gravity
-- Fixed timestep
-- Boundary collision / bouncing
-- Play / pause / step / reset
-- Optional vectors/overlays
-- Multiple bodies
-- Body-body collision
-- Clone a world
-- Two synchronized worlds
-- Compare gravity or timestep
-- Compare integration algorithms
-- Overlay and side-by-side layouts
-- Comparison metrics
-- Chaotic experiment, potentially a double pendulum
+Deeper structure should still appear only when concrete responsibilities justify it.
 
-The project may deliberately diverge from this sequence.
+## 7. Development roadmap
+
+The current phased strategy lives in [`roadmap.md`](roadmap.md).
+
+At a high level:
+
+1. **Phase 1 — Structure and lifecycle refactoring:** no new features; reorganize current behavior around Body → World → Simulation → Runtime.
+2. **Phase 2 — Geometry / single-shape learning:** introduce immutable Shape geometry incrementally while shapeless particle-like Bodies remain valid.
+3. **Phase 3 — Geometry becomes physics:** collision detection/response and related structure only when geometry creates a concrete need.
+4. **Phase 4+ — Richer bodies and presentation:** compound bodies, physical materials, appearance/textures, and other concepts only as previous phases justify them.
+
+The roadmap is directional and adaptive, not a frozen specification.
 
 ## 8. Continuity principle
 
-Project continuity is a first-class requirement. Stable identity, goals, constraints, architecture, decisions, environment, workflow, and current status must remain recoverable from the repository rather than depending on conversation history.
+Project continuity is a first-class requirement. Stable identity, goals, constraints, architecture, decisions, environment, workflow, roadmap, and current status must remain recoverable from the repository rather than depending on conversation history.
 
-The detailed development/learning agreement lives in `workflow.md`. The procedure for resuming the project in a fresh chat lives in `handoff.md`. The current operational state lives in `status.md`.
+The detailed development/learning agreement lives in `workflow.md`. The phased strategy lives in `roadmap.md`. The procedure for resuming the project in a fresh chat lives in `handoff.md`. The current operational state lives in `status.md`.
 
 The continuity documents do not replace the source repository, tests, configuration, or Git history; a faithful handoff needs the repository as well.
 

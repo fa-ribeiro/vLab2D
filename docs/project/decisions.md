@@ -100,9 +100,11 @@ OOP is welcome where objects provide a natural model for meaningful concepts suc
 
 ## D-016 — Multi-behavior simulation architecture remains deliberately open
 
-**Status:** Open / architectural question
+**Status:** Superseded by D-060 through D-064
 
-We expect multiple simulations/worlds to differ in policies such as gravity, integration algorithm, timestep, or future solver behavior. Do not yet decide whether behavior lives directly on a `World`, in a CHIP-8-like runtime/simulator object, or in another composition. A promising hypothesis is to keep world state separate from the mechanism that advances it, then let an experiment coordinate multiple independent world/runtime pairs. This should be validated by the first concrete implementations before becoming a settled architecture.
+This decision originally kept the boundary between world state, simulation orchestration, and runtime behavior deliberately open while the project gathered implementation evidence.
+
+The later architecture checkpoint establishes a clearer direction: `World` owns authoritative body runtime state and world-level policies; `Simulation` coordinates one or more worlds; `Runtime` drives simulation execution and host scheduling; visualization remains independent observation/presentation. See D-060 through D-064.
 
 ## D-017 — Vanilla TypeScript and minimal dependencies
 
@@ -652,3 +654,126 @@ A detached snapshot is an observation, not persistent selection state. The host 
 If a selected identity cannot be found in the current observation set, the inspector presents unavailable values without implicitly clearing or replacing selection. Future body-removal semantics should be decided explicitly if body removal is introduced.
 
 Formatting and DOM presentation remain host concerns. This decision does not introduce editable body controls, a general inspector framework, body mutation through the UI, or drag-to-move behavior.
+
+## D-060 — vLab2D evolves around four conceptual layers
+
+**Status:** Accepted architectural direction
+
+The project now uses four conceptual layers to guide refactoring and future growth:
+
+1. **Engine / Domain** — reusable physical definitions, world-owned authoritative state, mathematical values, and concrete simulation policies such as numerical integration.
+2. **Simulation / Orchestration** — coordinates one or more worlds and exposes deterministic simulation stepping.
+3. **Visualization** — observes detached simulation information and presents it without owning or mutating authoritative simulation state.
+4. **Runtime** — drives simulation execution in a host environment, including wall-clock scheduling and host-specific interaction/event mechanics.
+
+These are responsibility boundaries, not a requirement to create a framework, dependency-injection container, or interface for every concept.
+
+The dependency direction should remain inward: runtime may drive simulation, simulation may coordinate worlds, and visualization may observe simulation/world output. Engine/domain code must not depend on browser runtime or visualization concerns.
+
+The current source tree does not yet fully implement all four layers. Phase 1 of the roadmap incrementally migrates the existing implementation toward this structure while preserving current behavior.
+
+## D-061 — Intrinsic properties, initial conditions, and runtime state are distinct lifecycle categories
+
+**Status:** Accepted
+
+vLab2D treats **intrinsic properties**, **initial conditions**, and **runtime state** as distinct concepts.
+
+**Intrinsic properties** describe what a reusable definition is in its own domain context. They belong to that definition and should be immutable so the same definition can be reused safely.
+
+**Initial conditions** describe how a reusable definition enters a state-owning context. They are supplied at the insertion/instantiation boundary and are not themselves intrinsic properties of the reusable definition.
+
+**Runtime state** describes the current evolving state of one instantiated object. It is owned exclusively by the state-owning context responsible for advancing and validating that state.
+
+The lifecycle is therefore:
+
+```text
+immutable reusable definition
+        +
+initial conditions
+        ↓
+state-owning context
+        ↓
+independent runtime instance
+```
+
+Reusing the same definition with the same or different initial conditions creates independent runtime instances. A detached observation of runtime state is not itself authoritative runtime state.
+
+This principle should guide future concepts such as shapes, body geometry attachments, worlds, and simulation/runtime composition.
+
+## D-062 — Reusable definitions should own only intrinsic properties
+
+**Status:** Accepted
+
+A reusable domain object should contain only properties that describe that object in its own context.
+
+Properties that describe environment, host presentation, or one particular runtime instance must not be added merely because they are convenient to reach from the object.
+
+Examples:
+
+- body geometry or future mass may be intrinsic body properties when concrete physics requires them;
+- a body's world position and velocity are not intrinsic properties and belong to world-specific initial/runtime state;
+- gravity describes a world/environment, not a body;
+- Canvas marker size, selection state, colors used only for debugging, and viewport scale are presentation/runtime concerns rather than physical body properties.
+
+This rule does not imply that every real-world characteristic belongs in the engine model. An engine abstraction intentionally models only the concepts relevant to its domain responsibility.
+
+## D-063 — `Body` is a reusable definition; `KinematicWorld.addBody(...)` establishes independent runtime state
+
+**Status:** Accepted and implemented
+
+`Body` is the first explicit reusable physical definition in the engine. It currently has no intrinsic properties, which is intentional: Phase 1 does not introduce mass, shape, material, or other unproven concepts.
+
+A body definition enters a world through `KinematicWorld.addBody(body, initialConditions)`.
+
+The current initial conditions are:
+
+- world-space position, defaulting to `(0, 0)`;
+- velocity, defaulting to `(0, 0)` world units per second.
+
+The world copies supplied initial-condition values before accepting them as authoritative runtime state.
+
+Each call to `addBody(...)` creates an independent world-local runtime instance with its own `BodyId` and state. The same `Body` definition may therefore be added multiple times to one world or reused across different worlds.
+
+`BodyId` remains world-local and belongs to the runtime instance rather than to the reusable `Body` definition.
+
+The World remains the exclusive authority over mutable runtime state. External consumers observe detached state rather than mutating the `Body` definition or world storage directly.
+
+## D-064 — Relationship cardinality is a domain decision, not a convenience default
+
+**Status:** Accepted architectural direction
+
+Do not assume one-to-one relationships merely because a singular property is convenient to implement.
+
+For each relationship, decide independently:
+
+- how many related objects are meaningful;
+- who owns or composes them;
+- whether the relationship is mutable after construction;
+- whether reuse/sharing is safe.
+
+Current and intended examples include:
+
+- `Simulation` may coordinate one or more `World` instances;
+- `World` owns zero or more body runtime instances;
+- a future `Body` may have zero or more geometry attachments, allowing particle-like bodies and later compound bodies;
+- a geometry attachment refers to one shape definition;
+- a `World` has one active strategy per world-level responsibility, such as one current integrator and, if later justified, one collision pipeline;
+- visualization/observation may have zero or more views of the same simulation state.
+
+Phase 2 may deliberately exercise only zero-or-one shape per body while learning the geometry model, but the architecture must not encode a permanently singular body-shape relationship that is already known to be too restrictive.
+
+## D-065 — Future `World` default gravity is Earth-like `(0, -9.81)`
+
+**Status:** Accepted architectural direction
+
+The engine coordinate convention uses positive Y upward. Therefore a natural Earth-like default gravity vector points downward and is represented as:
+
+```text
+(0, -9.81)
+```
+
+world units per second squared.
+
+The future general `World` API should use this as its default gravity unless later evidence establishes a better default for the laboratory.
+
+This decision does not retroactively change every existing example. During Phase 1 refactoring, examples may continue to pass explicit acceleration/gravity values where doing so preserves their existing demonstrated behavior.

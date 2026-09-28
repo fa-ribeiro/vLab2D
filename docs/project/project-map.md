@@ -1,6 +1,6 @@
 # vLab2D — Project Map
 
-Last updated: 2026-09-26
+Last updated: 2026-09-28
 
 This is an orientation map, not a frozen architecture or roadmap.
 
@@ -13,96 +13,157 @@ mindmap
       Have fun
       Build something beautiful
       Explore visually
-    Simulation
-      World state
-      Bodies
-      Forces
+    Engine / Domain
+      Reusable definitions
+        Body
+        Future Shapes
+      World-owned runtime state
       Integrators
-      Collision detection
-      Collision solving
-    Experiments
-      Multiple worlds
-      Shared initial conditions
-      Different gravity
-      Different integrators
-      Sensitivity to initial conditions
+      Future forces
+      Future collision pipeline
+    Simulation / Orchestration
+      One or more Worlds
+      Deterministic stepping
+      Controlled comparisons
     Visualization
-      Renderer independent of physics
-      Velocity and acceleration vectors
-      Bounds
-      Contact points and normals
-      Trails and state colors
-      Side-by-side views
-      Overlay views
-    Observation
-      Optional controls
+      Canvas primary
+      SVG secondary
       Inspector
-      Logger / console
-      Metrics
+      Diagnostics
+      Multiple views
+    Runtime
+      Browser scheduling
+      Fixed timestep loop
+      Host interactions
     Engineering values
+      Intrinsic properties vs initial conditions vs runtime state
+      Safe defaults
+      Explicit cardinality
       Vanilla TypeScript
       Minimal dependencies
       Separation of concerns
       Dependency injection
       Composition over inheritance
-      Modular interchangeable behavior
       JSDoc and rationale-focused comments
       Trustworthy tests
       Visual documentation
 ```
 
-## Conceptual flow
+## Architectural flow
 
 ```mermaid
 flowchart LR
-    E[Experiment / Orchestrator] --> SA[Simulation A]
-    E --> SB[Simulation B]
+    DEF["Reusable definitions<br/>Body / future Shape"]
+    INIT["Initial conditions"]
+    WORLD["World<br/>authoritative runtime state"]
+    SIM["Simulation<br/>coordinates Worlds"]
+    RUNTIME["Runtime<br/>drives Simulation"]
+    VIS["Visualization<br/>observes detached state"]
 
-    SA --> WA[World State A]
-    SB --> WB[World State B]
+    DEF --> WORLD
+    INIT --> WORLD
+    WORLD --> SIM --> RUNTIME
 
-    PA[Injected physics policies] --> SA
-    PB[Injected physics policies] --> SB
-
-    WA --> V[Visualization / Comparison]
-    WB --> V
-
-    WA --> O[Optional observers]
-    WB --> O
-
-    O --> UI[Inspector / controls]
-    O --> LOG[Logger / metrics]
+    WORLD -. observations .-> VIS
+    SIM -. coordinated observations .-> VIS
 ```
 
-The exact boundary between `World`, `Simulation`, and injected policies remains intentionally open until early implementations provide evidence.
+The central lifecycle rule is:
+
+```text
+intrinsic properties
+    → reusable immutable definition
+
+initial conditions
+    → insertion into a state-owning context
+
+runtime state
+    → owned by that context
+```
+
+The same reusable definition may create multiple independent runtime instances.
+
+## Current Body / World relationship
+
+```mermaid
+flowchart TD
+    BODY["Body<br/>reusable definition"]
+    ADD["KinematicWorld.addBody(...)"]
+    INIT["BodyInitialConditions<br/>position / velocity"]
+    ID["world-local BodyId"]
+    STATE["World-owned KinematicState"]
+
+    BODY --> ADD
+    INIT --> ADD
+    ADD --> ID
+    ADD --> STATE
+```
+
+`Body` currently has no intrinsic properties. This is intentional during Phase 1.
+
+## Future cardinality direction
+
+Cardinality is decided per relationship rather than assumed to be one-to-one.
+
+```mermaid
+classDiagram
+    class Simulation
+    class World
+    class Body
+    class GeometryAttachment
+    class Shape
+    class Integrator
+
+    Simulation "1" o-- "1..*" World
+    World "1" o-- "0..*" Body
+    World "1" --> "1" Integrator
+    Body "1" o-- "0..*" GeometryAttachment
+    GeometryAttachment "1" --> "1" Shape
+```
+
+The Body/geometry part of this diagram is a future direction rather than current implementation. Phase 2 may exercise only zero-or-one Shape while learning the model, without encoding a permanently singular relationship.
+
+## Development phases
+
+```mermaid
+flowchart LR
+    P1["Phase 1<br/>Structure + lifecycle"]
+    P2["Phase 2<br/>Geometry"]
+    P3["Phase 3<br/>Collision / shape physics"]
+    P4["Phase 4+<br/>Compound bodies / materials / appearance"]
+
+    P1 --> P2 --> P3 --> P4
+```
+
+The detailed and authoritative phased strategy lives in [`roadmap.md`](roadmap.md).
 
 ## Development loop
 
 ```mermaid
 flowchart LR
-    A[Understand problem] --> B[Compare approaches]
-    B --> C[Explain rationale / why not]
-    C --> D[Implement smallest step]
-    D --> E[Document + test]
-    E --> F[Observe / run]
-    F --> G[User review & approval]
-    G --> H[Sync affected project docs]
-    H --> I[Verify + inspect staged diff]
+    A[Establish baseline] --> B[Understand problem]
+    B --> C[Compare approaches]
+    C --> D[Scope smallest step]
+    D --> E[Implement]
+    E --> F[Test + verify]
+    F --> G[User review]
+    G --> H[Sync affected docs]
+    H --> I[Inspect staged diff]
     I --> J[Commit]
-    J --> K[Next feature]
+    J --> K[New authoritative baseline]
 ```
 
 ## Engine boundary
 
 ```mermaid
 flowchart LR
-    EXT[Renderer / Debugger / UI / Experiment] -->|queries| Q[Read-only observation API]
-    Q --> ENG[Simulation Engine]
+    EXT[Renderer / Runtime / Simulation / Inspector] -->|queries| Q[Read-only observation API]
+    Q --> ENG[Engine / World]
     EXT -->|commands| C[Validated control API]
     C --> ENG
-    ENG --> STATE[(Authoritative mutable state)]
+    ENG --> STATE[(Authoritative mutable runtime state)]
     STATE --> ENG
-    ENG -->|snapshots / views / events| Q
+    ENG -->|detached snapshots / observations| Q
 ```
 
-The engine is the only authority allowed to mutate simulation state. Observation and control are separate concerns: outsiders may inspect safe representations of state and request changes, while the engine validates and applies those changes consistently.
+The engine remains the only authority allowed to mutate simulation state. Observation and control are separate concerns: outsiders may inspect safe representations of state and request changes, while the engine validates and applies those changes consistently.
