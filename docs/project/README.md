@@ -10,11 +10,11 @@ Choose the document that matches what you need:
 
 | Document                                   | Purpose                                                                                                 |
 | ------------------------------------------ | ------------------------------------------------------------------------------------------------------- |
-| [`project-context.md`](project-context.md) | Stable project identity, goals, constraints, guiding principles, and long-term architectural direction |
+| [`project-context.md`](project-context.md) | Stable project identity, goals, constraints, guiding principles, and long-term architectural direction  |
 | [`roadmap.md`](roadmap.md)                 | Current phased strategy, action plan, and future development direction                                  |
 | [`status.md`](status.md)                   | Current implementation checkpoint and the next small development goal                                   |
 | [`decisions.md`](decisions.md)             | Durable architectural, engineering, and workflow decisions with rationale                               |
-| [`project-map.md`](project-map.md)         | Visual/conceptual map of the project, lifecycle, layers, and possible evolution                          |
+| [`project-map.md`](project-map.md)         | Visual/conceptual map of the project, lifecycle, layers, and possible evolution                         |
 | [`environment.md`](environment.md)         | Development environment, versions, tooling constraints, and environment-specific notes                  |
 | [`workflow.md`](workflow.md)               | Development lifecycle, learning approach, testing standards, documentation rules, and working agreement |
 | [`handoff.md`](handoff.md)                 | Procedure for restoring context and continuing the project from an authoritative Git baseline           |

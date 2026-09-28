@@ -91,7 +91,7 @@ flowchart TD
     ADD["KinematicWorld.addBody(...)"]
     INIT["BodyInitialConditions<br/>position / velocity"]
     ID["world-local BodyId"]
-    STATE["World-owned KinematicState"]
+    STATE["World-owned BodyState"]
 
     BODY --> ADD
     INIT --> ADD

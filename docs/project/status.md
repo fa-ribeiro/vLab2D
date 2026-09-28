@@ -17,13 +17,12 @@ The public engine API currently provides:
 - `Vector2`, an immutable two-dimensional vector value.
 - `Body`, a reusable body definition with no intrinsic properties yet.
 - `BodyInitialConditions`, optional world-specific initial position and velocity.
-- `KinematicState`, currently representing position and velocity at a particular instant.
-- `KinematicIntegrator`, a narrow strategy contract for advancing kinematic state.
+- `BodyState`, a readonly runtime-state contract containing position and velocity.
+- `KinematicIntegrator`, a narrow strategy contract for advancing `BodyState` from acceleration.
 - `ExplicitEulerIntegrator`.
 - `SemiImplicitEulerIntegrator`.
-- `KinematicSimulation`, the earlier single-state runtime retained while Phase 1 evaluates its future.
 - `BodyId`, an opaque world-local identifier.
-- `KinematicBodySnapshot`, a detached observation of body identity and state.
+- `BodySnapshot`, a detached observation of body identity and runtime state.
 - `KinematicWorld`, which owns and advances multiple identified body runtime instances.
 
 The current Body/World lifecycle now distinguishes three categories explicitly:
@@ -35,7 +34,7 @@ Body
 BodyInitialConditions
     world-specific position / velocity supplied at insertion
 
-KinematicState inside KinematicWorld
+BodyState inside KinematicWorld
     authoritative evolving runtime state
 ```
 
@@ -218,26 +217,28 @@ Interpolation between fixed simulation states remains deliberately deferred.
 
 ## Next step
 
-Continue **Phase 1** with the naming/state-model cleanup from the new Body/World lifecycle baseline.
+Continue **Phase 1B.2 — establish the domain World**.
 
-Review the semantics of:
+Phase 1B.1 clarified runtime state:
 
-- `KinematicWorld`;
-- `KinematicState`;
-- `KinematicBodySnapshot`;
-- `KinematicIntegrator`;
-- the earlier `KinematicSimulation`.
+- the `KinematicState` class has been replaced by the structural `BodyState` runtime-data contract;
+- `KinematicBodySnapshot` has become `BodySnapshot`;
+- `KinematicSimulation` has been retired because the multi-body world already owns runtime state and the future `Simulation` has an orchestration role;
+- `KinematicIntegrator` remains deliberately narrow because it still represents a real kinematic integration contract.
 
-The goal is not to rename everything mechanically. Keep names whose current meaning remains accurate, broaden names only when the implemented responsibility has genuinely broadened, and retire concepts only after their replacement is proven.
+The next slice should review and, where justified, rename:
 
-After naming/state cleanup, Phase 1 proceeds incrementally toward:
+- `KinematicWorld` → `World`;
+- world-level `acceleration` → `gravity`.
+
+Behavior should remain unchanged. Constructor/default redesign, including the accepted future default gravity `(0, -9.81)`, should be handled deliberately rather than mixed into a mechanical rename.
+
+After Phase 1B, Phase 1 proceeds incrementally toward:
 
 ```text
 Body → World → Simulation → Runtime
 ```
 
 with Visualization remaining independent.
-
-No new simulation or Canvas features should be added during Phase 1 unless a refactor requires a narrowly scoped compatibility change.
 
 The phased strategy is maintained in [`roadmap.md`](roadmap.md).

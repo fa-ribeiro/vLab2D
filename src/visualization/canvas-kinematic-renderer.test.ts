@@ -1,7 +1,11 @@
 import { assertEquals, assertThrows } from "@std/assert";
 
-import { type KinematicBodySnapshot, KinematicState, Vector2 } from "../engine/mod.ts";
+import { type BodySnapshot, type BodyState, Vector2 } from "../engine/mod.ts";
 import { CanvasKinematicRenderer } from "./canvas-kinematic-renderer.ts";
+
+function createBodyState(position: Vector2, velocity: Vector2): BodyState {
+  return { position, velocity };
+}
 
 class RecordingCanvasContext {
   readonly calls: unknown[][] = [];
@@ -49,10 +53,10 @@ Deno.test("CanvasKinematicRenderer maps world coordinates to Canvas coordinates"
   const context = new RecordingCanvasContext();
   const renderer = new CanvasKinematicRenderer(context, 200, 100, 10, 3);
 
-  const snapshots: readonly KinematicBodySnapshot[] = [
+  const snapshots: readonly BodySnapshot[] = [
     {
       id: 7,
-      state: new KinematicState(new Vector2(2, 3), new Vector2(0, 0)),
+      state: createBodyState(new Vector2(2, 3), new Vector2(0, 0)),
     },
   ];
 
@@ -188,10 +192,10 @@ Deno.test("CanvasKinematicRenderer renders relative to the viewport world center
 
   renderer.setViewportCenter(3, -2);
 
-  const snapshots: readonly KinematicBodySnapshot[] = [
+  const snapshots: readonly BodySnapshot[] = [
     {
       id: 7,
-      state: new KinematicState(new Vector2(3, -2), new Vector2(0, 0)),
+      state: createBodyState(new Vector2(3, -2), new Vector2(0, 0)),
     },
   ];
 
@@ -239,10 +243,10 @@ Deno.test("CanvasKinematicRenderer pans by display-space displacement", () => {
 
   renderer.panViewportBy(20, 10);
 
-  const snapshots: readonly KinematicBodySnapshot[] = [
+  const snapshots: readonly BodySnapshot[] = [
     {
       id: 7,
-      state: new KinematicState(new Vector2(-2, 1), new Vector2(0, 0)),
+      state: createBodyState(new Vector2(-2, 1), new Vector2(0, 0)),
     },
   ];
 
@@ -273,10 +277,10 @@ Deno.test("CanvasKinematicRenderer renders using the changed viewport scale", ()
   renderer.setViewportCenter(3, -2);
   renderer.setViewportScale(20);
 
-  const snapshots: readonly KinematicBodySnapshot[] = [
+  const snapshots: readonly BodySnapshot[] = [
     {
       id: 7,
-      state: new KinematicState(new Vector2(4, -1), new Vector2(0, 0)),
+      state: createBodyState(new Vector2(4, -1), new Vector2(0, 0)),
     },
   ];
 
@@ -312,10 +316,10 @@ Deno.test("CanvasKinematicRenderer finds a body at a display-space point", () =>
   const context = new RecordingCanvasContext();
   const renderer = new CanvasKinematicRenderer(context, 200, 100, 10, 6);
 
-  const snapshots: readonly KinematicBodySnapshot[] = [
+  const snapshots: readonly BodySnapshot[] = [
     {
       id: 7,
-      state: new KinematicState(new Vector2(2, 3), new Vector2(0, 0)),
+      state: createBodyState(new Vector2(2, 3), new Vector2(0, 0)),
     },
   ];
 
@@ -326,10 +330,10 @@ Deno.test("CanvasKinematicRenderer returns undefined outside body markers", () =
   const context = new RecordingCanvasContext();
   const renderer = new CanvasKinematicRenderer(context, 200, 100, 10, 6);
 
-  const snapshots: readonly KinematicBodySnapshot[] = [
+  const snapshots: readonly BodySnapshot[] = [
     {
       id: 7,
-      state: new KinematicState(new Vector2(2, 3), new Vector2(0, 0)),
+      state: createBodyState(new Vector2(2, 3), new Vector2(0, 0)),
     },
   ];
 
@@ -343,10 +347,10 @@ Deno.test("CanvasKinematicRenderer hit testing follows viewport transformation",
   renderer.setViewportCenter(3, -2);
   renderer.setViewportScale(20);
 
-  const snapshots: readonly KinematicBodySnapshot[] = [
+  const snapshots: readonly BodySnapshot[] = [
     {
       id: 7,
-      state: new KinematicState(new Vector2(4, -1), new Vector2(0, 0)),
+      state: createBodyState(new Vector2(4, -1), new Vector2(0, 0)),
     },
   ];
 
@@ -357,14 +361,14 @@ Deno.test("CanvasKinematicRenderer picks the nearest hit body", () => {
   const context = new RecordingCanvasContext();
   const renderer = new CanvasKinematicRenderer(context, 200, 100, 10, 10);
 
-  const snapshots: readonly KinematicBodySnapshot[] = [
+  const snapshots: readonly BodySnapshot[] = [
     {
       id: 1,
-      state: new KinematicState(new Vector2(0, 0), new Vector2(0, 0)),
+      state: createBodyState(new Vector2(0, 0), new Vector2(0, 0)),
     },
     {
       id: 2,
-      state: new KinematicState(new Vector2(1, 0), new Vector2(0, 0)),
+      state: createBodyState(new Vector2(1, 0), new Vector2(0, 0)),
     },
   ];
 
@@ -376,10 +380,10 @@ Deno.test("CanvasKinematicRenderer highlights the requested body", () => {
 
   const renderer = new CanvasKinematicRenderer(context, 200, 100, 10, 6);
 
-  const snapshots: readonly KinematicBodySnapshot[] = [
+  const snapshots: readonly BodySnapshot[] = [
     {
       id: 7,
-      state: new KinematicState(new Vector2(2, 3), new Vector2(0, 0)),
+      state: createBodyState(new Vector2(2, 3), new Vector2(0, 0)),
     },
   ];
 
@@ -398,10 +402,10 @@ Deno.test("CanvasKinematicRenderer does not highlight another body", () => {
 
   const renderer = new CanvasKinematicRenderer(context, 200, 100, 10, 6);
 
-  const snapshots: readonly KinematicBodySnapshot[] = [
+  const snapshots: readonly BodySnapshot[] = [
     {
       id: 7,
-      state: new KinematicState(new Vector2(2, 3), new Vector2(0, 0)),
+      state: createBodyState(new Vector2(2, 3), new Vector2(0, 0)),
     },
   ];
 
@@ -417,10 +421,10 @@ Deno.test("CanvasKinematicRenderer marks the selected body", () => {
 
   const renderer = new CanvasKinematicRenderer(context, 200, 100, 10, 6);
 
-  const snapshots: readonly KinematicBodySnapshot[] = [
+  const snapshots: readonly BodySnapshot[] = [
     {
       id: 7,
-      state: new KinematicState(new Vector2(2, 3), new Vector2(0, 0)),
+      state: createBodyState(new Vector2(2, 3), new Vector2(0, 0)),
     },
   ];
 
@@ -439,10 +443,10 @@ Deno.test("CanvasKinematicRenderer can show hover and selection on the same body
 
   const renderer = new CanvasKinematicRenderer(context, 200, 100, 10, 6);
 
-  const snapshots: readonly KinematicBodySnapshot[] = [
+  const snapshots: readonly BodySnapshot[] = [
     {
       id: 7,
-      state: new KinematicState(new Vector2(2, 3), new Vector2(0, 0)),
+      state: createBodyState(new Vector2(2, 3), new Vector2(0, 0)),
     },
   ];
 

@@ -1,7 +1,7 @@
 import { Vector2 } from "../math/vector2.ts";
-import { KinematicState } from "./kinematic-state.ts";
+import type { BodyState } from "../world/body-state.ts";
 
-export function assertFiniteState(state: KinematicState, name: string): void {
+export function assertFiniteBodyState(state: BodyState, name: string): void {
   assertFiniteVector(state.position, `${name} position`);
   assertFiniteVector(state.velocity, `${name} velocity`);
 }

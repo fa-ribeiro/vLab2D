@@ -235,15 +235,13 @@ Prefer one authoritative location for each kind of project information and use l
 
 This reduces synchronization work and prevents contradictory documentation as the project evolves.
 
-## D-034 — Kinematic state is separate from integration behavior
+## D-034 — Runtime motion state is separate from integration behavior
 
-**Status:** Accepted
+**Status:** Accepted; representation evolved by D-066
 
-`KinematicState` describes motion at a particular instant through position and velocity. It does not know how to advance itself through time.
+The original `KinematicState` class established that motion state describes position and velocity at a particular instant while numerical integration remains separate behavior.
 
-Numerical integration is a separate responsibility performed by integrator implementations.
-
-This separation allows the same state representation to be processed by different numerical methods without coupling the state to a specific algorithm.
+Phase 1B.1 keeps that separation but replaces the constructible `KinematicState` class with the structural `BodyState` runtime-data contract. Integrators continue to advance state without state values knowing how to advance themselves through time.
 
 ## D-035 — Engine time is expressed in seconds
 
@@ -293,27 +291,25 @@ This follows the project principle that abstractions should emerge from concrete
 
 ## D-038 — Kinematic simulation owns authoritative state
 
-**Status:** Accepted
+**Status:** Superseded by D-040 and D-066
 
-`KinematicSimulation` owns the current kinematic state and acceleration.
+`KinematicSimulation` originally established authoritative state ownership, validated stepping, and injected integration behavior for one state value.
 
-External consumers may observe these values but may not replace them directly. Runtime changes occur through validated public commands such as `setAcceleration(...)` and `step(...)`.
+`KinematicWorld` later became the real multi-body state owner, preserving those invariants at world scope. Phase 1B.1 therefore retires the obsolete single-state `KinematicSimulation` rather than carrying two competing state-owning runtime concepts forward.
 
-An injected integrator produces a candidate next state. The simulation validates that candidate before accepting it as authoritative state.
-
-This keeps state mutation controlled by the engine boundary and prevents invalid external or injected behavior from silently corrupting the simulation.
+The future `Simulation` concept has a different role: orchestration of one or more Worlds rather than ownership of one body's runtime state.
 
 ## D-039 — Kinematic integration is represented by a narrow strategy contract
 
 **Status:** Accepted
 
-The engine defines `KinematicIntegrator` as the capability required by `KinematicSimulation` to advance kinematic state.
+The engine defines `KinematicIntegrator` as the capability required by the World to advance current `BodyState` from an acceleration and timestep.
 
-The interface is deliberately specific to `KinematicState`; it is not intended to define a universal numerical integration abstraction.
+The interface remains deliberately specific to kinematic motion; it is not intended to define a universal numerical integration abstraction.
 
-`ExplicitEulerIntegrator` and `SemiImplicitEulerIntegrator` implement this contract and can therefore be injected interchangeably into the simulation.
+`ExplicitEulerIntegrator` and `SemiImplicitEulerIntegrator` implement this contract and can therefore be injected interchangeably into a World.
 
-The abstraction was introduced only after a concrete consumer demonstrated the need for interchangeable integration behavior.
+Phase 1B.1 deliberately keeps the `KinematicIntegrator` name because its current inputs and outputs still describe a genuinely narrow kinematic integration responsibility.
 
 ## D-040 — Worlds own body state
 
@@ -325,7 +321,7 @@ Bodies are identified externally by `BodyId` values. External consumers do not r
 
 This preserves the engine's state-ownership boundary while allowing bodies to be referenced consistently by renderers, debuggers, future commands, and other engine consumers.
 
-The current implementation uses a private `Map<BodyId, KinematicState>` because it is simple, explicit, and sufficient for the project's current requirements.
+The current implementation uses a private `Map<BodyId, WorldBody>` whose runtime `state` is a `BodyState`. The additional internal record also retains the reusable `Body` definition associated with each world-local instance.
 
 More specialized storage should be introduced only if a concrete requirement justifies it.
 
@@ -377,7 +373,7 @@ The invariant is:
 
 `KinematicWorld` does not expose references to its authoritative body state through its public observation API.
 
-`getBodyState(...)` returns a detached copy of the requested `KinematicState`, including detached position and velocity values.
+`getBodyState(...)` returns a detached `BodyState`, including detached position and velocity values.
 
 Collection-level observation similarly returns detached body snapshots rather than exposing the world's internal state objects.
 
@@ -389,9 +385,9 @@ An external consumer may therefore inspect or even improperly mutate its returne
 
 **Status:** Accepted
 
-`KinematicWorld` exposes bodies for observation through `KinematicBodySnapshot` values rather than exposing its private `Map<BodyId, KinematicState>`.
+`KinematicWorld` exposes bodies for observation through `BodySnapshot` values rather than exposing its private body-state storage.
 
-A body snapshot combines the body's world-local identity with its observed kinematic state and represents data rather than engine behavior.
+A body snapshot combines the body's world-local identity with its detached `BodyState` observation and represents data rather than engine behavior.
 
 The order of snapshots returned by the world is not part of the public contract. Consumers should use `BodyId` when identity matters rather than depending on iteration or storage order.
 
@@ -601,7 +597,7 @@ The first body-picking capability is a Canvas visualization query rather than an
 
 `KinematicWorld` currently owns only kinematic body state: identity, position, and velocity. It has no physical body shape or radius. The visible body radius is owned by `CanvasKinematicRenderer` and is expressed in Canvas display units. Moving hit testing into `KinematicWorld` would therefore make presentation geometry masquerade as simulation geometry.
 
-`CanvasKinematicRenderer.findBodyAtDisplayPoint(...)` receives detached `KinematicBodySnapshot` observations plus a Canvas drawing-buffer coordinate. It maps each observed body position through the renderer's current `ViewportTransform` and tests the point against the same circular marker radius used for rendering.
+`CanvasKinematicRenderer.findBodyAtDisplayPoint(...)` receives detached `BodySnapshot` observations plus a Canvas drawing-buffer coordinate. It maps each observed body position through the renderer's current `ViewportTransform` and tests the point against the same circular marker radius used for rendering.
 
 If more than one marker contains the point, the nearest rendered center is chosen. Picking therefore does not depend on snapshot array order, which is intentionally not part of `KinematicWorld`'s public observation contract.
 
@@ -633,7 +629,7 @@ The host stores an optional selected `BodyId`. Selection changes only when a pri
 
 On a valid click, the host converts the release position into Canvas drawing-buffer coordinates and reuses `CanvasKinematicRenderer.findBodyAtDisplayPoint(...)` with the current detached observations. Clicking a rendered body selects its `BodyId`; clicking empty Canvas clears selection. Pointer cancellation, lost capture, pointer leave, body motion, panning, and zoom do not by themselves clear or replace the selected identity.
 
-Selection stores identity rather than a `KinematicBodySnapshot`. The selected body can therefore continue moving while new detached observations are produced each frame without making an old snapshot authoritative or persistent.
+Selection stores identity rather than a `BodySnapshot`. The selected body can therefore continue moving while new detached observations are produced each frame without making an old snapshot authoritative or persistent.
 
 `CanvasKinematicRenderer` remains stateless about interaction identity. Its `render(...)` operation receives the current hovered and selected body identifiers as per-frame presentation input and draws distinct display-space markers for those states. A body may be both hovered and selected at the same time.
 
@@ -645,7 +641,7 @@ Click-versus-drag tolerance and gesture interpretation are browser-host policy. 
 
 The first selected-body inspector is read-only browser-host presentation. It does not add an engine query, renderer-owned inspector state, or a persistent selected snapshot.
 
-Persistent selection continues to store only an optional `BodyId`. Whenever current inspection values are needed, the host resolves that identity against the latest detached `KinematicBodySnapshot` observations already obtained for the current rendered frame.
+Persistent selection continues to store only an optional `BodyId`. Whenever current inspection values are needed, the host resolves that identity against the latest detached `BodySnapshot` observations already obtained for the current rendered frame.
 
 The inspector currently presents the selected body's position and velocity. Because the matching snapshot is resolved again after each new world observation, those values follow the selected body's changing state over time while `KinematicWorld` remains the sole owner of authoritative mutable body state.
 
@@ -777,3 +773,28 @@ world units per second squared.
 The future general `World` API should use this as its default gravity unless later evidence establishes a better default for the laboratory.
 
 This decision does not retroactively change every existing example. During Phase 1 refactoring, examples may continue to pass explicit acceleration/gravity values where doing so preserves their existing demonstrated behavior.
+
+## D-066 — Body runtime state is structural data and the obsolete single-state simulation is retired
+
+**Status:** Accepted and implemented
+
+Phase 1B.1 clarifies the engine vocabulary around runtime state.
+
+`BodyState` is a readonly structural TypeScript interface containing the runtime motion data currently required for a world-owned body instance:
+
+```text
+position
+velocity
+```
+
+It is not a constructible domain object, does not own behavior, and does not represent intrinsic properties of the reusable `Body` definition.
+
+The World creates authoritative `BodyState` values from `BodyInitialConditions`, owns their evolution, validates candidate replacements, and returns detached state observations.
+
+`BodySnapshot` replaces `KinematicBodySnapshot` as the public detached observation of world-local body identity plus `BodyState`.
+
+`KinematicIntegrator` remains deliberately narrow. Its `integrate(...)` operation consumes a `BodyState`, acceleration, and timestep and returns a candidate `BodyState`. The kinematic qualifier therefore still communicates a real contract rather than historical naming.
+
+The earlier `KinematicSimulation` is removed. Its useful lessons—authoritative state ownership, validated candidate-before-commit updates, and injected integration behavior—are already represented by `KinematicWorld`. Keeping the old class would create a competing meaning for the future `Simulation` layer, which is reserved for orchestration of one or more Worlds.
+
+No new physics or simulation behavior is introduced by this decision.

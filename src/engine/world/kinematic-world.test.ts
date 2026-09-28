@@ -2,7 +2,7 @@ import { assert, assertEquals, assertStrictEquals, assertThrows } from "@std/ass
 
 import { Body } from "../body/body.ts";
 import type { KinematicIntegrator } from "../kinematics/kinematic-integrator.ts";
-import { KinematicState } from "../kinematics/kinematic-state.ts";
+import type { BodyState } from "./body-state.ts";
 import { Vector2 } from "../math/vector2.ts";
 import { KinematicWorld } from "./kinematic-world.ts";
 
@@ -11,8 +11,12 @@ function assertVector(actual: Vector2, expectedX: number, expectedY: number): vo
   assertEquals(actual.y, expectedY);
 }
 
+function createBodyState(position: Vector2, velocity: Vector2): BodyState {
+  return { position, velocity };
+}
+
 type IntegrationCall = {
-  state: KinematicState;
+  state: BodyState;
   acceleration: Vector2;
   dt: number;
 };
@@ -22,13 +26,13 @@ class StubIntegrator implements KinematicIntegrator {
 
   public constructor(
     private readonly integrateFn: (
-      state: KinematicState,
+      state: BodyState,
       acceleration: Vector2,
       dt: number,
-    ) => KinematicState,
+    ) => BodyState,
   ) {}
 
-  public integrate(state: KinematicState, acceleration: Vector2, dt: number): KinematicState {
+  public integrate(state: BodyState, acceleration: Vector2, dt: number): BodyState {
     this.calls.push({
       state,
       acceleration,
@@ -160,9 +164,9 @@ Deno.test("KinematicWorld rejects invalid body initial conditions", () => {
 Deno.test("KinematicWorld advances every body using the injected integrator", () => {
   const acceleration = new Vector2(0, -10);
 
-  const firstNextState = new KinematicState(new Vector2(5, 6), new Vector2(7, 8));
+  const firstNextState = createBodyState(new Vector2(5, 6), new Vector2(7, 8));
 
-  const secondNextState = new KinematicState(new Vector2(50, 60), new Vector2(70, 80));
+  const secondNextState = createBodyState(new Vector2(50, 60), new Vector2(70, 80));
 
   const integrator = new StubIntegrator((state) => {
     if (state.position.x === 1) {
@@ -270,9 +274,9 @@ Deno.test("KinematicWorld rejects an invalid timestep before integrating bodies"
 Deno.test(
   "KinematicWorld preserves all body states when any integration result is invalid",
   () => {
-    const firstNextState = new KinematicState(new Vector2(5, 6), new Vector2(7, 8));
+    const firstNextState = createBodyState(new Vector2(5, 6), new Vector2(7, 8));
 
-    const invalidSecondState = new KinematicState(
+    const invalidSecondState = createBodyState(
       new Vector2(Number.NaN, 60),
       new Vector2(70, 80),
     );

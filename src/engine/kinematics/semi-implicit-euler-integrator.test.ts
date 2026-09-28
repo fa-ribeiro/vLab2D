@@ -1,7 +1,7 @@
 import { assert, assertEquals } from "@std/assert";
 
 import { Vector2 } from "../math/vector2.ts";
-import { KinematicState } from "./kinematic-state.ts";
+import type { BodyState } from "../world/body-state.ts";
 import { SemiImplicitEulerIntegrator } from "./semi-implicit-euler-integrator.ts";
 
 function assertVector(actual: Vector2, expectedX: number, expectedY: number): void {
@@ -9,10 +9,14 @@ function assertVector(actual: Vector2, expectedX: number, expectedY: number): vo
   assertEquals(actual.y, expectedY);
 }
 
+function createBodyState(position: Vector2, velocity: Vector2): BodyState {
+  return { position, velocity };
+}
+
 Deno.test("SemiImplicitEulerIntegrator updates velocity before position", () => {
   const integrator = new SemiImplicitEulerIntegrator();
 
-  const state = new KinematicState(new Vector2(0, 0), new Vector2(0, 0));
+  const state = createBodyState(new Vector2(0, 0), new Vector2(0, 0));
 
   const result = integrator.integrate(state, new Vector2(0, -10), 1);
 
@@ -23,7 +27,7 @@ Deno.test("SemiImplicitEulerIntegrator updates velocity before position", () => 
 Deno.test("SemiImplicitEulerIntegrator advances state using updated velocity", () => {
   const integrator = new SemiImplicitEulerIntegrator();
 
-  const state = new KinematicState(new Vector2(1, 2), new Vector2(4, -2));
+  const state = createBodyState(new Vector2(1, 2), new Vector2(4, -2));
 
   const result = integrator.integrate(state, new Vector2(2, 6), 0.5);
 
@@ -41,7 +45,7 @@ Deno.test("SemiImplicitEulerIntegrator advances state using updated velocity", (
 Deno.test("SemiImplicitEulerIntegrator leaves its inputs unchanged", () => {
   const integrator = new SemiImplicitEulerIntegrator();
 
-  const state = new KinematicState(new Vector2(1, 2), new Vector2(3, 4));
+  const state = createBodyState(new Vector2(1, 2), new Vector2(3, 4));
 
   const acceleration = new Vector2(5, 6);
 
@@ -57,7 +61,7 @@ Deno.test("SemiImplicitEulerIntegrator leaves its inputs unchanged", () => {
 Deno.test("SemiImplicitEulerIntegrator with a zero timestep preserves state values", () => {
   const integrator = new SemiImplicitEulerIntegrator();
 
-  const state = new KinematicState(new Vector2(3, 7), new Vector2(-2, 5));
+  const state = createBodyState(new Vector2(3, 7), new Vector2(-2, 5));
 
   const result = integrator.integrate(state, new Vector2(10, -20), 0);
 

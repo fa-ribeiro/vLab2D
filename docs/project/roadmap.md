@@ -97,17 +97,36 @@ No shapes, mass, materials, fixtures, or new simulation behavior were introduced
 
 ### 1B — Naming and state-model cleanup
 
-Review existing names against their now-clear responsibilities.
+Phase 1B is split into two semantic checkpoints rather than one mass rename.
 
-Primary candidates:
+#### 1B.1 — Clarify body runtime state
 
-- `KinematicWorld` → determine whether its current semantics justify `World`;
-- `KinematicState` → determine whether it remains a useful public concept, should become `BodyState`, or should become internal;
-- `KinematicBodySnapshot` → consider a broader observation name if the World concept broadens;
-- `KinematicIntegrator` → rename/generalize only if the demonstrated contract is genuinely broader;
-- `KinematicSimulation` → determine whether the old single-state simulation has been superseded and can be retired.
+**Status:** implemented.
 
-This is a semantic review, not a mass rename. Keep names that still accurately describe real responsibilities.
+Current result:
+
+- `KinematicState` is removed as a constructible public class;
+- `BodyState` is a readonly structural runtime-data contract containing position and velocity;
+- `BodyState` lives with World-owned runtime concepts rather than with reusable `Body` definitions;
+- `KinematicBodySnapshot` is renamed to `BodySnapshot`;
+- integrators consume and produce `BodyState` while `KinematicIntegrator` keeps its deliberately narrow name;
+- the earlier single-state `KinematicSimulation` and its tests are retired;
+- no replacement `Simulation` is introduced yet.
+
+This checkpoint clarifies that runtime state is data owned by the World, not a caller-created domain object.
+
+#### 1B.2 — Establish the domain World
+
+**Status:** next.
+
+Review the remaining world terminology against its broader responsibility:
+
+- `KinematicWorld` → `World`;
+- world-level `acceleration` → `gravity`.
+
+Keep the refactor semantic rather than mechanical. Do not rename `KinematicIntegrator` merely for symmetry: its current contract remains specifically kinematic.
+
+Default-constructor policy should be handled deliberately. The accepted future Earth-like gravity default remains `(0, -9.81)`, but introducing defaults should not be mixed into a rename unless the API change is explicitly scoped and reviewed.
 
 ### 1C — Simulation / orchestration
 

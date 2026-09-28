@@ -11,7 +11,7 @@ The project currently has two concrete visualization implementations:
 - `CanvasKinematicRenderer` for browser Canvas 2D rendering;
 - `SvgKinematicRenderer` for static SVG output.
 
-Both consume detached `KinematicBodySnapshot` values exposed by the simulation engine.
+Both consume detached `BodySnapshot` values exposed by the simulation engine.
 
 `ViewportTransform` provides bidirectional world/display coordinate mapping, continuous visible-world geometry, mutable world-space centering, mutable display scale, and anchor-preserving zoom geometry shared by the visualization layer.
 
@@ -219,4 +219,4 @@ Programmatic viewport centering and scale changes are supported by both concrete
 
 Anchor-preserving zoom is geometry owned by `ViewportTransform`; wheel interpretation, scale limits, sensitivity, browser event cancellation, CSS-to-Canvas coordinate conversion, inspection UI, transient hover identity, persistent selection identity, click-versus-drag tolerance, and inspector formatting remain host policy. Body hit testing stays in Canvas visualization because the current pick radius is the renderer's display-space marker radius rather than engine-owned physical geometry. The renderer accepts per-frame hover and selection identities but owns neither state.
 
-The inspector resolves the selected `BodyId` against fresh detached snapshots and never treats a retained snapshot as authoritative state. The next likely visual step is a selected-body velocity-vector diagnostic. Editable state, drag manipulation, physical engine shapes, cameras, renderer interfaces, generalized inspector systems, diagnostic-overlay frameworks, and generalized rendering abstractions remain deferred until concrete requirements establish their shape.
+The inspector resolves the selected `BodyId` against fresh detached snapshots and never treats a retained snapshot as authoritative state. Visual feature development is currently paused during Phase 1 architectural refactoring; the selected-body velocity-vector diagnostic remains a later candidate once the structural work is complete. Editable state, drag manipulation, physical engine shapes, cameras, renderer interfaces, generalized inspector systems, diagnostic-overlay frameworks, and generalized rendering abstractions remain deferred until concrete requirements establish their shape.

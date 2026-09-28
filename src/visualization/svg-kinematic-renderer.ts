@@ -1,4 +1,4 @@
-import type { KinematicBodySnapshot } from "../engine/mod.ts";
+import type { BodySnapshot } from "../engine/mod.ts";
 import { ViewportTransform } from "./viewport-transform.ts";
 
 const ORIGIN_MARKER_HALF_SIZE = 5;
@@ -6,7 +6,7 @@ const GRID_OPACITY = 0.15;
 const AXIS_OPACITY = 0.45;
 
 /**
- * Renders kinematic body snapshots and spatial reference information into an
+ * Renders detached body snapshots and spatial reference information into an
  * SVG document.
  *
  * The renderer operates only on detached engine observations. It does not own,
@@ -77,7 +77,7 @@ export class SvgKinematicRenderer {
    * @param snapshots The detached body observations to render.
    * @returns A complete SVG document as text.
    */
-  public render(snapshots: readonly KinematicBodySnapshot[]): string {
+  public render(snapshots: readonly BodySnapshot[]): string {
     const bodies = snapshots.map((snapshot) => this.#renderBody(snapshot)).join("\n");
 
     return [
@@ -95,7 +95,7 @@ export class SvgKinematicRenderer {
       .join("\n");
   }
 
-  #renderBody(snapshot: KinematicBodySnapshot): string {
+  #renderBody(snapshot: BodySnapshot): string {
     const x = this.#transform.worldToDisplayX(snapshot.state.position.x);
     const y = this.#transform.worldToDisplayY(snapshot.state.position.y);
 

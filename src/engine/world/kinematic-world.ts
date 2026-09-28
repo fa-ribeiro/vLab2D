@@ -1,24 +1,24 @@
 import type { Body } from "../body/body.ts";
 import type { KinematicIntegrator } from "../kinematics/kinematic-integrator.ts";
-import { KinematicState } from "../kinematics/kinematic-state.ts";
 import {
-  assertFiniteState,
+  assertFiniteBodyState,
   assertFiniteVector,
   assertValidTimestep,
 } from "../kinematics/validation.ts";
 import { Vector2 } from "../math/vector2.ts";
 import type { BodyId } from "./body-id.ts";
 import type { BodyInitialConditions } from "./body-initial-conditions.ts";
-import type { KinematicBodySnapshot } from "./kinematic-body-snapshot.ts";
+import type { BodySnapshot } from "./body-snapshot.ts";
+import type { BodyState } from "./body-state.ts";
 
 interface WorldBody {
   readonly definition: Body;
-  state: KinematicState;
+  state: BodyState;
 }
 
 /**
- * Owns and advances the kinematic runtime state of a collection of identified
- * body instances.
+ * Owns and advances the runtime state of a collection of identified body
+ * instances.
  *
  * Reusable {@link Body} definitions enter the world through `addBody(...)`.
  * Initial position and velocity are supplied separately as world-specific
@@ -95,12 +95,12 @@ export class KinematicWorld {
     const position = initialConditions.position ?? new Vector2(0, 0);
     const velocity = initialConditions.velocity ?? new Vector2(0, 0);
 
-    const initialState = new KinematicState(
-      new Vector2(position.x, position.y),
-      new Vector2(velocity.x, velocity.y),
-    );
+    const initialState: BodyState = {
+      position: new Vector2(position.x, position.y),
+      velocity: new Vector2(velocity.x, velocity.y),
+    };
 
-    assertFiniteState(initialState, "Initial body state");
+    assertFiniteBodyState(initialState, "Initial body state");
 
     const bodyId = this.#nextBodyId++;
 
@@ -113,7 +113,7 @@ export class KinematicWorld {
   }
 
   /**
-   * Returns a detached snapshot of the current kinematic state of a body.
+   * Returns a detached snapshot of the current runtime state of a body.
    *
    * Modifying the returned state cannot change the authoritative state owned by
    * the world.
@@ -122,7 +122,7 @@ export class KinematicWorld {
    * @returns A snapshot of the body's current state, or `undefined` when the
    * identifier does not belong to this world.
    */
-  public getBodyState(bodyId: BodyId): KinematicState | undefined {
+  public getBodyState(bodyId: BodyId): BodyState | undefined {
     const worldBody = this.#bodies.get(bodyId);
 
     return worldBody === undefined ? undefined : copyState(worldBody.state);
@@ -137,8 +137,8 @@ export class KinematicWorld {
    *
    * @returns A snapshot for every body currently in the world.
    */
-  public getBodySnapshots(): readonly KinematicBodySnapshot[] {
-    return Array.from(this.#bodies, ([id, worldBody]): KinematicBodySnapshot => ({
+  public getBodySnapshots(): readonly BodySnapshot[] {
+    return Array.from(this.#bodies, ([id, worldBody]): BodySnapshot => ({
       id,
       state: copyState(worldBody.state),
     }));
@@ -159,12 +159,12 @@ export class KinematicWorld {
   public step(dt: number): void {
     assertValidTimestep(dt);
 
-    const nextStates = new Map<BodyId, KinematicState>();
+    const nextStates = new Map<BodyId, BodyState>();
 
     for (const [bodyId, worldBody] of this.#bodies) {
       const nextState = this.#integrator.integrate(worldBody.state, this.#acceleration, dt);
 
-      assertFiniteState(nextState, `Integrator result for body ${bodyId}`);
+      assertFiniteBodyState(nextState, `Integrator result for body ${bodyId}`);
 
       nextStates.set(bodyId, nextState);
     }
@@ -181,9 +181,9 @@ export class KinematicWorld {
   }
 }
 
-function copyState(state: KinematicState): KinematicState {
-  return new KinematicState(
-    new Vector2(state.position.x, state.position.y),
-    new Vector2(state.velocity.x, state.velocity.y),
-  );
+function copyState(state: BodyState): BodyState {
+  return {
+    position: new Vector2(state.position.x, state.position.y),
+    velocity: new Vector2(state.velocity.x, state.velocity.y),
+  };
 }

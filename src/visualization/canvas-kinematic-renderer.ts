@@ -1,4 +1,4 @@
-import type { BodyId, KinematicBodySnapshot } from "../engine/mod.ts";
+import type { BodyId, BodySnapshot } from "../engine/mod.ts";
 import { ViewportTransform } from "./viewport-transform.ts";
 
 const ORIGIN_MARKER_HALF_SIZE = 5;
@@ -35,7 +35,7 @@ interface CanvasDrawingContext {
 }
 
 /**
- * Renders kinematic body snapshots into a Canvas 2D drawing context.
+ * Renders detached body snapshots into a Canvas 2D drawing context.
  *
  * The renderer operates only on detached engine observations. It does not own,
  * advance, or mutate simulation state.
@@ -171,7 +171,7 @@ export class CanvasKinematicRenderer {
    * body marker contains the point.
    */
   public findBodyAtDisplayPoint(
-    snapshots: readonly KinematicBodySnapshot[],
+    snapshots: readonly BodySnapshot[],
     displayX: number,
     displayY: number,
   ): BodyId | undefined {
@@ -204,7 +204,7 @@ export class CanvasKinematicRenderer {
    * @param snapshots The detached body observations to render.
    */
   public render(
-    snapshots: readonly KinematicBodySnapshot[],
+    snapshots: readonly BodySnapshot[],
     hoveredBodyId?: BodyId,
     selectedBodyId?: BodyId,
   ): void {
@@ -219,7 +219,7 @@ export class CanvasKinematicRenderer {
     }
   }
 
-  #renderBody(snapshot: KinematicBodySnapshot, hovered: boolean, selected: boolean): void {
+  #renderBody(snapshot: BodySnapshot, hovered: boolean, selected: boolean): void {
     const x = this.#transform.worldToDisplayX(snapshot.state.position.x);
     const y = this.#transform.worldToDisplayY(snapshot.state.position.y);
 

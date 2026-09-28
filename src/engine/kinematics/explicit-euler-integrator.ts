@@ -1,9 +1,9 @@
 import { Vector2 } from "../math/vector2.ts";
-import { KinematicState } from "./kinematic-state.ts";
+import type { BodyState } from "../world/body-state.ts";
 import type { KinematicIntegrator } from "./kinematic-integrator.ts";
 
 /**
- * Advances kinematic state using the Explicit Euler integration method.
+ * Advances kinematic body state using the Explicit Euler integration method.
  *
  * Explicit Euler estimates the next state entirely from values at the
  * beginning of the timestep:
@@ -11,26 +11,29 @@ import type { KinematicIntegrator } from "./kinematic-integrator.ts";
  * - `nextPosition = position + velocity * dt`
  * - `nextVelocity = velocity + acceleration * dt`
  *
- * This method is intentionally simple and will later provide a useful baseline
- * for comparison with other numerical integration methods.
+ * This method is intentionally simple and provides a useful baseline for
+ * comparison with other numerical integration methods.
  */
 export class ExplicitEulerIntegrator implements KinematicIntegrator {
   /**
-   * Advances a kinematic state by one timestep.
+   * Advances body state by one timestep.
    *
    * Neither the supplied state nor the acceleration vector is modified.
-   * A new {@link KinematicState} is returned.
+   * A new {@link BodyState} value is returned.
    *
-   * @param state The state at the beginning of the timestep.
+   * @param state The body state at the beginning of the timestep.
    * @param acceleration The constant acceleration applied during the timestep,
    * expressed in world units per second squared.
    * @param dt The timestep duration in seconds.
-   * @returns The approximated state at the end of the timestep.
+   * @returns The approximated body state at the end of the timestep.
    */
-  public integrate(state: KinematicState, acceleration: Vector2, dt: number): KinematicState {
+  public integrate(state: BodyState, acceleration: Vector2, dt: number): BodyState {
     const nextPosition = state.position.add(state.velocity.scale(dt));
     const nextVelocity = state.velocity.add(acceleration.scale(dt));
 
-    return new KinematicState(nextPosition, nextVelocity);
+    return {
+      position: nextPosition,
+      velocity: nextVelocity,
+    };
   }
 }

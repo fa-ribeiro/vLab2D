@@ -62,7 +62,6 @@ src/
 ├── engine/
 │   ├── kinematics/
 │   ├── math/
-│   ├── simulation/
 │   ├── world/
 │   └── mod.ts
 │
@@ -78,16 +77,15 @@ examples/
 
 These areas have different responsibilities.
 
-| Area                     | Responsibility                                                                  |
-| ------------------------ | ------------------------------------------------------------------------------- |
-| `src/engine/`            | Own and advance simulation state                                                |
-| `src/engine/mod.ts`      | Define the public consumer-facing engine boundary                               |
-| `src/engine/math/`       | Small mathematical values and operations used by the engine                     |
-| `src/engine/kinematics/` | Kinematic state and numerical integration behavior                              |
-| `src/engine/world/`      | Own collections of simulated bodies and their authoritative state               |
-| `src/engine/simulation/` | Earlier single-state simulation runtime retained while the architecture evolves |
-| `src/visualization/`     | Convert observed simulation information into visual representations             |
-| `examples/`              | Compose components into runnable scenarios                                      |
+| Area                     | Responsibility                                                      |
+| ------------------------ | ------------------------------------------------------------------- |
+| `src/engine/`            | Own and advance simulation state                                    |
+| `src/engine/mod.ts`      | Define the public consumer-facing engine boundary                   |
+| `src/engine/math/`       | Small mathematical values and operations used by the engine         |
+| `src/engine/kinematics/` | Numerical integration behavior for current kinematic body state     |
+| `src/engine/world/`      | Own collections of simulated bodies and their authoritative state   |
+| `src/visualization/`     | Convert observed simulation information into visual representations |
+| `examples/`              | Compose components into runnable scenarios                          |
 
 The folders are not intended as permanent framework layers. They exist because concrete implementation responsibilities have appeared.
 
@@ -154,17 +152,17 @@ flowchart LR
     API["src/engine/mod.ts<br/>public boundary"]
 
     subgraph INTERNAL["Engine implementation"]
+        BODY["Body"]
         WORLD["KinematicWorld"]
-        SIM["KinematicSimulation"]
-        INT["Integrators"]
-        STATE["KinematicState"]
+        INT["Kinematic integrators"]
+        STATE["BodyState / BodySnapshot"]
         VEC["Vector2"]
     end
 
     EXT --> API
 
+    API --> BODY
     API --> WORLD
-    API --> SIM
     API --> INT
     API --> STATE
     API --> VEC
@@ -193,24 +191,30 @@ For the multi-body runtime, that authority belongs to `KinematicWorld`.
 
 ```mermaid
 flowchart TD
+    BODY["Reusable Body definition"]
+    INIT["BodyInitialConditions"]
     WORLD["KinematicWorld"]
-    STORE[("private Map&lt;BodyId, KinematicState&gt;")]
+    STORE[("private BodyId → WorldBody storage")]
+    STATE["World-owned BodyState"]
 
-    COMMANDS["Validated commands<br/>createBody<br/>setAcceleration<br/>step"]
+    COMMANDS["Validated commands<br/>addBody<br/>setAcceleration<br/>step"]
     QUERIES["Observation<br/>getBodyState<br/>getBodySnapshots"]
-    SNAPSHOTS["Detached state / snapshots"]
+    SNAPSHOTS["Detached BodyState / BodySnapshot"]
 
+    BODY --> COMMANDS
+    INIT --> COMMANDS
     COMMANDS --> WORLD
     WORLD --> STORE
+    STORE --> STATE
 
-    STORE --> WORLD
+    STATE --> WORLD
     WORLD --> QUERIES
     QUERIES --> SNAPSHOTS
 ```
 
-Consumers do not receive the world's internal `Map`, and observation APIs do not expose writable references into world storage.
+`BodyState` is runtime data, not an intrinsic property of `Body`. Consumers do not construct authoritative state or receive the world's internal storage.
 
-A renderer can inspect a body snapshot, but changing that snapshot cannot change the world.
+A renderer can inspect a detached `BodySnapshot`, but changing that observation cannot change the world.
 
 ---
 
@@ -241,7 +245,7 @@ Control asks:
 Examples:
 
 ```text
-world.createBody(...)
+world.addBody(...)
 world.setAcceleration(...)
 world.step(...)
 ```
@@ -254,22 +258,30 @@ That is intentional. The project has not demonstrated a need for a command bus, 
 
 ## 7. World-owned bodies
 
-Bodies currently do not exist as independently mutable runtime objects.
-
-Instead:
+`Body` is a reusable definition while the World owns each instantiated body's runtime identity and state.
 
 ```text
-KinematicWorld
-    owns
-      ↓
-BodyId → KinematicState
+Body definition
+    +
+BodyInitialConditions
+    ↓
+KinematicWorld.addBody(...)
+    ↓
+BodyId → BodyState
 ```
 
-`BodyId` is an opaque, world-local identifier used by consumers to refer to body state owned by a world.
+`BodyId` is an opaque, world-local identifier.
 
-This avoids handing consumers a mutable `Body` object whose state could bypass world invariants.
+`BodyState` currently contains position and velocity. It is a readonly structural data contract rather than a constructible state-owning class.
 
-It also gives the world one clear place to coordinate future operations that affect multiple bodies.
+This keeps the distinction explicit:
+
+```text
+Body                  intrinsic reusable definition
+BodyInitialConditions insertion configuration
+BodyState              World-owned runtime data
+BodySnapshot           detached observation
+```
 
 ---
 
@@ -285,7 +297,7 @@ classDiagram
         -Map bodies
         -Vector2 acceleration
         -KinematicIntegrator integrator
-        +createBody()
+        +addBody()
         +getBodySnapshots()
         +setAcceleration()
         +step(dt)
@@ -352,9 +364,9 @@ The invariant is:
 
 ---
 
-## 10. Kinematic state model
+## 10. Body runtime-state model
 
-The current physics state is intentionally small.
+The current runtime motion state is intentionally small.
 
 ```mermaid
 classDiagram
@@ -366,51 +378,43 @@ classDiagram
         +scale()
     }
 
-    class KinematicState {
+    class BodyState {
+        <<interface>>
         +Vector2 position
         +Vector2 velocity
     }
 
-    KinematicState *-- Vector2 : position
-    KinematicState *-- Vector2 : velocity
+    BodyState *-- Vector2 : position
+    BodyState *-- Vector2 : velocity
 ```
 
-A `KinematicState` contains only:
+A `BodyState` contains only:
 
 ```text
 position
 velocity
 ```
 
-It deliberately does not yet contain concepts such as mass, force, shape, orientation, angular velocity, or collision state.
+It deliberately does not contain intrinsic Body properties, mass, force, geometry, orientation, angular velocity, or collision state.
 
-Those should appear only when simulation features create a real requirement for them.
+Unlike the earlier `KinematicState` class, `BodyState` has no constructor or behavior. It is the structural data contract for World-owned runtime motion state.
 
 ---
 
-## 11. The role of `KinematicSimulation`
+## 11. Retired single-state simulation
 
-The project currently contains two state-owning runtime concepts:
+`KinematicSimulation` has been removed.
 
-```mermaid
-flowchart TD
-    KS["KinematicSimulation"]
-    KW["KinematicWorld"]
+It originally established several useful invariants:
 
-    KS --> ONE["one kinematic state"]
-    KW --> MANY["many identified body states"]
+- authoritative state ownership;
+- validated state changes;
+- injected integration behavior;
+- candidate-before-commit stepping.
 
-    INT["KinematicIntegrator"]
+`KinematicWorld` now provides those responsibilities for actual body instances, so retaining a second single-state runtime would duplicate ownership concepts and conflict with the future meaning of `Simulation`.
 
-    KS --> INT
-    KW --> INT
-```
-
-`KinematicSimulation` came first and established authoritative state ownership, validated state changes, injected integration behavior, and candidate-before-commit stepping.
-
-`KinematicWorld` later applied those ideas to multiple identified bodies.
-
-`KinematicSimulation` remains part of the public engine API, but its presence should not be interpreted as a commitment that both runtime concepts must exist permanently.
+The future `Simulation` layer is reserved for orchestration of one or more Worlds rather than ownership of one body's position and velocity.
 
 ---
 
@@ -434,7 +438,7 @@ Both consume detached engine observations, but their output mechanisms differ.
 ```mermaid
 flowchart LR
     WORLD["KinematicWorld"]
-    SNAP["readonly KinematicBodySnapshot[]"]
+    SNAP["readonly BodySnapshot[]"]
 
     SVG["SvgKinematicRenderer"]
     CANVAS["CanvasKinematicRenderer"]
@@ -687,13 +691,12 @@ It is useful to keep these categories separate.
 ```text
 ✓ public engine boundary through mod.ts
 ✓ mathematical Vector2 values
-✓ kinematic state
+✓ readonly BodyState runtime-data contract
 ✓ replaceable kinematic integrators
-✓ single-state KinematicSimulation
-✓ multi-body KinematicWorld
+✓ reusable Body definitions + multi-body KinematicWorld
 ✓ world-local BodyId
 ✓ world-owned authoritative body state
-✓ detached body observations
+✓ detached BodyState / BodySnapshot observations
 ✓ atomic world stepping
 ✓ independent SVG visualization
 ✓ independent Canvas 2D visualization

@@ -10,9 +10,9 @@ Eventually, vLab2D aims to make simulations not only runnable, but **observable*
 
 ## Project status
 
-**Current checkpoint:** a multi-body `KinematicWorld` owns authoritative simulation state and exposes detached observations that can be visualized through the primary live Canvas 2D path or the secondary static SVG path. `ViewportTransform` owns bidirectional world/display coordinate conversion, continuous visible world bounds, mutable world-space centering, and mutable display scale. The live Canvas example supports pointer-drag panning, pointer-coordinate inspection, bounded pointer-anchored wheel/trackpad zoom, display-space body picking, live hover highlighting, persistent click selection, and a live read-only inspector for the selected body's current position and velocity.
+**Current checkpoint:** Phase 1 architectural refactoring is in progress. `Body` is a reusable definition; `BodyInitialConditions` establish world-specific starting values; `BodyState` is the readonly runtime-data contract owned by `KinematicWorld`; and `BodySnapshot` provides detached observations. The obsolete single-state `KinematicSimulation` has been retired. Existing Canvas/SVG behavior, viewport interaction, picking, selection, and selected-body inspection remain intact.
 
-**Next step:** use the proven selected-body observation path for the first visual diagnostic overlay. A velocity vector for the selected body is the leading candidate; editable state, drag manipulation, and broader inspector architecture remain separate decisions.
+**Next step:** Phase 1B.2 will establish the broader World vocabulary by reviewing `KinematicWorld` → `World` and world-level `acceleration` → `gravity` without adding simulation features.
 
 See the [project documentation](docs/project/README.md) for the authoritative current status, project context, decisions, workflow, and continuity information.
 
