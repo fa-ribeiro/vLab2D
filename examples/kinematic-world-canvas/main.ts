@@ -1,4 +1,5 @@
 import {
+  type BodyId,
   KinematicState,
   KinematicWorld,
   SemiImplicitEulerIntegrator,
@@ -57,6 +58,11 @@ let activePointerId: number | undefined;
 let previousPointerX = 0;
 let previousPointerY = 0;
 
+let hoveredBodyId: BodyId | undefined;
+
+let pointerClientX: number | undefined;
+let pointerClientY: number | undefined;
+
 canvas.addEventListener("pointerdown", (event) => {
   if (event.button !== 0 || activePointerId !== undefined) {
     return;
@@ -113,6 +119,9 @@ function normalizeWheelDelta(event: WheelEvent): number {
 }
 
 function updatePointerInspection(clientX: number, clientY: number): void {
+  pointerClientX = clientX;
+  pointerClientY = clientY;
+
   const display = clientToDisplayCoordinates(clientX, clientY);
 
   const worldX = renderer.displayToWorldX(display.x);
@@ -120,9 +129,18 @@ function updatePointerInspection(clientX: number, clientY: number): void {
 
   coordinateOutput.value = `World: (${worldX.toFixed(2)}, ${worldY.toFixed(2)})`;
 
-  const bodyId = renderer.findBodyAtDisplayPoint(renderedSnapshots, display.x, display.y);
+  hoveredBodyId = renderer.findBodyAtDisplayPoint(renderedSnapshots, display.x, display.y);
 
-  bodyOutput.value = bodyId === undefined ? "Body: —" : `Body: ${bodyId}`;
+  bodyOutput.value = hoveredBodyId === undefined ? "Body: —" : `Body: ${hoveredBodyId}`;
+}
+
+function refreshPointerInspection(): void {
+  if (pointerClientX === undefined || pointerClientY === undefined) {
+    hoveredBodyId = undefined;
+    return;
+  }
+
+  updatePointerInspection(pointerClientX, pointerClientY);
 }
 
 canvas.addEventListener("pointermove", (event) => {
@@ -193,8 +211,9 @@ function frame(timestamp: number): void {
 
   renderedSnapshots = world.getBodySnapshots();
 
-  renderer.render(renderedSnapshots);
+  refreshPointerInspection();
 
+  renderer.render(renderedSnapshots, hoveredBodyId);
   requestAnimationFrame(frame);
 }
 

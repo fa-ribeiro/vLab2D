@@ -2,8 +2,12 @@ import type { BodyId, KinematicBodySnapshot } from "../engine/mod.ts";
 import { ViewportTransform } from "./viewport-transform.ts";
 
 const ORIGIN_MARKER_HALF_SIZE = 5;
+
 const GRID_OPACITY = 0.15;
 const AXIS_OPACITY = 0.45;
+
+const HOVER_RING_PADDING = 4;
+const HOVER_RING_OPACITY = 0.6;
 
 interface CanvasDrawingContext {
   clearRect(x: number, y: number, width: number, height: number): void;
@@ -196,7 +200,7 @@ export class CanvasKinematicRenderer {
    *
    * @param snapshots The detached body observations to render.
    */
-  public render(snapshots: readonly KinematicBodySnapshot[]): void {
+  public render(snapshots: readonly KinematicBodySnapshot[], highlightedBodyId?: BodyId): void {
     this.#context.clearRect(0, 0, this.#transform.width, this.#transform.height);
 
     this.#renderGrid();
@@ -204,17 +208,30 @@ export class CanvasKinematicRenderer {
     this.#renderOrigin();
 
     for (const snapshot of snapshots) {
-      this.#renderBody(snapshot);
+      this.#renderBody(snapshot, snapshot.id === highlightedBodyId);
     }
   }
 
-  #renderBody(snapshot: KinematicBodySnapshot): void {
+  #renderBody(snapshot: KinematicBodySnapshot, highlighted: boolean): void {
     const x = this.#transform.worldToDisplayX(snapshot.state.position.x);
     const y = this.#transform.worldToDisplayY(snapshot.state.position.y);
 
     this.#context.beginPath();
     this.#context.arc(x, y, this.#bodyRadius, 0, Math.PI * 2);
     this.#context.fill();
+
+    if (!highlighted) {
+      return;
+    }
+
+    this.#context.save();
+    this.#context.globalAlpha = HOVER_RING_OPACITY;
+
+    this.#context.beginPath();
+    this.#context.arc(x, y, this.#bodyRadius + HOVER_RING_PADDING, 0, Math.PI * 2);
+    this.#context.stroke();
+
+    this.#context.restore();
   }
 
   #renderOrigin(): void {

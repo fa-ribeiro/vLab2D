@@ -606,3 +606,17 @@ If more than one marker contains the point, the nearest rendered center is chose
 The browser host retains the latest detached snapshots used to render the visible frame and reuses those snapshots for pointer hit testing. This keeps visual inspection aligned with what the user can actually see while leaving authoritative simulation state inside `KinematicWorld`.
 
 The host owns presentation of the picked result, such as the current `BodyId` readout. No persistent selection state, body highlighting, drag manipulation, physical engine shape, or generic picking framework is introduced by this decision.
+
+## D-057 — Hover identity is transient host state and rendering input
+
+**Status:** Accepted
+
+Hovering is presentation state owned by the browser host, not authoritative simulation state and not persistent renderer state.
+
+The host retains the current pointer client position and recomputes the hovered body from the latest detached snapshots used for the current frame. This evaluation occurs during the animation loop as well as in response to pointer-driven viewport changes because bodies can move underneath a stationary pointer.
+
+`CanvasKinematicRenderer` remains stateless about hover identity. Its `render(...)` operation receives an optional `BodyId` describing which body, if any, should receive the frame's hover treatment. The renderer owns only how that highlighted body is drawn: currently a simple display-space halo around the existing body marker.
+
+The same `renderedSnapshots` observation set is therefore used to determine hover identity and to render both the bodies and the corresponding hover feedback. This keeps inspection synchronized with the visible frame without reading newer authoritative world state during input handling.
+
+Transient hover is distinct from persistent selection. This decision does not establish click semantics, selected-body ownership, selection persistence, drag manipulation, a style/theme system, or engine-owned interaction state.

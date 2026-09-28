@@ -467,6 +467,7 @@ CanvasKinematicRenderer
     origin marker
     body drawing
     display-space body-marker hit testing
+    per-frame highlighted-body presentation
 ```
 
 Both renderers use `ViewportTransform` for coordinate placement while retaining rendering-technology-specific drawing behavior. Both expose programmatic viewport centering and scale changes. Canvas additionally accepts display-space pan deltas, exposes inverse display-to-world scalar queries, supports anchor-preserving scale changes, and can hit-test its rendered body markers, while browser pointer/wheel-event orchestration remains outside the renderer in host/example code.
@@ -579,7 +580,8 @@ sequenceDiagram
 
     Host->>World: getBodySnapshots()
     World-->>Host: detached snapshots
-    Host->>Renderer: render(snapshots)
+    Host->>Host: recompute hovered BodyId from snapshots + pointer
+    Host->>Renderer: render(snapshots, hovered BodyId)
     Host->>Browser: request next frame
 ```
 
@@ -591,7 +593,9 @@ The host also owns pointer and wheel interaction. It tracks the active pointer, 
 
 For wheel/trackpad zoom, the host normalizes wheel deltas, applies zoom sensitivity and minimum/maximum scale policy, prevents page scrolling while the Canvas owns the wheel interaction, and supplies an absolute requested scale together with the pointer's Canvas display-space anchor. `CanvasKinematicRenderer` delegates the anchor-preserving geometry to `ViewportTransform`.
 
-For picking, the host retains the latest detached snapshots used for rendering and supplies those same observations to `CanvasKinematicRenderer.findBodyAtDisplayPoint(...)`. This keeps the hit test synchronized with the visible frame. The renderer therefore remains independent from DOM pointer/wheel-event APIs and host interaction policy.
+For picking and hover, the host retains the latest detached snapshots used for rendering and supplies those same observations to `CanvasKinematicRenderer.findBodyAtDisplayPoint(...)`. It owns the current pointer position and transient hovered `BodyId`, then supplies that identifier back to `render(...)` as per-frame presentation input.
+
+Hover is recomputed during the animation loop because simulation bodies move independently of pointer events. A stationary pointer can therefore gain or lose a hovered body as the rendered snapshots change. The renderer remains independent from DOM pointer/wheel-event APIs and does not persist hover identity.
 
 ```mermaid
 flowchart LR
@@ -700,6 +704,8 @@ It is useful to keep these categories separate.
 ✓ pointer-anchored wheel / trackpad zoom
 ✓ Canvas display-space body-marker picking
 ✓ live body-under-pointer inspection
+✓ transient host-owned hover identity
+✓ per-frame Canvas hover highlighting
 ✓ equivalent SVG and Canvas spatial references
 ✓ Canvas integer grid
 ✓ Canvas world axes
@@ -728,8 +734,8 @@ Possible future capabilities include:
 
 ```text
 ? pinch zoom
-? hover highlighting
 ? persistent body selection
+? selected-body inspector
 ? experiment orchestration
 ? synchronized multiple worlds
 ? UI controls
@@ -895,9 +901,35 @@ Squared distance avoids an unnecessary square root while expressing the same cir
 
 The browser host deliberately reuses the same detached snapshots that produced the visible frame when performing the hit test. Picking is therefore an observation of rendered presentation state, not a second read from authoritative world storage during the input event.
 
-This does not establish physical body geometry, collision shape, persistent selection state, hover styling, or a generic picking framework.
+This does not establish physical body geometry, collision shape, persistent selection state, or a generic picking framework.
 
-No `WorldBounds` value type, renderer hierarchy, camera model, transformation matrix framework, point abstraction, persistent selection model, or gesture framework has been introduced.
+### Transient hover highlighting
+
+Hover builds directly on the Canvas picking query while preserving state ownership boundaries.
+
+The browser host owns the transient hovered `BodyId` because hover is interaction/presentation state rather than simulation state. `CanvasKinematicRenderer` remains stateless about hover identity: `render(...)` receives an optional highlighted body identifier for the current frame and draws a simple halo around that body's existing marker.
+
+```mermaid
+flowchart LR
+    POINTER["Retained pointer position"]
+    SNAP["Latest rendered snapshots"]
+    HOST["Browser host"]
+    PICK["Canvas hit test"]
+    HOVER["Hovered BodyId"]
+    RENDER["render(snapshots, hovered BodyId)"]
+    HALO["Body + hover halo"]
+
+    POINTER --> HOST
+    SNAP --> HOST
+    HOST --> PICK --> HOVER --> RENDER --> HALO
+    SNAP --> RENDER
+```
+
+The host recomputes hover after obtaining each frame's latest detached snapshots. This is necessary because bodies move even when the pointer does not. The hover readout and halo can therefore appear or disappear under a stationary pointer without waiting for another DOM pointer event.
+
+The same snapshot set drives hit testing and rendering, so the highlighted identity corresponds to the observations visible in that frame.
+
+No persistent selected-body state, click semantics, style/theme abstraction, `WorldBounds` value type, renderer hierarchy, camera model, transformation matrix framework, point abstraction, or gesture framework has been introduced.
 
 ---
 

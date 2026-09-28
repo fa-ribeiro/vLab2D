@@ -97,7 +97,9 @@ Wheel normalization, zoom sensitivity, minimum and maximum scale, and suppressio
 
 Canvas also supports visual body picking through `findBodyAtDisplayPoint(...)`. The query receives detached snapshots and a Canvas drawing-buffer point, maps each body position through the same viewport transform used for rendering, and tests against the renderer's circular body-marker radius. When markers overlap, the nearest rendered center wins rather than relying on snapshot order.
 
-This is intentionally visualization geometry. The engine does not yet model physical body shape or radius, so body picking is not an engine/world query. The browser host reuses the latest snapshots that were rendered when producing the live `BodyId` inspection readout.
+The renderer can also receive an optional highlighted `BodyId` during `render(...)`. It draws a simple halo around that body's existing marker but stores no hover identity itself.
+
+This is intentionally visualization geometry. The engine does not yet model physical body shape or radius, so body picking is not an engine/world query. The browser host reuses the latest rendered snapshots for both hit testing and drawing, owns the transient hovered `BodyId`, and recomputes hover every animation frame so moving bodies remain synchronized with a stationary pointer.
 
 Clearing the previous frame remains deliberate. Trails should become an explicit visualization capability rather than appearing accidentally because old frames were left on the canvas.
 
@@ -211,8 +213,8 @@ The two concrete implementations should continue to teach us which concepts are 
 
 ## Direction
 
-Programmatic viewport centering and scale changes are supported by both concrete renderers. The Canvas browser example adds pointer-drag panning, live world-coordinate inspection, bounded pointer-anchored wheel/trackpad zoom, and display-space body picking.
+Programmatic viewport centering and scale changes are supported by both concrete renderers. The Canvas browser example adds pointer-drag panning, live world-coordinate inspection, bounded pointer-anchored wheel/trackpad zoom, display-space body picking, and live hover highlighting.
 
-Anchor-preserving zoom is geometry owned by `ViewportTransform`; wheel interpretation, scale limits, sensitivity, browser event cancellation, CSS-to-Canvas coordinate conversion, and inspection UI remain host policy. Body hit testing stays in Canvas visualization because the current pick radius is the renderer's display-space marker radius rather than engine-owned physical geometry.
+Anchor-preserving zoom is geometry owned by `ViewportTransform`; wheel interpretation, scale limits, sensitivity, browser event cancellation, CSS-to-Canvas coordinate conversion, inspection UI, and transient hover identity remain host policy. Body hit testing stays in Canvas visualization because the current pick radius is the renderer's display-space marker radius rather than engine-owned physical geometry. The renderer accepts a per-frame highlighted `BodyId` but does not own hover state.
 
-The next likely inspection step is simple hover feedback for the currently picked body. Persistent click selection, selected-body UI, drag manipulation, physical engine shapes, cameras, renderer interfaces, richer diagnostics, and generalized rendering abstractions remain deferred until concrete requirements establish their shape.
+The next likely inspection step is the smallest useful persistent click selection. Selected-body UI, drag manipulation, physical engine shapes, cameras, renderer interfaces, richer diagnostics, and generalized rendering abstractions remain deferred until concrete requirements establish their shape.
