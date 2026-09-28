@@ -25,52 +25,52 @@ interface WorldBody {
  * initial conditions. The world copies those values into authoritative runtime
  * state that remains private and may be observed through detached snapshots.
  *
- * All body instances currently share the same world acceleration and numerical
+ * All body instances currently share the same world gravity and numerical
  * integration strategy.
  */
-export class KinematicWorld {
+export class World {
   #nextBodyId: BodyId = 1;
 
   readonly #bodies = new Map<BodyId, WorldBody>();
   readonly #integrator: KinematicIntegrator;
 
-  #acceleration: Vector2;
+  #gravity: Vector2;
 
   /**
-   * Creates a kinematic world.
+   * Creates a world.
    *
-   * @param acceleration The constant acceleration applied to every body,
+   * @param gravity The gravitational acceleration applied to every body,
    * expressed in world units per second squared.
    * @param integrator The numerical integration strategy used to advance body
    * states.
-   * @throws {RangeError} If the acceleration contains a non-finite component.
+   * @throws {RangeError} If the gravity vector contains a non-finite component.
    */
-  public constructor(acceleration: Vector2, integrator: KinematicIntegrator) {
-    assertFiniteVector(acceleration, "Acceleration");
+  public constructor(gravity: Vector2, integrator: KinematicIntegrator) {
+    assertFiniteVector(gravity, "Gravity");
 
-    this.#acceleration = acceleration;
+    this.#gravity = gravity;
     this.#integrator = integrator;
   }
 
   /**
-   * The acceleration currently applied to every body in the world, expressed
-   * in world units per second squared.
+   * The gravitational acceleration currently applied to every body in the
+   * world, expressed in world units per second squared.
    */
-  public get acceleration(): Vector2 {
-    return this.#acceleration;
+  public get gravity(): Vector2 {
+    return this.#gravity;
   }
 
   /**
-   * Changes the acceleration used by subsequent world steps.
+   * Changes the gravity used by subsequent world steps.
    *
-   * @param acceleration The new acceleration, expressed in world units per
-   * second squared.
+   * @param gravity The new gravitational acceleration, expressed in world
+   * units per second squared.
    * @throws {RangeError} If either component is not finite.
    */
-  public setAcceleration(acceleration: Vector2): void {
-    assertFiniteVector(acceleration, "Acceleration");
+  public setGravity(gravity: Vector2): void {
+    assertFiniteVector(gravity, "Gravity");
 
-    this.#acceleration = acceleration;
+    this.#gravity = gravity;
   }
 
   /**
@@ -162,7 +162,7 @@ export class KinematicWorld {
     const nextStates = new Map<BodyId, BodyState>();
 
     for (const [bodyId, worldBody] of this.#bodies) {
-      const nextState = this.#integrator.integrate(worldBody.state, this.#acceleration, dt);
+      const nextState = this.#integrator.integrate(worldBody.state, this.#gravity, dt);
 
       assertFiniteBodyState(nextState, `Integrator result for body ${bodyId}`);
 

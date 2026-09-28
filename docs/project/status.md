@@ -23,7 +23,7 @@ The public engine API currently provides:
 - `SemiImplicitEulerIntegrator`.
 - `BodyId`, an opaque world-local identifier.
 - `BodySnapshot`, a detached observation of body identity and runtime state.
-- `KinematicWorld`, which owns and advances multiple identified body runtime instances.
+- `World`, which owns and advances multiple identified body runtime instances.
 
 The current Body/World lifecycle now distinguishes three categories explicitly:
 
@@ -34,13 +34,13 @@ Body
 BodyInitialConditions
     world-specific position / velocity supplied at insertion
 
-BodyState inside KinematicWorld
+BodyState inside World
     authoritative evolving runtime state
 ```
 
-`KinematicWorld.addBody(...)` may instantiate the same `Body` definition multiple times. Each addition receives an independent world-local `BodyId` and independent runtime state. Position and velocity default to zero, and supplied vectors are copied before they become authoritative world state.
+`World.addBody(...)` may instantiate the same `Body` definition multiple times. Each addition receives an independent world-local `BodyId` and independent runtime state. Position and velocity default to zero, and supplied vectors are copied before they become authoritative world state.
 
-`KinematicWorld` owns authoritative body state and advances every body using an injected `KinematicIntegrator`.
+`World` owns authoritative body state and advances every body using an injected `KinematicIntegrator`.
 
 External consumers receive detached observations rather than references to internal world storage.
 
@@ -145,7 +145,7 @@ The pointer position is retained by the host and hover is recalculated every ani
 
 Selection changes only after a primary-pointer interaction completes without moving beyond the host-defined click tolerance. Movement beyond that tolerance is treated as drag navigation: the viewport pans, but selection remains unchanged. Clicking a rendered body stores that body's `BodyId`; clicking empty Canvas clears selection. Pointer leave clears hover inspection but does not clear persistent selection.
 
-The selected-body inspector stores no snapshot of its own. On each frame, the host resolves `selectedBodyId` against the latest `renderedSnapshots` and presents the matching snapshot's current position and velocity. This keeps the inspector synchronized with the observation set used for rendering while preserving `KinematicWorld` as the authoritative owner of mutable body state.
+The selected-body inspector stores no snapshot of its own. On each frame, the host resolves `selectedBodyId` against the latest `renderedSnapshots` and presents the matching snapshot's current position and velocity. This keeps the inspector synchronized with the observation set used for rendering while preserving `World` as the authoritative owner of mutable body state.
 
 If no body is selected, or if a selected identity cannot be resolved in the current observation set, the inspector displays unavailable values rather than implicitly changing selection. Body-removal semantics therefore remain a separate future decision.
 
@@ -166,7 +166,7 @@ The anchor-aware transform preserves the world coordinate underneath the pointer
 
 The coordinate, hovered-body, selected-body, position, and velocity readouts remain ordinary DOM presentation owned by the host. The transient hovered `BodyId` and persistent selected `BodyId` are both host-owned interaction/presentation state. The inspector derives current values from detached observations rather than retaining a selected snapshot. Formatting such as decimal precision does not enter `ViewportTransform`, the renderer, or the engine.
 
-Body picking is deliberately a visualization query rather than an engine query. `KinematicWorld` currently stores kinematic position and velocity but no physical shape or radius. The hit radius comes from the Canvas renderer's display-space body marker, so placing the query in `KinematicWorld` would incorrectly turn presentation geometry into simulation geometry.
+Body picking is deliberately a visualization query rather than an engine query. `World` currently stores kinematic position and velocity but no physical shape or radius. The hit radius comes from the Canvas renderer's display-space body marker, so placing the query in `World` would incorrectly turn presentation geometry into simulation geometry.
 
 When multiple rendered markers contain the pointer, the Canvas renderer chooses the hit whose rendered center is nearest to the pointer instead of depending on snapshot ordering, which is not part of the world's public contract.
 
@@ -217,28 +217,19 @@ Interpolation between fixed simulation states remains deliberately deferred.
 
 ## Next step
 
-Continue **Phase 1B.2 — establish the domain World**.
+Continue **Phase 1C — Simulation / orchestration**.
 
-Phase 1B.1 clarified runtime state:
+Phase 1B is complete:
 
-- the `KinematicState` class has been replaced by the structural `BodyState` runtime-data contract;
-- `KinematicBodySnapshot` has become `BodySnapshot`;
-- `KinematicSimulation` has been retired because the multi-body world already owns runtime state and the future `Simulation` has an orchestration role;
-- `KinematicIntegrator` remains deliberately narrow because it still represents a real kinematic integration contract.
+- `BodyState` is structural World-owned runtime data;
+- `BodySnapshot` is the detached observation contract;
+- the obsolete single-state `KinematicSimulation` is retired;
+- `World` is now the general domain container name;
+- world-level environmental acceleration is named `gravity`;
+- `KinematicIntegrator` remains deliberately narrow and still receives acceleration as its mathematical input.
 
-The next slice should review and, where justified, rename:
+Phase 1C should introduce the smallest real `Simulation` concept needed to coordinate one or more Worlds through deterministic `step(dt)` orchestration.
 
-- `KinematicWorld` → `World`;
-- world-level `acceleration` → `gravity`.
-
-Behavior should remain unchanged. Constructor/default redesign, including the accepted future default gravity `(0, -9.81)`, should be handled deliberately rather than mixed into a mechanical rename.
-
-After Phase 1B, Phase 1 proceeds incrementally toward:
-
-```text
-Body → World → Simulation → Runtime
-```
-
-with Visualization remaining independent.
+It must not own browser scheduling, Canvas dimensions, pointer input, rendering, or `requestAnimationFrame`.
 
 The phased strategy is maintained in [`roadmap.md`](roadmap.md).

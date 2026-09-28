@@ -1,12 +1,7 @@
-import {
-  Body,
-  KinematicWorld,
-  SemiImplicitEulerIntegrator,
-  Vector2,
-} from "../src/engine/mod.ts";
+import { Body, SemiImplicitEulerIntegrator, Vector2, World } from "../src/engine/mod.ts";
 import { SvgKinematicRenderer } from "../src/visualization/svg-kinematic-renderer.ts";
 
-const world = new KinematicWorld(new Vector2(0, -9.81), new SemiImplicitEulerIntegrator());
+const world = new World(new Vector2(0, -9.81), new SemiImplicitEulerIntegrator());
 
 const particle = new Body();
 

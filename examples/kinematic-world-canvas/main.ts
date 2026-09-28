@@ -1,9 +1,9 @@
 import {
   Body,
   type BodyId,
-  KinematicWorld,
   SemiImplicitEulerIntegrator,
   Vector2,
+  World,
 } from "../../src/engine/mod.ts";
 import { CanvasKinematicRenderer } from "../../src/visualization/canvas-kinematic-renderer.ts";
 
@@ -63,7 +63,7 @@ if (selectedBodyVelocityOutputElement === null) {
 }
 const selectedBodyVelocityOutput: HTMLOutputElement = selectedBodyVelocityOutputElement;
 
-const world = new KinematicWorld(new Vector2(0, -1), new SemiImplicitEulerIntegrator());
+const world = new World(new Vector2(0, -1), new SemiImplicitEulerIntegrator());
 
 const particle = new Body();
 
@@ -225,17 +225,13 @@ function refreshSelectedBodyInspection(): void {
 
   const { position, velocity } = snapshot.state;
 
-  selectedBodyPositionOutput.value = `Position: (${position.x.toFixed(2)}, ${
-    position.y.toFixed(
-      2,
-    )
-  })`;
+  selectedBodyPositionOutput.value = `Position: (${position.x.toFixed(2)}, ${position.y.toFixed(
+    2,
+  )})`;
 
-  selectedBodyVelocityOutput.value = `Velocity: (${velocity.x.toFixed(2)}, ${
-    velocity.y.toFixed(
-      2,
-    )
-  })`;
+  selectedBodyVelocityOutput.value = `Velocity: (${velocity.x.toFixed(2)}, ${velocity.y.toFixed(
+    2,
+  )})`;
 }
 
 canvas.addEventListener("pointermove", (event) => {

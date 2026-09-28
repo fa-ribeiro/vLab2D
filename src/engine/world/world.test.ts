@@ -4,7 +4,7 @@ import { Body } from "../body/body.ts";
 import type { KinematicIntegrator } from "../kinematics/kinematic-integrator.ts";
 import type { BodyState } from "./body-state.ts";
 import { Vector2 } from "../math/vector2.ts";
-import { KinematicWorld } from "./kinematic-world.ts";
+import { World } from "./world.ts";
 
 function assertVector(actual: Vector2, expectedX: number, expectedY: number): void {
   assertEquals(actual.x, expectedX);
@@ -43,10 +43,10 @@ class StubIntegrator implements KinematicIntegrator {
   }
 }
 
-Deno.test("KinematicWorld adds a body and exposes its initial runtime state", () => {
+Deno.test("World adds a body and exposes its initial runtime state", () => {
   const integrator = new StubIntegrator((state) => state);
 
-  const world = new KinematicWorld(new Vector2(0, -10), integrator);
+  const world = new World(new Vector2(0, -10), integrator);
 
   const bodyId = world.addBody(new Body(), {
     position: new Vector2(3, 4),
@@ -61,8 +61,8 @@ Deno.test("KinematicWorld adds a body and exposes its initial runtime state", ()
   assertVector(state.velocity, -2, 5);
 });
 
-Deno.test("KinematicWorld uses zero-valued body initial-condition defaults", () => {
-  const world = new KinematicWorld(new Vector2(0, -10), new StubIntegrator((state) => state));
+Deno.test("World uses zero-valued body initial-condition defaults", () => {
+  const world = new World(new Vector2(0, -10), new StubIntegrator((state) => state));
 
   const bodyId = world.addBody(new Body());
 
@@ -74,10 +74,10 @@ Deno.test("KinematicWorld uses zero-valued body initial-condition defaults", () 
   assertVector(state.velocity, 0, 0);
 });
 
-Deno.test("KinematicWorld assigns different identifiers to different body instances", () => {
+Deno.test("World assigns different identifiers to different body instances", () => {
   const integrator = new StubIntegrator((state) => state);
 
-  const world = new KinematicWorld(new Vector2(0, -10), integrator);
+  const world = new World(new Vector2(0, -10), integrator);
 
   const body = new Body();
 
@@ -87,41 +87,38 @@ Deno.test("KinematicWorld assigns different identifiers to different body instan
   assert(firstBodyId !== secondBodyId);
 });
 
-Deno.test(
-  "KinematicWorld can reuse one Body definition with independent runtime states",
-  () => {
-    const integrator = new StubIntegrator((state) => state);
+Deno.test("World can reuse one Body definition with independent runtime states", () => {
+  const integrator = new StubIntegrator((state) => state);
 
-    const world = new KinematicWorld(new Vector2(0, -10), integrator);
+  const world = new World(new Vector2(0, -10), integrator);
 
-    const body = new Body();
+  const body = new Body();
 
-    const firstId = world.addBody(body, {
-      position: new Vector2(1, 2),
-      velocity: new Vector2(3, 4),
-    });
+  const firstId = world.addBody(body, {
+    position: new Vector2(1, 2),
+    velocity: new Vector2(3, 4),
+  });
 
-    const secondId = world.addBody(body, {
-      position: new Vector2(10, 20),
-      velocity: new Vector2(30, 40),
-    });
+  const secondId = world.addBody(body, {
+    position: new Vector2(10, 20),
+    velocity: new Vector2(30, 40),
+  });
 
-    const firstState = world.getBodyState(firstId);
-    const secondState = world.getBodyState(secondId);
+  const firstState = world.getBodyState(firstId);
+  const secondState = world.getBodyState(secondId);
 
-    assert(firstState !== undefined);
-    assert(secondState !== undefined);
+  assert(firstState !== undefined);
+  assert(secondState !== undefined);
 
-    assertVector(firstState.position, 1, 2);
-    assertVector(firstState.velocity, 3, 4);
+  assertVector(firstState.position, 1, 2);
+  assertVector(firstState.velocity, 3, 4);
 
-    assertVector(secondState.position, 10, 20);
-    assertVector(secondState.velocity, 30, 40);
-  },
-);
+  assertVector(secondState.position, 10, 20);
+  assertVector(secondState.velocity, 30, 40);
+});
 
-Deno.test("KinematicWorld copies body initial conditions into runtime state", () => {
-  const world = new KinematicWorld(new Vector2(0, -10), new StubIntegrator((state) => state));
+Deno.test("World copies body initial conditions into runtime state", () => {
+  const world = new World(new Vector2(0, -10), new StubIntegrator((state) => state));
 
   const position = new Vector2(1, 2);
   const velocity = new Vector2(3, 4);
@@ -144,10 +141,10 @@ Deno.test("KinematicWorld copies body initial conditions into runtime state", ()
   assertVector(state.velocity, 3, 4);
 });
 
-Deno.test("KinematicWorld rejects invalid body initial conditions", () => {
+Deno.test("World rejects invalid body initial conditions", () => {
   const integrator = new StubIntegrator((state) => state);
 
-  const world = new KinematicWorld(new Vector2(0, -10), integrator);
+  const world = new World(new Vector2(0, -10), integrator);
 
   assertThrows(
     () =>
@@ -161,8 +158,8 @@ Deno.test("KinematicWorld rejects invalid body initial conditions", () => {
   assertEquals(world.getBodySnapshots(), []);
 });
 
-Deno.test("KinematicWorld advances every body using the injected integrator", () => {
-  const acceleration = new Vector2(0, -10);
+Deno.test("World advances every body using the injected integrator", () => {
+  const gravity = new Vector2(0, -10);
 
   const firstNextState = createBodyState(new Vector2(5, 6), new Vector2(7, 8));
 
@@ -180,7 +177,7 @@ Deno.test("KinematicWorld advances every body using the injected integrator", ()
     throw new Error("Unexpected state.");
   });
 
-  const world = new KinematicWorld(acceleration, integrator);
+  const world = new World(gravity, integrator);
 
   const body = new Body();
 
@@ -211,48 +208,45 @@ Deno.test("KinematicWorld advances every body using the injected integrator", ()
   assertEquals(integrator.calls.length, 2);
 
   for (const call of integrator.calls) {
-    assertStrictEquals(call.acceleration, acceleration);
+    assertStrictEquals(call.acceleration, gravity);
     assertEquals(call.dt, 0.5);
   }
 });
 
-Deno.test("KinematicWorld uses updated acceleration on subsequent steps", () => {
+Deno.test("World uses updated gravity on subsequent steps", () => {
   const integrator = new StubIntegrator((state) => state);
 
-  const world = new KinematicWorld(new Vector2(0, -10), integrator);
+  const world = new World(new Vector2(0, -10), integrator);
 
   world.addBody(new Body());
 
-  const newAcceleration = new Vector2(4, -2);
+  const newGravity = new Vector2(4, -2);
 
-  world.setAcceleration(newAcceleration);
+  world.setGravity(newGravity);
   world.step(1);
 
-  assertStrictEquals(world.acceleration, newAcceleration);
-  assertStrictEquals(integrator.calls[0].acceleration, newAcceleration);
+  assertStrictEquals(world.gravity, newGravity);
+  assertStrictEquals(integrator.calls[0].acceleration, newGravity);
 });
 
-Deno.test(
-  "KinematicWorld rejects invalid acceleration without replacing the current value",
-  () => {
-    const acceleration = new Vector2(0, -10);
+Deno.test("World rejects invalid gravity without replacing the current value", () => {
+  const gravity = new Vector2(0, -10);
 
-    const world = new KinematicWorld(acceleration, new StubIntegrator((state) => state));
+  const world = new World(gravity, new StubIntegrator((state) => state));
 
-    assertThrows(
-      () => world.setAcceleration(new Vector2(Number.NaN, 0)),
-      RangeError,
-      "Acceleration must contain finite components.",
-    );
+  assertThrows(
+    () => world.setGravity(new Vector2(Number.NaN, 0)),
+    RangeError,
+    "Gravity must contain finite components.",
+  );
 
-    assertStrictEquals(world.acceleration, acceleration);
-  },
-);
+  assertStrictEquals(world.gravity, gravity);
+});
 
-Deno.test("KinematicWorld rejects an invalid timestep before integrating bodies", () => {
+Deno.test("World rejects an invalid timestep before integrating bodies", () => {
   const integrator = new StubIntegrator((state) => state);
 
-  const world = new KinematicWorld(new Vector2(0, -10), integrator);
+  const world = new World(new Vector2(0, -10), integrator);
 
   const bodyId = world.addBody(new Body(), {
     position: new Vector2(1, 2),
@@ -271,76 +265,67 @@ Deno.test("KinematicWorld rejects an invalid timestep before integrating bodies"
   assertVector(stateAfterRejectedStep.velocity, 3, 4);
 });
 
-Deno.test(
-  "KinematicWorld preserves all body states when any integration result is invalid",
-  () => {
-    const firstNextState = createBodyState(new Vector2(5, 6), new Vector2(7, 8));
+Deno.test("World preserves all body states when any integration result is invalid", () => {
+  const firstNextState = createBodyState(new Vector2(5, 6), new Vector2(7, 8));
 
-    const invalidSecondState = createBodyState(
-      new Vector2(Number.NaN, 60),
-      new Vector2(70, 80),
-    );
+  const invalidSecondState = createBodyState(new Vector2(Number.NaN, 60), new Vector2(70, 80));
 
-    const integrator = new StubIntegrator((state) => {
-      if (state.position.x === 1) {
-        return firstNextState;
-      }
+  const integrator = new StubIntegrator((state) => {
+    if (state.position.x === 1) {
+      return firstNextState;
+    }
 
-      if (state.position.x === 10) {
-        return invalidSecondState;
-      }
+    if (state.position.x === 10) {
+      return invalidSecondState;
+    }
 
-      throw new Error("Unexpected state.");
-    });
+    throw new Error("Unexpected state.");
+  });
 
-    const world = new KinematicWorld(new Vector2(0, -10), integrator);
+  const world = new World(new Vector2(0, -10), integrator);
 
-    const body = new Body();
+  const body = new Body();
 
-    const firstBodyId = world.addBody(body, {
-      position: new Vector2(1, 2),
-      velocity: new Vector2(3, 4),
-    });
+  const firstBodyId = world.addBody(body, {
+    position: new Vector2(1, 2),
+    velocity: new Vector2(3, 4),
+  });
 
-    const secondBodyId = world.addBody(body, {
-      position: new Vector2(10, 20),
-      velocity: new Vector2(30, 40),
-    });
+  const secondBodyId = world.addBody(body, {
+    position: new Vector2(10, 20),
+    velocity: new Vector2(30, 40),
+  });
 
-    assertThrows(
-      () => world.step(0.5),
-      RangeError,
-      `Integrator result for body ${secondBodyId} position must contain finite components.`,
-    );
+  assertThrows(
+    () => world.step(0.5),
+    RangeError,
+    `Integrator result for body ${secondBodyId} position must contain finite components.`,
+  );
 
-    const firstResult = world.getBodyState(firstBodyId);
-    const secondResult = world.getBodyState(secondBodyId);
+  const firstResult = world.getBodyState(firstBodyId);
+  const secondResult = world.getBodyState(secondBodyId);
 
-    assert(firstResult !== undefined);
-    assert(secondResult !== undefined);
+  assert(firstResult !== undefined);
+  assert(secondResult !== undefined);
 
-    assertVector(firstResult.position, 1, 2);
-    assertVector(firstResult.velocity, 3, 4);
+  assertVector(firstResult.position, 1, 2);
+  assertVector(firstResult.velocity, 3, 4);
 
-    assertVector(secondResult.position, 10, 20);
-    assertVector(secondResult.velocity, 30, 40);
-  },
-);
+  assertVector(secondResult.position, 10, 20);
+  assertVector(secondResult.velocity, 30, 40);
+});
 
-Deno.test("KinematicWorld rejects invalid initial acceleration", () => {
+Deno.test("World rejects invalid initial gravity", () => {
   assertThrows(
     () =>
-      new KinematicWorld(
-        new Vector2(0, Number.POSITIVE_INFINITY),
-        new StubIntegrator((state) => state),
-      ),
+      new World(new Vector2(0, Number.POSITIVE_INFINITY), new StubIntegrator((state) => state)),
     RangeError,
-    "Acceleration must contain finite components.",
+    "Gravity must contain finite components.",
   );
 });
 
-Deno.test("KinematicWorld exposes snapshots of all bodies", () => {
-  const world = new KinematicWorld(new Vector2(0, -10), new StubIntegrator((state) => state));
+Deno.test("World exposes snapshots of all bodies", () => {
+  const world = new World(new Vector2(0, -10), new StubIntegrator((state) => state));
 
   const body = new Body();
 
@@ -371,14 +356,14 @@ Deno.test("KinematicWorld exposes snapshots of all bodies", () => {
   assertVector(second.state.velocity, 30, 40);
 });
 
-Deno.test("KinematicWorld exposes an empty body snapshot collection when empty", () => {
-  const world = new KinematicWorld(new Vector2(0, -10), new StubIntegrator((state) => state));
+Deno.test("World exposes an empty body snapshot collection when empty", () => {
+  const world = new World(new Vector2(0, -10), new StubIntegrator((state) => state));
 
   assertEquals(world.getBodySnapshots(), []);
 });
 
-Deno.test("KinematicWorld body snapshots cannot mutate authoritative world state", () => {
-  const world = new KinematicWorld(new Vector2(0, -10), new StubIntegrator((state) => state));
+Deno.test("World body snapshots cannot mutate authoritative world state", () => {
+  const world = new World(new Vector2(0, -10), new StubIntegrator((state) => state));
 
   const bodyId = world.addBody(new Body(), {
     position: new Vector2(1, 2),
@@ -400,8 +385,8 @@ Deno.test("KinematicWorld body snapshots cannot mutate authoritative world state
   assertVector(authoritativeSnapshot.position, 1, 2);
 });
 
-Deno.test("KinematicWorld getBodyState returns detached state", () => {
-  const world = new KinematicWorld(new Vector2(0, -10), new StubIntegrator((state) => state));
+Deno.test("World getBodyState returns detached state", () => {
+  const world = new World(new Vector2(0, -10), new StubIntegrator((state) => state));
 
   const bodyId = world.addBody(new Body(), {
     position: new Vector2(1, 2),

@@ -10,9 +10,9 @@ Eventually, vLab2D aims to make simulations not only runnable, but **observable*
 
 ## Project status
 
-**Current checkpoint:** Phase 1 architectural refactoring is in progress. `Body` is a reusable definition; `BodyInitialConditions` establish world-specific starting values; `BodyState` is the readonly runtime-data contract owned by `KinematicWorld`; and `BodySnapshot` provides detached observations. The obsolete single-state `KinematicSimulation` has been retired. Existing Canvas/SVG behavior, viewport interaction, picking, selection, and selected-body inspection remain intact.
+**Current checkpoint:** Phase 1 architectural refactoring is in progress. `Body` is a reusable definition; `BodyInitialConditions` establish world-specific starting values; `BodyState` is the readonly runtime-data contract owned by `World`; and `BodySnapshot` provides detached observations. The obsolete single-state `KinematicSimulation` has been retired. Existing Canvas/SVG behavior, viewport interaction, picking, selection, and selected-body inspection remain intact.
 
-**Next step:** Phase 1B.2 will establish the broader World vocabulary by reviewing `KinematicWorld` → `World` and world-level `acceleration` → `gravity` without adding simulation features.
+**Next step:** Phase 1C will introduce the smallest real `Simulation` orchestration concept for coordinating one or more Worlds through deterministic `step(dt)` calls, without browser scheduling or visualization responsibilities.
 
 See the [project documentation](docs/project/README.md) for the authoritative current status, project context, decisions, workflow, and continuity information.
 

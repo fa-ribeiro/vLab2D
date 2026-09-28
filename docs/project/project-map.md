@@ -88,7 +88,7 @@ The same reusable definition may create multiple independent runtime instances.
 ```mermaid
 flowchart TD
     BODY["Body<br/>reusable definition"]
-    ADD["KinematicWorld.addBody(...)"]
+    ADD["World.addBody(...)"]
     INIT["BodyInitialConditions<br/>position / velocity"]
     ID["world-local BodyId"]
     STATE["World-owned BodyState"]

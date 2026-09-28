@@ -77,7 +77,7 @@ Each frame is rendered in this order:
 
 ```mermaid
 flowchart LR
-    W[KinematicWorld]
+    W[World]
     S[Detached snapshots]
     R[CanvasKinematicRenderer]
     C[Canvas 2D]

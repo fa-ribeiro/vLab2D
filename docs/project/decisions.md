@@ -295,7 +295,7 @@ This follows the project principle that abstractions should emerge from concrete
 
 `KinematicSimulation` originally established authoritative state ownership, validated stepping, and injected integration behavior for one state value.
 
-`KinematicWorld` later became the real multi-body state owner, preserving those invariants at world scope. Phase 1B.1 therefore retires the obsolete single-state `KinematicSimulation` rather than carrying two competing state-owning runtime concepts forward.
+`World` later became the real multi-body state owner, preserving those invariants at world scope. Phase 1B.1 therefore retires the obsolete single-state `KinematicSimulation` rather than carrying two competing state-owning runtime concepts forward.
 
 The future `Simulation` concept has a different role: orchestration of one or more Worlds rather than ownership of one body's runtime state.
 
@@ -315,7 +315,7 @@ Phase 1B.1 deliberately keeps the `KinematicIntegrator` name because its current
 
 **Status:** Accepted
 
-`KinematicWorld` owns the authoritative kinematic state associated with each body.
+`World` owns the authoritative kinematic state associated with each body.
 
 Bodies are identified externally by `BodyId` values. External consumers do not receive mutable body objects and do not access the world's internal body storage directly.
 
@@ -329,7 +329,7 @@ More specialized storage should be introduced only if a concrete requirement jus
 
 **Status:** Accepted
 
-`BodyId` identifies a body within the `KinematicWorld` that created it.
+`BodyId` identifies a body within the `World` that created it.
 
 Callers may retain and compare body identifiers, but they should not assign meaning to the underlying numeric value or depend on the world's current identifier allocation strategy.
 
@@ -337,25 +337,25 @@ Body identifiers are not required to be globally unique across different worlds.
 
 This keeps public identity independent from internal storage and leaves the engine free to change the representation or allocation strategy later if a concrete requirement demands it.
 
-## D-042 — Kinematic worlds use injected integration behavior
+## D-042 — Worlds use injected integration behavior
 
 **Status:** Accepted
 
-`KinematicWorld` depends on the narrow `KinematicIntegrator` contract rather than on a concrete numerical integration algorithm.
+`World` depends on the narrow `KinematicIntegrator` contract rather than on a concrete numerical integration algorithm.
 
 The integration strategy is supplied when the world is created and is used to advance every body in that world.
 
-This allows the same world behavior and initial conditions to be exercised with different integration algorithms, such as Explicit Euler and Semi-Implicit Euler, without changing `KinematicWorld`.
+This allows the same world behavior and initial conditions to be exercised with different integration algorithms, such as Explicit Euler and Semi-Implicit Euler, without changing `World`.
 
 The dependency is injected because integration behavior is genuinely variable and already has multiple concrete implementations. No dependency-injection framework or additional abstraction is required.
 
-All bodies in a `KinematicWorld` currently share one integrator and one world-level acceleration. Per-body integration policies or acceleration should be introduced only if a concrete requirement demonstrates their need.
+All bodies in a `World` currently share one integrator and one world-level gravity vector. Per-body integration policies or gravity should be introduced only if a concrete requirement demonstrates their need.
 
 ## D-043 — World steps are atomic
 
 **Status:** Accepted
 
-A `KinematicWorld` step is committed only when every body's candidate next state has been successfully computed and validated.
+A `World` step is committed only when every body's candidate next state has been successfully computed and validated.
 
 During a step, candidate states are kept separate from authoritative body state. The world replaces its current states only after all candidates are known to be valid.
 
@@ -371,7 +371,7 @@ The invariant is:
 
 **Status:** Accepted
 
-`KinematicWorld` does not expose references to its authoritative body state through its public observation API.
+`World` does not expose references to its authoritative body state through its public observation API.
 
 `getBodyState(...)` returns a detached `BodyState`, including detached position and velocity values.
 
@@ -385,7 +385,7 @@ An external consumer may therefore inspect or even improperly mutate its returne
 
 **Status:** Accepted
 
-`KinematicWorld` exposes bodies for observation through `BodySnapshot` values rather than exposing its private body-state storage.
+`World` exposes bodies for observation through `BodySnapshot` values rather than exposing its private body-state storage.
 
 A body snapshot combines the body's world-local identity with its detached `BodyState` observation and represents data rather than engine behavior.
 
@@ -444,7 +444,7 @@ As the architecture grows, `docs/architecture/README.md` remains the section ent
 
 The browser host advances simulation time using a fixed timestep rather than using the variable time between rendered frames directly as the physics timestep.
 
-`requestAnimationFrame` timestamps measure elapsed real time. The host accumulates that elapsed time and performs zero or more fixed-size `KinematicWorld.step(...)` calls before rendering the latest committed world state.
+`requestAnimationFrame` timestamps measure elapsed real time. The host accumulates that elapsed time and performs zero or more fixed-size `World.step(...)` calls before rendering the latest committed world state.
 
 This keeps:
 
@@ -595,13 +595,13 @@ The transform therefore owns zoom geometry and viewport invariants, while the ho
 
 The first body-picking capability is a Canvas visualization query rather than an engine/world spatial query.
 
-`KinematicWorld` currently owns only kinematic body state: identity, position, and velocity. It has no physical body shape or radius. The visible body radius is owned by `CanvasKinematicRenderer` and is expressed in Canvas display units. Moving hit testing into `KinematicWorld` would therefore make presentation geometry masquerade as simulation geometry.
+`World` currently owns only kinematic body state: identity, position, and velocity. It has no physical body shape or radius. The visible body radius is owned by `CanvasKinematicRenderer` and is expressed in Canvas display units. Moving hit testing into `World` would therefore make presentation geometry masquerade as simulation geometry.
 
 `CanvasKinematicRenderer.findBodyAtDisplayPoint(...)` receives detached `BodySnapshot` observations plus a Canvas drawing-buffer coordinate. It maps each observed body position through the renderer's current `ViewportTransform` and tests the point against the same circular marker radius used for rendering.
 
-If more than one marker contains the point, the nearest rendered center is chosen. Picking therefore does not depend on snapshot array order, which is intentionally not part of `KinematicWorld`'s public observation contract.
+If more than one marker contains the point, the nearest rendered center is chosen. Picking therefore does not depend on snapshot array order, which is intentionally not part of `World`'s public observation contract.
 
-The browser host retains the latest detached snapshots used to render the visible frame and reuses those snapshots for pointer hit testing. This keeps visual inspection aligned with what the user can actually see while leaving authoritative simulation state inside `KinematicWorld`.
+The browser host retains the latest detached snapshots used to render the visible frame and reuses those snapshots for pointer hit testing. This keeps visual inspection aligned with what the user can actually see while leaving authoritative simulation state inside `World`.
 
 The host owns presentation of the picked result, such as the current `BodyId` readout. No persistent selection state, body highlighting, drag manipulation, physical engine shape, or generic picking framework is introduced by this decision.
 
@@ -643,7 +643,7 @@ The first selected-body inspector is read-only browser-host presentation. It doe
 
 Persistent selection continues to store only an optional `BodyId`. Whenever current inspection values are needed, the host resolves that identity against the latest detached `BodySnapshot` observations already obtained for the current rendered frame.
 
-The inspector currently presents the selected body's position and velocity. Because the matching snapshot is resolved again after each new world observation, those values follow the selected body's changing state over time while `KinematicWorld` remains the sole owner of authoritative mutable body state.
+The inspector currently presents the selected body's position and velocity. Because the matching snapshot is resolved again after each new world observation, those values follow the selected body's changing state over time while `World` remains the sole owner of authoritative mutable body state.
 
 A detached snapshot is an observation, not persistent selection state. The host therefore must not retain a selected snapshot as the source of truth across frames.
 
@@ -713,13 +713,13 @@ Examples:
 
 This rule does not imply that every real-world characteristic belongs in the engine model. An engine abstraction intentionally models only the concepts relevant to its domain responsibility.
 
-## D-063 — `Body` is a reusable definition; `KinematicWorld.addBody(...)` establishes independent runtime state
+## D-063 — `Body` is a reusable definition; `World.addBody(...)` establishes independent runtime state
 
 **Status:** Accepted and implemented
 
 `Body` is the first explicit reusable physical definition in the engine. It currently has no intrinsic properties, which is intentional: Phase 1 does not introduce mass, shape, material, or other unproven concepts.
 
-A body definition enters a world through `KinematicWorld.addBody(body, initialConditions)`.
+A body definition enters a world through `World.addBody(body, initialConditions)`.
 
 The current initial conditions are:
 
@@ -770,9 +770,9 @@ The engine coordinate convention uses positive Y upward. Therefore a natural Ear
 
 world units per second squared.
 
-The future general `World` API should use this as its default gravity unless later evidence establishes a better default for the laboratory.
+The `World` API should eventually use this as its default gravity unless later evidence establishes a better default for the laboratory.
 
-This decision does not retroactively change every existing example. During Phase 1 refactoring, examples may continue to pass explicit acceleration/gravity values where doing so preserves their existing demonstrated behavior.
+This decision does not retroactively add constructor defaults. During Phase 1 refactoring, examples continue to pass explicit gravity values so behavior remains intentional and unchanged.
 
 ## D-066 — Body runtime state is structural data and the obsolete single-state simulation is retired
 
@@ -795,6 +795,39 @@ The World creates authoritative `BodyState` values from `BodyInitialConditions`,
 
 `KinematicIntegrator` remains deliberately narrow. Its `integrate(...)` operation consumes a `BodyState`, acceleration, and timestep and returns a candidate `BodyState`. The kinematic qualifier therefore still communicates a real contract rather than historical naming.
 
-The earlier `KinematicSimulation` is removed. Its useful lessons—authoritative state ownership, validated candidate-before-commit updates, and injected integration behavior—are already represented by `KinematicWorld`. Keeping the old class would create a competing meaning for the future `Simulation` layer, which is reserved for orchestration of one or more Worlds.
+The earlier `KinematicSimulation` is removed. Its useful lessons—authoritative state ownership, validated candidate-before-commit updates, and injected integration behavior—are already represented by `World`. Keeping the old class would create a competing meaning for the future `Simulation` layer, which is reserved for orchestration of one or more Worlds.
 
 No new physics or simulation behavior is introduced by this decision.
+
+## D-067 — `World` is the general domain container and owns environmental gravity
+
+**Status:** Accepted and implemented
+
+Phase 1B.2 removes the historical `KinematicWorld` name because the state-owning domain container is intended to grow beyond its current kinematic capabilities without becoming a different kind of World for each future feature.
+
+The public class and source files are therefore named:
+
+```text
+World
+world.ts
+world.test.ts
+```
+
+The environment value previously exposed as world-level `acceleration` is named `gravity`.
+
+The public vocabulary is:
+
+```text
+world.gravity
+world.setGravity(...)
+```
+
+Gravity is a World/environment property. It currently provides the acceleration applied uniformly to every body during stepping.
+
+The numerical integration boundary deliberately keeps the term `acceleration`: `KinematicIntegrator.integrate(state, acceleration, dt)` describes the mathematical quantity consumed by the integration algorithm. At the current stage, the acceleration supplied by `World.step(...)` is exactly the World's gravity vector. Future forces or other effects may later contribute to a body's net acceleration without changing the meaning of gravity itself.
+
+This refactor does not introduce constructor defaults. `World` still requires explicit gravity and an explicit `KinematicIntegrator`. The accepted future Earth-like default `(0, -9.81)` remains a separate API-default decision.
+
+Example filenames and renderer names retain their current `kinematic` qualifier because those names still describe the examples' and renderers' present scope. They should broaden only when concrete capabilities justify it.
+
+No equations, timestep behavior, state ownership, observation semantics, or visualization behavior change as part of this decision.

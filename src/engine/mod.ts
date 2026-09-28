@@ -21,4 +21,4 @@ export type { BodyInitialConditions } from "./world/body-initial-conditions.ts";
 export type { BodySnapshot } from "./world/body-snapshot.ts";
 export type { BodyState } from "./world/body-state.ts";
 
-export { KinematicWorld } from "./world/kinematic-world.ts";
+export { World } from "./world/world.ts";

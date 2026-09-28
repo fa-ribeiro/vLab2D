@@ -87,7 +87,7 @@ Current result:
 
 - `Body` is an immutable reusable definition with no intrinsic properties yet;
 - `BodyInitialConditions` carries world-specific position and velocity;
-- `KinematicWorld.addBody(...)` creates independent world-local runtime instances;
+- `World.addBody(...)` creates independent world-local runtime instances;
 - position and velocity default to zero;
 - World copies initial conditions into authoritative runtime state;
 - the same Body definition can be reused;
@@ -117,16 +117,19 @@ This checkpoint clarifies that runtime state is data owned by the World, not a c
 
 #### 1B.2 — Establish the domain World
 
-**Status:** next.
+**Status:** implemented.
 
-Review the remaining world terminology against its broader responsibility:
+Current result:
 
-- `KinematicWorld` → `World`;
-- world-level `acceleration` → `gravity`.
+- `KinematicWorld` is renamed to `World`;
+- the source/test files become `world.ts` and `world.test.ts`;
+- world-level `acceleration` is renamed to `gravity`;
+- `setAcceleration(...)` becomes `setGravity(...)`;
+- constructor arguments remain explicit, so this slice does not introduce default gravity or a default integrator;
+- `KinematicIntegrator` remains deliberately narrow and continues receiving acceleration as its mathematical input;
+- example filenames and renderer names retain their current kinematic qualifiers until later concrete requirements justify broader names.
 
-Keep the refactor semantic rather than mechanical. Do not rename `KinematicIntegrator` merely for symmetry: its current contract remains specifically kinematic.
-
-Default-constructor policy should be handled deliberately. The accepted future Earth-like gravity default remains `(0, -9.81)`, but introducing defaults should not be mixed into a rename unless the API change is explicitly scoped and reviewed.
+This checkpoint makes the domain boundary explicit without changing equations, numerical integration behavior, timestep behavior, or visualization behavior.
 
 ### 1C — Simulation / orchestration
 

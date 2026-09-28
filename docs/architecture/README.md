@@ -26,7 +26,7 @@ At the current checkpoint, vLab2D has three important runtime areas:
 flowchart LR
     HOST["Host / Example"]
 
-    WORLD["KinematicWorld"]
+    WORLD["World"]
     SNAP["Detached snapshots"]
 
     TRANSFORM["ViewportTransform"]
@@ -153,7 +153,7 @@ flowchart LR
 
     subgraph INTERNAL["Engine implementation"]
         BODY["Body"]
-        WORLD["KinematicWorld"]
+        WORLD["World"]
         INT["Kinematic integrators"]
         STATE["BodyState / BodySnapshot"]
         VEC["Vector2"]
@@ -187,17 +187,17 @@ One of the strongest current architectural rules is:
 
 > The simulation engine owns authoritative mutable simulation state.
 
-For the multi-body runtime, that authority belongs to `KinematicWorld`.
+For the multi-body runtime, that authority belongs to `World`.
 
 ```mermaid
 flowchart TD
     BODY["Reusable Body definition"]
     INIT["BodyInitialConditions"]
-    WORLD["KinematicWorld"]
+    WORLD["World"]
     STORE[("private BodyId → WorldBody storage")]
     STATE["World-owned BodyState"]
 
-    COMMANDS["Validated commands<br/>addBody<br/>setAcceleration<br/>step"]
+    COMMANDS["Validated commands<br/>addBody<br/>setGravity<br/>step"]
     QUERIES["Observation<br/>getBodyState<br/>getBodySnapshots"]
     SNAPSHOTS["Detached BodyState / BodySnapshot"]
 
@@ -231,7 +231,7 @@ Observation asks:
 Examples:
 
 ```text
-world.acceleration
+world.gravity
 world.getBodyState(...)
 world.getBodySnapshots()
 ```
@@ -246,7 +246,7 @@ Examples:
 
 ```text
 world.addBody(...)
-world.setAcceleration(...)
+world.setGravity(...)
 world.step(...)
 ```
 
@@ -265,7 +265,7 @@ Body definition
     +
 BodyInitialConditions
     ↓
-KinematicWorld.addBody(...)
+World.addBody(...)
     ↓
 BodyId → BodyState
 ```
@@ -287,19 +287,19 @@ BodySnapshot           detached observation
 
 ## 8. State and integration behavior are separate
 
-`KinematicWorld` owns state, but it does not contain a hard-coded numerical integration algorithm.
+`World` owns body runtime state and environmental gravity, but it does not contain a hard-coded numerical integration algorithm.
 
 Instead it receives a `KinematicIntegrator`.
 
 ```mermaid
 classDiagram
-    class KinematicWorld {
+    class World {
         -Map bodies
-        -Vector2 acceleration
+        -Vector2 gravity
         -KinematicIntegrator integrator
         +addBody()
         +getBodySnapshots()
-        +setAcceleration()
+        +setGravity()
         +step(dt)
     }
 
@@ -316,17 +316,29 @@ classDiagram
         +integrate(state, acceleration, dt)
     }
 
-    KinematicWorld --> KinematicIntegrator : delegates stepping
+    World --> KinematicIntegrator : delegates stepping
     ExplicitEulerIntegrator ..|> KinematicIntegrator
     SemiImplicitEulerIntegrator ..|> KinematicIntegrator
 ```
 
 This is a small application of the Strategy pattern:
 
-- `KinematicWorld` decides **when** bodies are advanced;
+- `World` decides **when** bodies are advanced and supplies its current gravity as the acceleration input;
 - an integrator decides **how** one kinematic state is numerically advanced.
 
 The interface remains deliberately specific to kinematics rather than becoming a generalized numerical-integration framework.
+
+The names are intentionally different at the World and integrator boundaries:
+
+```text
+World.gravity
+    environment property
+
+KinematicIntegrator.integrate(..., acceleration, ...)
+    mathematical quantity consumed by the integration algorithm
+```
+
+At the current stage, the acceleration supplied during stepping is exactly the World's gravity vector.
 
 ---
 
@@ -339,7 +351,7 @@ The world first calculates and validates every candidate state before committing
 ```mermaid
 sequenceDiagram
     participant Host
-    participant World as KinematicWorld
+    participant World as World
     participant Integrator as KinematicIntegrator
     participant Candidates as Candidate states
     participant State as Authoritative state
@@ -348,7 +360,7 @@ sequenceDiagram
     World->>World: validate dt
 
     loop every body
-        World->>Integrator: integrate(state, acceleration, dt)
+        World->>Integrator: integrate(state, gravity, dt)
         Integrator-->>World: candidate state
         World->>World: validate candidate
         World->>Candidates: store candidate
@@ -412,7 +424,7 @@ It originally established several useful invariants:
 - injected integration behavior;
 - candidate-before-commit stepping.
 
-`KinematicWorld` now provides those responsibilities for actual body instances, so retaining a second single-state runtime would duplicate ownership concepts and conflict with the future meaning of `Simulation`.
+`World` now provides those responsibilities for actual body instances, so retaining a second single-state runtime would duplicate ownership concepts and conflict with the future meaning of `Simulation`.
 
 The future `Simulation` layer is reserved for orchestration of one or more Worlds rather than ownership of one body's position and velocity.
 
@@ -437,7 +449,7 @@ Both consume detached engine observations, but their output mechanisms differ.
 
 ```mermaid
 flowchart LR
-    WORLD["KinematicWorld"]
+    WORLD["World"]
     SNAP["readonly BodySnapshot[]"]
 
     SVG["SvgKinematicRenderer"]
@@ -538,7 +550,7 @@ minWorldY
 maxWorldY
 ```
 
-It deliberately does not know about integer-grid selection, SVG, Canvas, `KinematicWorld`, snapshots, `Vector2`, or rendering primitives.
+It deliberately does not know about integer-grid selection, SVG, Canvas, `World`, snapshots, `Vector2`, or rendering primitives.
 
 Both renderers construct and retain their transform internally. Renderer methods expose semantic viewport operations without leaking the transform object itself.
 
@@ -553,7 +565,7 @@ Example code currently acts as the composition root.
 The host decides:
 
 - which integrator to use;
-- which acceleration the world has;
+- which gravity the world has;
 - which bodies to create;
 - when the world advances;
 - which renderer to create;
@@ -571,7 +583,7 @@ The Canvas example separates simulation cadence from rendering cadence.
 sequenceDiagram
     participant Browser
     participant Host
-    participant World as KinematicWorld
+    participant World as World
     participant Renderer as CanvasKinematicRenderer
 
     Browser->>Host: requestAnimationFrame(timestamp)
@@ -633,7 +645,7 @@ The engine contains no rendering dependency.
 
 ### State ownership is explicit
 
-`KinematicWorld` owns authoritative body state.
+`World` owns authoritative body state.
 
 ### Observation does not expose world storage
 
@@ -693,7 +705,7 @@ It is useful to keep these categories separate.
 ✓ mathematical Vector2 values
 ✓ readonly BodyState runtime-data contract
 ✓ replaceable kinematic integrators
-✓ reusable Body definitions + multi-body KinematicWorld
+✓ reusable Body definitions + multi-body World
 ✓ world-local BodyId
 ✓ world-owned authoritative body state
 ✓ detached BodyState / BodySnapshot observations
@@ -893,7 +905,7 @@ The browser host owns wheel/trackpad interpretation: browser-coordinate conversi
 
 The first body-picking capability is intentionally tied to Canvas presentation geometry.
 
-`KinematicWorld` exposes detached body identity and kinematic state but does not currently define body shape or physical radius. `CanvasKinematicRenderer`, however, already owns the circular display marker used to draw each body. The renderer therefore has the information required to answer whether a Canvas drawing-buffer point lies inside a rendered marker without inventing engine geometry.
+`World` exposes detached body identity and kinematic state but does not currently define body shape or physical radius. `CanvasKinematicRenderer`, however, already owns the circular display marker used to draw each body. The renderer therefore has the information required to answer whether a Canvas drawing-buffer point lies inside a rendered marker without inventing engine geometry.
 
 `findBodyAtDisplayPoint(...)` accepts detached snapshots and a display-space point. For each snapshot it maps the body's world position through the current viewport transform, compares squared display-space distance against the squared marker radius, and returns the nearest hit `BodyId`.
 
@@ -1001,7 +1013,7 @@ The selected snapshot itself is not retained across frames. This preserves the d
 ```text
 persistent: selected BodyId
 ephemeral:  snapshot resolved for the current frame
-authority:  KinematicWorld
+authority:  World
 ```
 
 If the selected identity cannot be resolved in the current observation set, the inspector shows unavailable values without silently changing selection. Body-removal behavior can therefore be decided separately if removal becomes a real capability.
