@@ -101,6 +101,8 @@ The renderer can also receive optional hovered and selected `BodyId` values duri
 
 This is intentionally visualization geometry. The engine does not yet model physical body shape or radius, so body picking is not an engine/world query. The browser host reuses detached observations for hit testing and drawing, owns the transient hovered `BodyId` and persistent selected `BodyId`, recomputes hover as bodies move, and changes selection only through click semantics.
 
+The selected-body inspector is also host-owned and read-only. It resolves the persistent selected identity against the latest detached snapshots each frame and displays the matching body's current position and velocity. No selected snapshot is retained as persistent state.
+
 Clearing the previous frame remains deliberate. Trails should become an explicit visualization capability rather than appearing accidentally because old frames were left on the canvas.
 
 The browser host controls repeated execution. The renderer itself has no knowledge of `requestAnimationFrame`.
@@ -213,8 +215,8 @@ The two concrete implementations should continue to teach us which concepts are 
 
 ## Direction
 
-Programmatic viewport centering and scale changes are supported by both concrete renderers. The Canvas browser example adds pointer-drag panning, live world-coordinate inspection, bounded pointer-anchored wheel/trackpad zoom, display-space body picking, live hover highlighting, and persistent click selection.
+Programmatic viewport centering and scale changes are supported by both concrete renderers. The Canvas browser example adds pointer-drag panning, live world-coordinate inspection, bounded pointer-anchored wheel/trackpad zoom, display-space body picking, live hover highlighting, persistent click selection, and read-only live selected-body inspection.
 
-Anchor-preserving zoom is geometry owned by `ViewportTransform`; wheel interpretation, scale limits, sensitivity, browser event cancellation, CSS-to-Canvas coordinate conversion, inspection UI, transient hover identity, persistent selection identity, and click-versus-drag tolerance remain host policy. Body hit testing stays in Canvas visualization because the current pick radius is the renderer's display-space marker radius rather than engine-owned physical geometry. The renderer accepts per-frame hover and selection identities but owns neither state.
+Anchor-preserving zoom is geometry owned by `ViewportTransform`; wheel interpretation, scale limits, sensitivity, browser event cancellation, CSS-to-Canvas coordinate conversion, inspection UI, transient hover identity, persistent selection identity, click-versus-drag tolerance, and inspector formatting remain host policy. Body hit testing stays in Canvas visualization because the current pick radius is the renderer's display-space marker radius rather than engine-owned physical geometry. The renderer accepts per-frame hover and selection identities but owns neither state.
 
-The next likely inspection step is a small read-only selected-body inspector based on the latest detached snapshot for the selected `BodyId`. Editable state, drag manipulation, physical engine shapes, cameras, renderer interfaces, generalized inspector systems, richer diagnostics, and generalized rendering abstractions remain deferred until concrete requirements establish their shape.
+The inspector resolves the selected `BodyId` against fresh detached snapshots and never treats a retained snapshot as authoritative state. The next likely visual step is a selected-body velocity-vector diagnostic. Editable state, drag manipulation, physical engine shapes, cameras, renderer interfaces, generalized inspector systems, diagnostic-overlay frameworks, and generalized rendering abstractions remain deferred until concrete requirements establish their shape.

@@ -582,6 +582,8 @@ sequenceDiagram
     Host->>World: getBodySnapshots()
     World-->>Host: detached snapshots
     Host->>Host: recompute hovered BodyId from snapshots + pointer
+    Host->>Host: resolve selected BodyId against snapshots
+    Host->>Host: update selected-body position / velocity outputs
     Host->>Renderer: render(snapshots, hovered BodyId, selected BodyId)
     Host->>Browser: request next frame
 ```
@@ -599,6 +601,8 @@ For picking, hover, and selection, the host owns interaction state while the eng
 Hover is recomputed during the animation loop because simulation bodies move independently of pointer events. A stationary pointer can therefore gain or lose a hovered body as the rendered snapshots change.
 
 Selection changes only when a primary-pointer interaction completes without exceeding the host-defined movement tolerance. Once movement exceeds that tolerance, the interaction is treated as viewport dragging and does not alter selection. Clicking a body selects its `BodyId`; clicking empty Canvas clears selection. The renderer remains independent from DOM pointer/wheel-event APIs and persists neither hover nor selection identity.
+
+The selected-body inspector uses the same latest detached observation set. The host resolves `selectedBodyId` against those snapshots on each frame and formats the matching body's position and velocity into DOM outputs. It stores identity persistently, not the matching snapshot.
 
 ```mermaid
 flowchart LR
@@ -712,6 +716,8 @@ It is useful to keep these categories separate.
 ✓ persistent host-owned selected-body identity
 ✓ click-versus-drag interaction distinction
 ✓ per-frame Canvas selection highlighting
+✓ read-only selected-body position / velocity inspection
+✓ selected identity resolved against fresh detached observations
 ✓ equivalent SVG and Canvas spatial references
 ✓ Canvas integer grid
 ✓ Canvas world axes
@@ -740,7 +746,7 @@ Possible future capabilities include:
 
 ```text
 ? pinch zoom
-? selected-body inspector
+? selected-body velocity-vector diagnostic
 ? editable body controls
 ? experiment orchestration
 ? synchronized multiple worlds
@@ -965,7 +971,41 @@ Selection stores identity rather than a snapshot. Each new frame can therefore r
 
 `CanvasKinematicRenderer` receives both hovered and selected identifiers as per-frame presentation input and draws distinct rings for each. A body can be both hovered and selected, while the renderer itself owns neither state.
 
-No editable body state, drag-to-move behavior, style/theme abstraction, `WorldBounds` value type, renderer hierarchy, camera model, transformation matrix framework, point abstraction, generic inspector framework, or gesture framework has been introduced.
+### Read-only selected-body inspection
+
+Persistent identity now drives a live read-only inspector without changing the engine boundary.
+
+The browser host stores only `selectedBodyId`. After obtaining each frame's detached snapshots, it searches those observations for the matching identity and formats the matching snapshot's current position and velocity into ordinary DOM outputs.
+
+```mermaid
+flowchart LR
+    ID["selected BodyId"]
+    SNAP["Latest detached snapshots"]
+    HOST["Browser host"]
+    MATCH["Matching snapshot"]
+    POS["Position output"]
+    VEL["Velocity output"]
+
+    ID --> HOST
+    SNAP --> HOST
+    HOST --> MATCH
+    MATCH --> POS
+    MATCH --> VEL
+```
+
+The selected snapshot itself is not retained across frames. This preserves the distinction between persistent application identity and ephemeral engine observation:
+
+```text
+persistent: selected BodyId
+ephemeral:  snapshot resolved for the current frame
+authority:  KinematicWorld
+```
+
+If the selected identity cannot be resolved in the current observation set, the inspector shows unavailable values without silently changing selection. Body-removal behavior can therefore be decided separately if removal becomes a real capability.
+
+Formatting precision and DOM structure remain host presentation concerns. No engine API, renderer inspector state, writable control, or generic inspector abstraction is required for this first inspector.
+
+No editable body state, drag-to-move behavior, style/theme abstraction, `WorldBounds` value type, renderer hierarchy, camera model, transformation matrix framework, point abstraction, generic inspector framework, diagnostic-overlay framework, or gesture framework has been introduced.
 
 ---
 

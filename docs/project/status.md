@@ -6,7 +6,7 @@ vLab2D now has a small multi-body simulation engine, reproducible SVG visualizat
 
 Canvas is the primary visualization target. SVG remains a useful secondary renderer for static snapshots, debugging captures, exports, and documentation where maintaining it remains reasonable.
 
-Both renderers share `ViewportTransform` for viewport geometry, bidirectional world/display coordinate conversion, mutable world-space centering, and mutable display scale. The Canvas path additionally supports anchored interactive zoom, display-space picking of rendered body markers, live hover highlighting, and persistent click selection.
+Both renderers share `ViewportTransform` for viewport geometry, bidirectional world/display coordinate conversion, mutable world-space centering, and mutable display scale. The Canvas path additionally supports anchored interactive zoom, display-space picking of rendered body markers, live hover highlighting, persistent click selection, and live read-only selected-body inspection.
 
 ### Simulation engine
 
@@ -127,6 +127,10 @@ The pointer position is retained by the host and hover is recalculated every ani
 
 Selection changes only after a primary-pointer interaction completes without moving beyond the host-defined click tolerance. Movement beyond that tolerance is treated as drag navigation: the viewport pans, but selection remains unchanged. Clicking a rendered body stores that body's `BodyId`; clicking empty Canvas clears selection. Pointer leave clears hover inspection but does not clear persistent selection.
 
+The selected-body inspector stores no snapshot of its own. On each frame, the host resolves `selectedBodyId` against the latest `renderedSnapshots` and presents the matching snapshot's current position and velocity. This keeps the inspector synchronized with the observation set used for rendering while preserving `KinematicWorld` as the authoritative owner of mutable body state.
+
+If no body is selected, or if a selected identity cannot be resolved in the current observation set, the inspector displays unavailable values rather than implicitly changing selection. Body-removal semantics therefore remain a separate future decision.
+
 ```mermaid
 flowchart LR
     INPUT["Pointer / wheel input"]
@@ -142,7 +146,7 @@ flowchart LR
 
 The anchor-aware transform preserves the world coordinate underneath the pointer while the scale changes. The host currently prevents page scrolling during Canvas wheel zoom and owns scale limits and sensitivity; those are interaction policy rather than transform invariants.
 
-The coordinate, hovered-body, and selected-body readouts remain ordinary DOM presentation owned by the host. The transient hovered `BodyId` and persistent selected `BodyId` are both host-owned interaction/presentation state. Formatting such as decimal precision does not enter `ViewportTransform` or the renderer.
+The coordinate, hovered-body, selected-body, position, and velocity readouts remain ordinary DOM presentation owned by the host. The transient hovered `BodyId` and persistent selected `BodyId` are both host-owned interaction/presentation state. The inspector derives current values from detached observations rather than retaining a selected snapshot. Formatting such as decimal precision does not enter `ViewportTransform`, the renderer, or the engine.
 
 Body picking is deliberately a visualization query rather than an engine query. `KinematicWorld` currently stores kinematic position and velocity but no physical shape or radius. The hit radius comes from the Canvas renderer's display-space body marker, so placing the query in `KinematicWorld` would incorrectly turn presentation geometry into simulation geometry.
 
@@ -195,21 +199,21 @@ Interpolation between fixed simulation states remains deliberately deferred.
 
 ## Next step
 
-Use the completed persistent selection as the basis for the smallest useful selected-body inspector.
+Use the completed selected-body observation path for the first useful visual diagnostic overlay.
 
-The leading candidate is a read-only position/velocity view:
+The leading candidate is a velocity vector for the selected body:
 
-- resolve the selected `BodyId` against the latest detached snapshots;
-- display current position and velocity without introducing writable UI controls;
-- keep selection identity host-owned and keep authoritative body state inside `KinematicWorld`;
-- allow the inspector to follow the selected body's changing snapshots over time;
-- keep body mutation and drag manipulation separate until their ownership and validation requirements are concrete.
+- derive the vector from the selected body's latest detached snapshot;
+- render it as optional Canvas diagnostic presentation rather than simulation state;
+- keep its display scaling/presentation policy explicit and local until a second vector diagnostic creates pressure for abstraction;
+- preserve selection identity and engine authority exactly as they are;
+- keep editable controls and drag manipulation separate.
 
 Do not yet introduce:
 
 - editable body state;
 - drag-to-move bodies;
-- engine-owned physical shape solely to support interaction;
+- a generic diagnostic-overlay framework;
 - a general inspector framework;
 - a general styling/theme system;
 - a camera class;

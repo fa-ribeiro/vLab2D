@@ -47,6 +47,22 @@ if (selectedBodyOutputElement === null) {
 }
 const selectedBodyOutput: HTMLOutputElement = selectedBodyOutputElement;
 
+const selectedBodyPositionOutputElement = document.querySelector<HTMLOutputElement>(
+  "#selected-body-position",
+);
+if (selectedBodyPositionOutputElement === null) {
+  throw new Error("Selected body position output was not found.");
+}
+const selectedBodyPositionOutput: HTMLOutputElement = selectedBodyPositionOutputElement;
+
+const selectedBodyVelocityOutputElement = document.querySelector<HTMLOutputElement>(
+  "#selected-body-velocity",
+);
+if (selectedBodyVelocityOutputElement === null) {
+  throw new Error("Selected body velocity output was not found.");
+}
+const selectedBodyVelocityOutput: HTMLOutputElement = selectedBodyVelocityOutputElement;
+
 const world = new KinematicWorld(new Vector2(0, -1), new SemiImplicitEulerIntegrator());
 
 world.createBody(new KinematicState(new Vector2(-4, 3), new Vector2(1, 2)));
@@ -97,6 +113,8 @@ function setSelectedBody(bodyId: BodyId | undefined): void {
   selectedBodyId = bodyId;
 
   selectedBodyOutput.value = bodyId === undefined ? "Selected: —" : `Selected: ${bodyId}`;
+
+  refreshSelectedBodyInspection();
 }
 
 function endPointerDrag(pointerId: number): void {
@@ -184,6 +202,40 @@ function clearPointerInspection(): void {
   bodyOutput.value = "Body: —";
 }
 
+function refreshSelectedBodyInspection(): void {
+  if (selectedBodyId === undefined) {
+    selectedBodyPositionOutput.value = "Position: —";
+
+    selectedBodyVelocityOutput.value = "Velocity: —";
+
+    return;
+  }
+
+  const snapshot = renderedSnapshots.find(({ id }) => id === selectedBodyId);
+
+  if (snapshot === undefined) {
+    selectedBodyPositionOutput.value = "Position: —";
+
+    selectedBodyVelocityOutput.value = "Velocity: —";
+
+    return;
+  }
+
+  const { position, velocity } = snapshot.state;
+
+  selectedBodyPositionOutput.value = `Position: (${position.x.toFixed(2)}, ${
+    position.y.toFixed(
+      2,
+    )
+  })`;
+
+  selectedBodyVelocityOutput.value = `Velocity: (${velocity.x.toFixed(2)}, ${
+    velocity.y.toFixed(
+      2,
+    )
+  })`;
+}
+
 canvas.addEventListener("pointermove", (event) => {
   if (event.pointerId === activePointerId) {
     const deltaClientX = event.clientX - previousPointerX;
@@ -266,6 +318,7 @@ function frame(timestamp: number): void {
   renderedSnapshots = world.getBodySnapshots();
 
   refreshPointerInspection();
+  refreshSelectedBodyInspection();
 
   renderer.render(renderedSnapshots, hoveredBodyId, selectedBodyId);
   requestAnimationFrame(frame);

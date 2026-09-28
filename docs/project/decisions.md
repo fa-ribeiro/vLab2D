@@ -636,3 +636,19 @@ Selection stores identity rather than a `KinematicBodySnapshot`. The selected bo
 `CanvasKinematicRenderer` remains stateless about interaction identity. Its `render(...)` operation receives the current hovered and selected body identifiers as per-frame presentation input and draws distinct display-space markers for those states. A body may be both hovered and selected at the same time.
 
 Click-versus-drag tolerance and gesture interpretation are browser-host policy. This decision does not establish editable body properties, selected-body inspector structure, drag-to-move behavior, engine-owned selection state, a generic interaction framework, or a general styling system.
+
+## D-059 — Selected-body inspection resolves fresh detached observations by identity
+
+**Status:** Accepted
+
+The first selected-body inspector is read-only browser-host presentation. It does not add an engine query, renderer-owned inspector state, or a persistent selected snapshot.
+
+Persistent selection continues to store only an optional `BodyId`. Whenever current inspection values are needed, the host resolves that identity against the latest detached `KinematicBodySnapshot` observations already obtained for the current rendered frame.
+
+The inspector currently presents the selected body's position and velocity. Because the matching snapshot is resolved again after each new world observation, those values follow the selected body's changing state over time while `KinematicWorld` remains the sole owner of authoritative mutable body state.
+
+A detached snapshot is an observation, not persistent selection state. The host therefore must not retain a selected snapshot as the source of truth across frames.
+
+If a selected identity cannot be found in the current observation set, the inspector presents unavailable values without implicitly clearing or replacing selection. Future body-removal semantics should be decided explicitly if body removal is introduced.
+
+Formatting and DOM presentation remain host concerns. This decision does not introduce editable body controls, a general inspector framework, body mutation through the UI, or drag-to-move behavior.
