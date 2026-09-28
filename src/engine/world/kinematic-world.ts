@@ -1,3 +1,4 @@
+import type { Body } from "../body/body.ts";
 import type { KinematicIntegrator } from "../kinematics/kinematic-integrator.ts";
 import { KinematicState } from "../kinematics/kinematic-state.ts";
 import {
@@ -7,29 +8,30 @@ import {
 } from "../kinematics/validation.ts";
 import { Vector2 } from "../math/vector2.ts";
 import type { BodyId } from "./body-id.ts";
+import type { BodyInitialConditions } from "./body-initial-conditions.ts";
 import type { KinematicBodySnapshot } from "./kinematic-body-snapshot.ts";
 
-function copyState(state: KinematicState): KinematicState {
-  return new KinematicState(
-    new Vector2(state.position.x, state.position.y),
-    new Vector2(state.velocity.x, state.velocity.y),
-  );
+interface WorldBody {
+  readonly definition: Body;
+  state: KinematicState;
 }
 
 /**
- * Owns and advances the kinematic state of a collection of identified bodies.
+ * Owns and advances the kinematic runtime state of a collection of identified
+ * body instances.
  *
- * Bodies are represented externally by {@link BodyId} values. Their
- * authoritative state remains private to the world and may be observed through
- * detached snapshots exposed by the world's public API.
+ * Reusable {@link Body} definitions enter the world through `addBody(...)`.
+ * Initial position and velocity are supplied separately as world-specific
+ * initial conditions. The world copies those values into authoritative runtime
+ * state that remains private and may be observed through detached snapshots.
  *
- * All bodies currently share the same world acceleration and numerical
+ * All body instances currently share the same world acceleration and numerical
  * integration strategy.
  */
 export class KinematicWorld {
   #nextBodyId: BodyId = 1;
 
-  readonly #bodies = new Map<BodyId, KinematicState>();
+  readonly #bodies = new Map<BodyId, WorldBody>();
   readonly #integrator: KinematicIntegrator;
 
   #acceleration: Vector2;
@@ -72,21 +74,40 @@ export class KinematicWorld {
   }
 
   /**
-   * Creates a body with the supplied initial kinematic state.
+   * Adds a reusable body definition to the world as an independent runtime
+   * instance.
    *
-   * The world validates the state before accepting it. A failed creation does
-   * not add a body to the world.
+   * Position and velocity are world-specific initial conditions rather than
+   * intrinsic body properties. Omitted values default to zero. The supplied
+   * vectors are copied before becoming authoritative runtime state.
    *
-   * @param initialState The body's initial position and velocity.
-   * @returns The identifier assigned to the newly created body.
-   * @throws {RangeError} If the initial state contains a non-finite component.
+   * The same body definition may be added more than once, including to
+   * different worlds. Each addition receives its own world-local identifier
+   * and independent runtime state.
+   *
+   * @param body The reusable body definition to instantiate in this world.
+   * @param initialConditions Optional initial position and velocity.
+   * @returns The world-local identifier assigned to the new body instance.
+   * @throws {RangeError} If an initial condition contains a non-finite
+   * component.
    */
-  public createBody(initialState: KinematicState): BodyId {
+  public addBody(body: Body, initialConditions: BodyInitialConditions = {}): BodyId {
+    const position = initialConditions.position ?? new Vector2(0, 0);
+    const velocity = initialConditions.velocity ?? new Vector2(0, 0);
+
+    const initialState = new KinematicState(
+      new Vector2(position.x, position.y),
+      new Vector2(velocity.x, velocity.y),
+    );
+
     assertFiniteState(initialState, "Initial body state");
 
     const bodyId = this.#nextBodyId++;
 
-    this.#bodies.set(bodyId, initialState);
+    this.#bodies.set(bodyId, {
+      definition: body,
+      state: initialState,
+    });
 
     return bodyId;
   }
@@ -102,9 +123,9 @@ export class KinematicWorld {
    * identifier does not belong to this world.
    */
   public getBodyState(bodyId: BodyId): KinematicState | undefined {
-    const state = this.#bodies.get(bodyId);
+    const worldBody = this.#bodies.get(bodyId);
 
-    return state === undefined ? undefined : copyState(state);
+    return worldBody === undefined ? undefined : copyState(worldBody.state);
   }
 
   /**
@@ -117,9 +138,9 @@ export class KinematicWorld {
    * @returns A snapshot for every body currently in the world.
    */
   public getBodySnapshots(): readonly KinematicBodySnapshot[] {
-    return Array.from(this.#bodies, ([id, state]): KinematicBodySnapshot => ({
+    return Array.from(this.#bodies, ([id, worldBody]): KinematicBodySnapshot => ({
       id,
-      state: copyState(state),
+      state: copyState(worldBody.state),
     }));
   }
 
@@ -140,8 +161,8 @@ export class KinematicWorld {
 
     const nextStates = new Map<BodyId, KinematicState>();
 
-    for (const [bodyId, state] of this.#bodies) {
-      const nextState = this.#integrator.integrate(state, this.#acceleration, dt);
+    for (const [bodyId, worldBody] of this.#bodies) {
+      const nextState = this.#integrator.integrate(worldBody.state, this.#acceleration, dt);
 
       assertFiniteState(nextState, `Integrator result for body ${bodyId}`);
 
@@ -149,7 +170,20 @@ export class KinematicWorld {
     }
 
     for (const [bodyId, nextState] of nextStates) {
-      this.#bodies.set(bodyId, nextState);
+      const worldBody = this.#bodies.get(bodyId);
+
+      if (worldBody === undefined) {
+        throw new Error(`Body ${bodyId} disappeared during an atomic world step.`);
+      }
+
+      worldBody.state = nextState;
     }
   }
+}
+
+function copyState(state: KinematicState): KinematicState {
+  return new KinematicState(
+    new Vector2(state.position.x, state.position.y),
+    new Vector2(state.velocity.x, state.velocity.y),
+  );
 }

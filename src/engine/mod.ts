@@ -7,6 +7,8 @@
  * @module
  */
 
+export { Body } from "./body/body.ts";
+
 export type { KinematicIntegrator } from "./kinematics/kinematic-integrator.ts";
 
 export { ExplicitEulerIntegrator } from "./kinematics/explicit-euler-integrator.ts";
@@ -18,6 +20,7 @@ export { Vector2 } from "./math/vector2.ts";
 export { KinematicSimulation } from "./simulation/kinematic-simulation.ts";
 
 export type { BodyId } from "./world/body-id.ts";
+export type { BodyInitialConditions } from "./world/body-initial-conditions.ts";
 export type { KinematicBodySnapshot } from "./world/kinematic-body-snapshot.ts";
 
 export { KinematicWorld } from "./world/kinematic-world.ts";

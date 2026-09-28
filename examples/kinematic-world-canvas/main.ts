@@ -1,6 +1,6 @@
 import {
+  Body,
   type BodyId,
-  KinematicState,
   KinematicWorld,
   SemiImplicitEulerIntegrator,
   Vector2,
@@ -65,11 +65,13 @@ const selectedBodyVelocityOutput: HTMLOutputElement = selectedBodyVelocityOutput
 
 const world = new KinematicWorld(new Vector2(0, -1), new SemiImplicitEulerIntegrator());
 
-world.createBody(new KinematicState(new Vector2(-4, 3), new Vector2(1, 2)));
+const particle = new Body();
 
-world.createBody(new KinematicState(new Vector2(0, 5), new Vector2(0, 0)));
+world.addBody(particle, { position: new Vector2(-4, 3), velocity: new Vector2(1, 2) });
 
-world.createBody(new KinematicState(new Vector2(4, 2), new Vector2(-1, 2)));
+world.addBody(particle, { position: new Vector2(0, 5) });
+
+world.addBody(particle, { position: new Vector2(4, 2), velocity: new Vector2(-1, 2) });
 
 const renderer = new CanvasKinematicRenderer(context, canvas.width, canvas.height, 40, 6);
 

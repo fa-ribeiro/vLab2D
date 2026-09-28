@@ -1,5 +1,5 @@
 import {
-  KinematicState,
+  Body,
   KinematicWorld,
   SemiImplicitEulerIntegrator,
   Vector2,
@@ -8,11 +8,21 @@ import { SvgKinematicRenderer } from "../src/visualization/svg-kinematic-rendere
 
 const world = new KinematicWorld(new Vector2(0, -9.81), new SemiImplicitEulerIntegrator());
 
-world.createBody(new KinematicState(new Vector2(-4, 3), new Vector2(2, 3)));
+const particle = new Body();
 
-world.createBody(new KinematicState(new Vector2(0, 5), new Vector2(0, 0)));
+world.addBody(particle, {
+  position: new Vector2(-4, 3),
+  velocity: new Vector2(2, 3),
+});
 
-world.createBody(new KinematicState(new Vector2(4, 2), new Vector2(-1, 4)));
+world.addBody(particle, {
+  position: new Vector2(0, 5),
+});
+
+world.addBody(particle, {
+  position: new Vector2(4, 2),
+  velocity: new Vector2(-1, 4),
+});
 
 for (let step = 0; step < 5; step++) {
   world.step(0.1);
