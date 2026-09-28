@@ -62,25 +62,6 @@ canvas.addEventListener("pointerdown", (event) => {
   canvas.setPointerCapture(event.pointerId);
 });
 
-canvas.addEventListener("pointermove", (event) => {
-  if (event.pointerId !== activePointerId) {
-    return;
-  }
-
-  const deltaClientX = event.clientX - previousPointerX;
-  const deltaClientY = event.clientY - previousPointerY;
-
-  previousPointerX = event.clientX;
-  previousPointerY = event.clientY;
-
-  const bounds = canvas.getBoundingClientRect();
-
-  const deltaDisplayX = (deltaClientX * canvas.width) / bounds.width;
-  const deltaDisplayY = (deltaClientY * canvas.height) / bounds.height;
-
-  renderer.panViewportBy(deltaDisplayX, deltaDisplayY);
-});
-
 function endPointerDrag(pointerId: number): void {
   if (pointerId === activePointerId) {
     activePointerId = undefined;
@@ -98,15 +79,6 @@ canvas.addEventListener("pointercancel", (event) => {
 canvas.addEventListener("lostpointercapture", (event) => {
   endPointerDrag(event.pointerId);
 });
-
-function pointerToDisplayCoordinates(event: PointerEvent): { x: number; y: number } {
-  const bounds = canvas.getBoundingClientRect();
-
-  return {
-    x: ((event.clientX - bounds.left) * canvas.width) / bounds.width,
-    y: ((event.clientY - bounds.top) * canvas.height) / bounds.height,
-  };
-}
 
 function clientToDisplayCoordinates(
   clientX: number,
@@ -134,7 +106,7 @@ function normalizeWheelDelta(event: WheelEvent): number {
 }
 
 function updatePointerWorldCoordinate(event: PointerEvent): void {
-  const display = pointerToDisplayCoordinates(event);
+  const display = clientToDisplayCoordinates(event.clientX, event.clientY);
 
   const worldX = renderer.displayToWorldX(display.x);
   const worldY = renderer.displayToWorldY(display.y);
