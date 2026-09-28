@@ -1,4 +1,4 @@
-import type { KinematicBodySnapshot } from "../engine/mod.ts";
+import type { BodyId, KinematicBodySnapshot } from "../engine/mod.ts";
 import { ViewportTransform } from "./viewport-transform.ts";
 
 const ORIGIN_MARKER_HALF_SIZE = 5;
@@ -149,6 +149,46 @@ export class CanvasKinematicRenderer {
    */
   public displayToWorldY(displayY: number): number {
     return this.#transform.displayToWorldY(displayY);
+  }
+
+  /**
+   * Finds the rendered body underneath a Canvas display-space point.
+   *
+   * A body is considered hit when the point lies within the body's rendered
+   * circular marker.
+   *
+   * @param snapshots Detached body observations to test.
+   * @param displayX Horizontal point coordinate in Canvas drawing-buffer units.
+   * @param displayY Vertical point coordinate in Canvas drawing-buffer units.
+   * @returns The identifier of the nearest hit body, or `undefined` when no
+   * body marker contains the point.
+   */
+  public findBodyAtDisplayPoint(
+    snapshots: readonly KinematicBodySnapshot[],
+    displayX: number,
+    displayY: number,
+  ): BodyId | undefined {
+    let nearestBodyId: BodyId | undefined;
+    let nearestDistanceSquared = Number.POSITIVE_INFINITY;
+
+    for (const snapshot of snapshots) {
+      const bodyX = this.#transform.worldToDisplayX(snapshot.state.position.x);
+      const bodyY = this.#transform.worldToDisplayY(snapshot.state.position.y);
+
+      const deltaX = displayX - bodyX;
+      const deltaY = displayY - bodyY;
+      const distanceSquared = deltaX * deltaX + deltaY * deltaY;
+
+      if (
+        distanceSquared <= this.#bodyRadius * this.#bodyRadius &&
+        distanceSquared < nearestDistanceSquared
+      ) {
+        nearestBodyId = snapshot.id;
+        nearestDistanceSquared = distanceSquared;
+      }
+    }
+
+    return nearestBodyId;
   }
 
   /**

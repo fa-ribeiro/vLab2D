@@ -10,9 +10,9 @@ Eventually, vLab2D aims to make simulations not only runnable, but **observable*
 
 ## Project status
 
-**Current checkpoint:** a multi-body `KinematicWorld` owns authoritative simulation state and exposes detached observations that can be visualized through the primary live Canvas 2D path or the secondary static SVG path. `ViewportTransform` now owns bidirectional world/display coordinate conversion, continuous visible world bounds, a mutable world-space viewport center, and mutable display scale. The live Canvas example supports pointer-drag panning, pointer-coordinate inspection, and bounded pointer-anchored wheel/trackpad zoom.
+**Current checkpoint:** a multi-body `KinematicWorld` owns authoritative simulation state and exposes detached observations that can be visualized through the primary live Canvas 2D path or the secondary static SVG path. `ViewportTransform` owns bidirectional world/display coordinate conversion, continuous visible world bounds, mutable world-space centering, and mutable display scale. The live Canvas example supports pointer-drag panning, pointer-coordinate inspection, bounded pointer-anchored wheel/trackpad zoom, and display-space body picking that reports the rendered body underneath the pointer.
 
-**Next step:** use the completed interactive viewport as the foundation for the next small inspection capability. Body picking is the leading candidate, but selection state, selection UI, and richer inspectors remain separate decisions rather than part of the zoom feature.
+**Next step:** build on the proven picking query with the smallest useful visual feedback for the body under the pointer. Hover highlighting is the leading candidate; persistent click selection, selection state, and richer inspectors remain separate decisions.
 
 See the [project documentation](docs/project/README.md) for the authoritative current status, project context, decisions, workflow, and continuity information.
 
@@ -60,7 +60,7 @@ The project currently has two concrete visualization paths:
 
 Both renderers use the shared `ViewportTransform` for bidirectional coordinate mapping, continuous visible-world geometry, mutable world-space centering, and mutable display scale while retaining rendering-technology-specific drawing behavior. Both renderers expose programmatic viewport centering and scale changes. Canvas additionally accepts display-space pan deltas, exposes scalar display-to-world queries for interaction, and can change scale around a display-space anchor without exposing the transform object itself.
 
-The browser Canvas example owns pointer and wheel-event orchestration and converts browser CSS coordinates into Canvas drawing-buffer units. It uses display-space deltas for panning, inverse mapping for a live world-coordinate readout, and bounded exponential wheel/trackpad scaling for pointer-anchored zoom. Zoom sensitivity, wheel-delta normalization, and minimum/maximum scale are host interaction policy rather than viewport-geometry invariants. The renderer remains unaware of DOM input events and UI formatting.
+The browser Canvas example owns pointer and wheel-event orchestration and converts browser CSS coordinates into Canvas drawing-buffer units. It uses display-space deltas for panning, inverse mapping for a live world-coordinate readout, and bounded exponential wheel/trackpad scaling for pointer-anchored zoom. It also asks `CanvasKinematicRenderer` which rendered body marker, if any, contains the pointer and presents the resulting `BodyId` as ordinary DOM inspection output. Picking uses the same detached snapshots that produced the current visible frame. Zoom sensitivity, wheel-delta normalization, minimum/maximum scale, and UI formatting remain host interaction policy rather than viewport-geometry or engine concerns.
 
 Canvas and canvas-like interactive rendering drive visualization design. SVG should remain working where support is natural and reasonably inexpensive, but Canvas features should not be compromised merely to preserve SVG parity.
 

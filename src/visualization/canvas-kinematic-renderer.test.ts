@@ -307,3 +307,66 @@ Deno.test("CanvasKinematicRenderer changes scale around a display-space anchor",
 
   assertEquals(renderer.displayToWorldY(displayY), worldYBefore);
 });
+
+Deno.test("CanvasKinematicRenderer finds a body at a display-space point", () => {
+  const context = new RecordingCanvasContext();
+  const renderer = new CanvasKinematicRenderer(context, 200, 100, 10, 6);
+
+  const snapshots: readonly KinematicBodySnapshot[] = [
+    {
+      id: 7,
+      state: new KinematicState(new Vector2(2, 3), new Vector2(0, 0)),
+    },
+  ];
+
+  assertEquals(renderer.findBodyAtDisplayPoint(snapshots, 120, 20), 7);
+});
+
+Deno.test("CanvasKinematicRenderer returns undefined outside body markers", () => {
+  const context = new RecordingCanvasContext();
+  const renderer = new CanvasKinematicRenderer(context, 200, 100, 10, 6);
+
+  const snapshots: readonly KinematicBodySnapshot[] = [
+    {
+      id: 7,
+      state: new KinematicState(new Vector2(2, 3), new Vector2(0, 0)),
+    },
+  ];
+
+  assertEquals(renderer.findBodyAtDisplayPoint(snapshots, 127, 20), undefined);
+});
+
+Deno.test("CanvasKinematicRenderer hit testing follows viewport transformation", () => {
+  const context = new RecordingCanvasContext();
+  const renderer = new CanvasKinematicRenderer(context, 200, 100, 10, 6);
+
+  renderer.setViewportCenter(3, -2);
+  renderer.setViewportScale(20);
+
+  const snapshots: readonly KinematicBodySnapshot[] = [
+    {
+      id: 7,
+      state: new KinematicState(new Vector2(4, -1), new Vector2(0, 0)),
+    },
+  ];
+
+  assertEquals(renderer.findBodyAtDisplayPoint(snapshots, 120, 30), 7);
+});
+
+Deno.test("CanvasKinematicRenderer picks the nearest hit body", () => {
+  const context = new RecordingCanvasContext();
+  const renderer = new CanvasKinematicRenderer(context, 200, 100, 10, 10);
+
+  const snapshots: readonly KinematicBodySnapshot[] = [
+    {
+      id: 1,
+      state: new KinematicState(new Vector2(0, 0), new Vector2(0, 0)),
+    },
+    {
+      id: 2,
+      state: new KinematicState(new Vector2(1, 0), new Vector2(0, 0)),
+    },
+  ];
+
+  assertEquals(renderer.findBodyAtDisplayPoint(snapshots, 108, 50), 2);
+});

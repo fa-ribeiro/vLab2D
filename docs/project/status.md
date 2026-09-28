@@ -6,7 +6,7 @@ vLab2D now has a small multi-body simulation engine, reproducible SVG visualizat
 
 Canvas is the primary visualization target. SVG remains a useful secondary renderer for static snapshots, debugging captures, exports, and documentation where maintaining it remains reasonable.
 
-Both renderers share `ViewportTransform` for viewport geometry, bidirectional world/display coordinate conversion, mutable world-space centering, and mutable display scale. The Canvas path additionally supports anchored interactive zoom without moving the world point underneath the chosen display-space anchor.
+Both renderers share `ViewportTransform` for viewport geometry, bidirectional world/display coordinate conversion, mutable world-space centering, and mutable display scale. The Canvas path additionally supports anchored interactive zoom and display-space picking of rendered body markers.
 
 ### Simulation engine
 
@@ -113,11 +113,14 @@ The renderer exposes focused viewport operations and queries:
 - `panViewportBy(deltaX, deltaY)` accepts a displacement in Canvas display units and converts it into the corresponding world-center change;
 - `viewportScale` exposes the current scale read-only for host interaction policy;
 - `setViewportScaleAroundDisplayPoint(...)` changes scale while preserving the world point underneath a Canvas display-space anchor;
-- `displayToWorldX(displayX)` and `displayToWorldY(displayY)` expose the transform's inverse scalar mapping without leaking the transform object itself.
+- `displayToWorldX(displayX)` and `displayToWorldY(displayY)` expose the transform's inverse scalar mapping without leaking the transform object itself;
+- `findBodyAtDisplayPoint(...)` tests detached snapshots against the rendered circular body markers and returns the nearest hit `BodyId`, or `undefined` when no marker contains the point.
 
 The integer grid, axes, origin marker, and body positions all consume the same transform, so panning and zooming move and magnify the complete world view coherently.
 
-The live browser example adds pointer-drag panning, pointer-coordinate inspection, and wheel/trackpad zoom. Browser input remains host responsibility: the example tracks one active pointer, uses pointer capture, converts browser CSS coordinates into Canvas drawing-buffer coordinates, normalizes wheel deltas, calculates an exponential zoom factor, clamps the requested scale to host-defined limits, and passes the resulting absolute scale and display-space anchor to the renderer.
+The live browser example adds pointer-drag panning, pointer-coordinate inspection, wheel/trackpad zoom, and body picking. Browser input remains host responsibility: the example tracks one active pointer, uses pointer capture, converts browser CSS coordinates into Canvas drawing-buffer coordinates, normalizes wheel deltas, calculates an exponential zoom factor, clamps the requested scale to host-defined limits, and passes renderer-facing display-space values rather than DOM event objects.
+
+For picking, the host retains the latest detached snapshots used for rendering and passes those same snapshots to `findBodyAtDisplayPoint(...)`. This keeps the visual query synchronized with the frame the user can actually see rather than independently observing a slightly newer world state during the pointer event.
 
 ```mermaid
 flowchart LR
@@ -134,11 +137,15 @@ flowchart LR
 
 The anchor-aware transform preserves the world coordinate underneath the pointer while the scale changes. The host currently prevents page scrolling during Canvas wheel zoom and owns scale limits and sensitivity; those are interaction policy rather than transform invariants.
 
-The world-coordinate readout remains ordinary DOM presentation owned by the host. Formatting such as decimal precision does not enter `ViewportTransform` or the renderer.
+The coordinate and body readouts remain ordinary DOM presentation owned by the host. Formatting such as decimal precision does not enter `ViewportTransform` or the renderer.
+
+Body picking is deliberately a visualization query rather than an engine query. `KinematicWorld` currently stores kinematic position and velocity but no physical shape or radius. The hit radius comes from the Canvas renderer's display-space body marker, so placing the query in `KinematicWorld` would incorrectly turn presentation geometry into simulation geometry.
+
+When multiple rendered markers contain the pointer, the Canvas renderer chooses the hit whose rendered center is nearest to the pointer instead of depending on snapshot ordering, which is not part of the world's public contract.
 
 The renderer remains unaware of DOM pointer and wheel events and performs no simulation calculations or engine-state mutation.
 
-Canvas regression tests cover forward and inverse coordinate mapping, spatial references, viewport centering, programmatic scale changes, display-space panning, anchor-preserving scale changes, frame clearing, and validation behavior.
+Canvas regression tests cover forward and inverse coordinate mapping, spatial references, viewport centering, programmatic scale changes, display-space panning, anchor-preserving scale changes, body-marker hit testing, nearest-hit behavior, frame clearing, and validation behavior.
 
 ### SVG visualization
 
@@ -183,22 +190,21 @@ Interpolation between fixed simulation states remains deliberately deferred.
 
 ## Next step
 
-Use the completed interactive viewport as the foundation for the next small inspection capability.
+Build on the completed picking query with the smallest useful visual feedback for the body currently under the pointer.
 
-The leading candidate is body picking: determine which body, if any, is underneath a pointer position by using the existing display-to-world mapping and detached world observations.
+The leading candidate is hover highlighting:
 
-Keep the first picking step deliberately narrow:
-
-- define the minimum geometric query needed to identify a body under a world-space point;
-- keep authoritative simulation state inside `KinematicWorld`;
-- avoid giving the renderer ownership of selection state;
-- separate hit testing from any later selected-body UI or inspector;
-- use the existing Canvas/browser coordinate boundary rather than introducing a camera or event abstraction.
+- keep hit testing in `CanvasKinematicRenderer` where the rendered marker geometry already exists;
+- keep transient hover choice outside authoritative engine state;
+- render a simple visual distinction for the picked body without introducing a general style/theme system;
+- continue using the latest rendered detached snapshots as the observation source;
+- keep persistent click selection and selected-body inspection separate until their ownership and UI requirements are concrete.
 
 Do not yet introduce:
 
-- persistent selection state or selection UI;
+- persistent selected-body state;
 - drag-to-move bodies;
+- engine-owned physical shape solely to support picking;
 - a camera class;
 - transformation matrices;
 - renderer interfaces;

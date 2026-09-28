@@ -466,9 +466,10 @@ CanvasKinematicRenderer
     world axes
     origin marker
     body drawing
+    display-space body-marker hit testing
 ```
 
-Both renderers use `ViewportTransform` for coordinate placement while retaining rendering-technology-specific drawing behavior. Both expose programmatic viewport centering. Canvas additionally accepts display-space pan deltas and exposes inverse display-to-world scalar queries for interaction, while browser pointer-event orchestration remains outside the renderer in host/example code.
+Both renderers use `ViewportTransform` for coordinate placement while retaining rendering-technology-specific drawing behavior. Both expose programmatic viewport centering and scale changes. Canvas additionally accepts display-space pan deltas, exposes inverse display-to-world scalar queries, supports anchor-preserving scale changes, and can hit-test its rendered body markers, while browser pointer/wheel-event orchestration remains outside the renderer in host/example code.
 
 Canvas and canvas-like interactive rendering are the primary visualization target. SVG remains a secondary static companion where maintaining support is natural and reasonably inexpensive. Shared abstractions should represent genuinely common concepts; SVG compatibility must not force Canvas into a weaker or less useful design.
 
@@ -586,9 +587,11 @@ Variable browser frame delta is used as scheduling input, not as the numerical i
 
 The renderer remains unaware of `requestAnimationFrame` and of simulation stepping.
 
-The host also owns pointer and wheel interaction. It tracks the active pointer, uses browser pointer capture for dragging, and converts browser client coordinates from CSS space into Canvas drawing-buffer coordinates. Display-space deltas are passed to `CanvasKinematicRenderer.panViewportBy(...)`; absolute display coordinates are passed through the renderer's inverse mapping queries to produce the live world-coordinate readout.
+The host also owns pointer and wheel interaction. It tracks the active pointer, uses browser pointer capture for dragging, and converts browser client coordinates from CSS space into Canvas drawing-buffer coordinates. Display-space deltas are passed to `CanvasKinematicRenderer.panViewportBy(...)`; absolute display coordinates are passed through the renderer's inverse mapping queries to produce the live world-coordinate readout and through its body-marker hit test to produce the live body readout.
 
-For wheel/trackpad zoom, the host normalizes wheel deltas, applies zoom sensitivity and minimum/maximum scale policy, prevents page scrolling while the Canvas owns the wheel interaction, and supplies an absolute requested scale together with the pointer's Canvas display-space anchor. `CanvasKinematicRenderer` delegates the anchor-preserving geometry to `ViewportTransform`. The renderer therefore remains independent from DOM pointer/wheel-event APIs and host interaction policy.
+For wheel/trackpad zoom, the host normalizes wheel deltas, applies zoom sensitivity and minimum/maximum scale policy, prevents page scrolling while the Canvas owns the wheel interaction, and supplies an absolute requested scale together with the pointer's Canvas display-space anchor. `CanvasKinematicRenderer` delegates the anchor-preserving geometry to `ViewportTransform`.
+
+For picking, the host retains the latest detached snapshots used for rendering and supplies those same observations to `CanvasKinematicRenderer.findBodyAtDisplayPoint(...)`. This keeps the hit test synchronized with the visible frame. The renderer therefore remains independent from DOM pointer/wheel-event APIs and host interaction policy.
 
 ```mermaid
 flowchart LR
@@ -695,6 +698,8 @@ It is useful to keep these categories separate.
 ✓ pointer-drag panning in the Canvas browser host
 ✓ Canvas pointer world-coordinate inspection
 ✓ pointer-anchored wheel / trackpad zoom
+✓ Canvas display-space body-marker picking
+✓ live body-under-pointer inspection
 ✓ equivalent SVG and Canvas spatial references
 ✓ Canvas integer grid
 ✓ Canvas world axes
@@ -723,7 +728,8 @@ Possible future capabilities include:
 
 ```text
 ? pinch zoom
-? body picking and selection
+? hover highlighting
+? persistent body selection
 ? experiment orchestration
 ? synchronized multiple worlds
 ? UI controls
@@ -862,7 +868,36 @@ Both renderers expose programmatic scale changes because mutable scale is shared
 
 The browser host owns wheel/trackpad interpretation: browser-coordinate conversion, delta-mode normalization, exponential zoom sensitivity, minimum/maximum scale limits, and cancellation of page scrolling during Canvas zoom. These are interaction policies rather than `ViewportTransform` invariants.
 
-No `WorldBounds` value type, renderer hierarchy, camera model, transformation matrix framework, point abstraction, body-picking system, persistent selection model, or gesture framework has been introduced.
+### Canvas body picking
+
+The first body-picking capability is intentionally tied to Canvas presentation geometry.
+
+`KinematicWorld` exposes detached body identity and kinematic state but does not currently define body shape or physical radius. `CanvasKinematicRenderer`, however, already owns the circular display marker used to draw each body. The renderer therefore has the information required to answer whether a Canvas drawing-buffer point lies inside a rendered marker without inventing engine geometry.
+
+`findBodyAtDisplayPoint(...)` accepts detached snapshots and a display-space point. For each snapshot it maps the body's world position through the current viewport transform, compares squared display-space distance against the squared marker radius, and returns the nearest hit `BodyId`.
+
+```mermaid
+flowchart LR
+    SNAP["Latest rendered snapshots"]
+    POINT["Canvas display point"]
+    RENDERER["CanvasKinematicRenderer"]
+    TRANSFORM["ViewportTransform"]
+    HIT["Nearest BodyId or none"]
+
+    SNAP --> RENDERER
+    POINT --> RENDERER
+    RENDERER --> TRANSFORM
+    TRANSFORM --> RENDERER
+    RENDERER --> HIT
+```
+
+Squared distance avoids an unnecessary square root while expressing the same circular containment test. Choosing the nearest hit avoids depending on snapshot order when rendered markers overlap.
+
+The browser host deliberately reuses the same detached snapshots that produced the visible frame when performing the hit test. Picking is therefore an observation of rendered presentation state, not a second read from authoritative world storage during the input event.
+
+This does not establish physical body geometry, collision shape, persistent selection state, hover styling, or a generic picking framework.
+
+No `WorldBounds` value type, renderer hierarchy, camera model, transformation matrix framework, point abstraction, persistent selection model, or gesture framework has been introduced.
 
 ---
 

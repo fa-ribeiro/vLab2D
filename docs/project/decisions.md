@@ -1,6 +1,6 @@
 # Decisions and Architectural Intentions
 
-Last updated: 2026-09-27
+Last updated: 2026-09-28
 
 This file records decisions that should survive chat boundaries. Some entries are architectural intentions rather than implementation commitments; those are labeled accordingly.
 
@@ -590,3 +590,19 @@ For interactive zoom, `setPixelsPerUnitAroundDisplayPoint(...)` changes scale an
 Browser wheel and trackpad semantics remain host/application responsibility. The Canvas example owns browser client-to-Canvas coordinate conversion, wheel-delta normalization, zoom sensitivity, minimum and maximum scale policy, suppression of page scrolling during Canvas zoom, and conversion from wheel input into an absolute requested viewport scale.
 
 The transform therefore owns zoom geometry and viewport invariants, while the host owns interaction policy. This adds pointer-anchored zoom without introducing wheel-event knowledge into the renderer or transform, and without introducing a camera abstraction, transformation matrices, or gesture framework.
+
+## D-056 — Body picking uses Canvas presentation geometry and rendered snapshots
+
+**Status:** Accepted
+
+The first body-picking capability is a Canvas visualization query rather than an engine/world spatial query.
+
+`KinematicWorld` currently owns only kinematic body state: identity, position, and velocity. It has no physical body shape or radius. The visible body radius is owned by `CanvasKinematicRenderer` and is expressed in Canvas display units. Moving hit testing into `KinematicWorld` would therefore make presentation geometry masquerade as simulation geometry.
+
+`CanvasKinematicRenderer.findBodyAtDisplayPoint(...)` receives detached `KinematicBodySnapshot` observations plus a Canvas drawing-buffer coordinate. It maps each observed body position through the renderer's current `ViewportTransform` and tests the point against the same circular marker radius used for rendering.
+
+If more than one marker contains the point, the nearest rendered center is chosen. Picking therefore does not depend on snapshot array order, which is intentionally not part of `KinematicWorld`'s public observation contract.
+
+The browser host retains the latest detached snapshots used to render the visible frame and reuses those snapshots for pointer hit testing. This keeps visual inspection aligned with what the user can actually see while leaving authoritative simulation state inside `KinematicWorld`.
+
+The host owns presentation of the picked result, such as the current `BodyId` readout. No persistent selection state, body highlighting, drag manipulation, physical engine shape, or generic picking framework is introduced by this decision.

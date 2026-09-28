@@ -20,7 +20,6 @@ if (canvasElement === null) {
 const canvas: HTMLCanvasElement = canvasElement;
 
 const context = canvas.getContext("2d");
-
 if (context === null) {
   throw new Error("Canvas 2D rendering is not available.");
 }
@@ -32,6 +31,12 @@ if (coordinateOutputElement === null) {
   throw new Error("Pointer world-coordinate output was not found.");
 }
 const coordinateOutput: HTMLOutputElement = coordinateOutputElement;
+
+const bodyOutputElement = document.querySelector<HTMLOutputElement>("#pointer-body");
+if (bodyOutputElement === null) {
+  throw new Error("Pointer body output was not found.");
+}
+const bodyOutput: HTMLOutputElement = bodyOutputElement;
 
 const world = new KinematicWorld(new Vector2(0, -1), new SemiImplicitEulerIntegrator());
 
@@ -45,6 +50,8 @@ const renderer = new CanvasKinematicRenderer(context, canvas.width, canvas.heigh
 
 renderer.setViewportCenter(3, 2);
 renderer.setViewportScale(25);
+
+let renderedSnapshots = world.getBodySnapshots();
 
 let activePointerId: number | undefined;
 let previousPointerX = 0;
@@ -105,13 +112,17 @@ function normalizeWheelDelta(event: WheelEvent): number {
   }
 }
 
-function updatePointerWorldCoordinate(event: PointerEvent): void {
-  const display = clientToDisplayCoordinates(event.clientX, event.clientY);
+function updatePointerInspection(clientX: number, clientY: number): void {
+  const display = clientToDisplayCoordinates(clientX, clientY);
 
   const worldX = renderer.displayToWorldX(display.x);
   const worldY = renderer.displayToWorldY(display.y);
 
   coordinateOutput.value = `World: (${worldX.toFixed(2)}, ${worldY.toFixed(2)})`;
+
+  const bodyId = renderer.findBodyAtDisplayPoint(renderedSnapshots, display.x, display.y);
+
+  bodyOutput.value = bodyId === undefined ? "Body: —" : `Body: ${bodyId}`;
 }
 
 canvas.addEventListener("pointermove", (event) => {
@@ -131,7 +142,7 @@ canvas.addEventListener("pointermove", (event) => {
     renderer.panViewportBy(deltaDisplayX, deltaDisplayY);
   }
 
-  updatePointerWorldCoordinate(event);
+  updatePointerInspection(event.clientX, event.clientY);
 });
 
 canvas.addEventListener(
@@ -153,6 +164,7 @@ canvas.addEventListener(
     );
 
     renderer.setViewportScaleAroundDisplayPoint(nextScale, display.x, display.y);
+    updatePointerInspection(event.clientX, event.clientY);
   },
   { passive: false },
 );
@@ -179,9 +191,9 @@ function frame(timestamp: number): void {
     accumulator -= FIXED_TIMESTEP;
   }
 
-  renderer.render(world.getBodySnapshots());
+  renderedSnapshots = world.getBodySnapshots();
 
-  requestAnimationFrame(frame);
+  renderer.render(renderedSnapshots);
 }
 
 renderer.render(world.getBodySnapshots());
