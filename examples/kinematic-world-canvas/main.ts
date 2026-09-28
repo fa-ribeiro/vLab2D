@@ -14,6 +14,8 @@ const ZOOM_SENSITIVITY = 0.002;
 const FIXED_TIMESTEP = 1 / 60;
 const MAX_FRAME_DELTA = 0.25;
 
+const CLICK_MOVEMENT_TOLERANCE = 4;
+
 const canvasElement = document.querySelector<HTMLCanvasElement>("#simulation");
 if (canvasElement === null) {
   throw new Error("Simulation canvas was not found.");
@@ -39,6 +41,12 @@ if (bodyOutputElement === null) {
 }
 const bodyOutput: HTMLOutputElement = bodyOutputElement;
 
+const selectedBodyOutputElement = document.querySelector<HTMLOutputElement>("#selected-body");
+if (selectedBodyOutputElement === null) {
+  throw new Error("Selected body output was not found.");
+}
+const selectedBodyOutput: HTMLOutputElement = selectedBodyOutputElement;
+
 const world = new KinematicWorld(new Vector2(0, -1), new SemiImplicitEulerIntegrator());
 
 world.createBody(new KinematicState(new Vector2(-4, 3), new Vector2(1, 2)));
@@ -59,9 +67,14 @@ let previousPointerX = 0;
 let previousPointerY = 0;
 
 let hoveredBodyId: BodyId | undefined;
+let selectedBodyId: BodyId | undefined;
 
 let pointerClientX: number | undefined;
 let pointerClientY: number | undefined;
+
+let pointerDownX = 0;
+let pointerDownY = 0;
+let pointerMovedBeyondClickTolerance = false;
 
 canvas.addEventListener("pointerdown", (event) => {
   if (event.button !== 0 || activePointerId !== undefined) {
@@ -69,11 +82,22 @@ canvas.addEventListener("pointerdown", (event) => {
   }
 
   activePointerId = event.pointerId;
+
   previousPointerX = event.clientX;
   previousPointerY = event.clientY;
 
+  pointerDownX = event.clientX;
+  pointerDownY = event.clientY;
+  pointerMovedBeyondClickTolerance = false;
+
   canvas.setPointerCapture(event.pointerId);
 });
+
+function setSelectedBody(bodyId: BodyId | undefined): void {
+  selectedBodyId = bodyId;
+
+  selectedBodyOutput.value = bodyId === undefined ? "Selected: —" : `Selected: ${bodyId}`;
+}
 
 function endPointerDrag(pointerId: number): void {
   if (pointerId === activePointerId) {
@@ -82,7 +106,15 @@ function endPointerDrag(pointerId: number): void {
 }
 
 canvas.addEventListener("pointerup", (event) => {
-  endPointerDrag(event.pointerId);
+  if (event.pointerId !== activePointerId) {
+    return;
+  }
+
+  if (!pointerMovedBeyondClickTolerance) {
+    const display = clientToDisplayCoordinates(event.clientX, event.clientY);
+
+    setSelectedBody(renderer.findBodyAtDisplayPoint(renderedSnapshots, display.x, display.y));
+  }
 });
 
 canvas.addEventListener("pointercancel", (event) => {
@@ -160,6 +192,15 @@ canvas.addEventListener("pointermove", (event) => {
     previousPointerX = event.clientX;
     previousPointerY = event.clientY;
 
+    const totalDeltaX = event.clientX - pointerDownX;
+    const totalDeltaY = event.clientY - pointerDownY;
+
+    const movementSquared = totalDeltaX * totalDeltaX + totalDeltaY * totalDeltaY;
+
+    if (movementSquared > CLICK_MOVEMENT_TOLERANCE * CLICK_MOVEMENT_TOLERANCE) {
+      pointerMovedBeyondClickTolerance = true;
+    }
+
     const bounds = canvas.getBoundingClientRect();
 
     const deltaDisplayX = (deltaClientX * canvas.width) / bounds.width;
@@ -226,9 +267,9 @@ function frame(timestamp: number): void {
 
   refreshPointerInspection();
 
-  renderer.render(renderedSnapshots, hoveredBodyId);
+  renderer.render(renderedSnapshots, hoveredBodyId, selectedBodyId);
   requestAnimationFrame(frame);
 }
 
-renderer.render(renderedSnapshots);
+renderer.render(renderedSnapshots, hoveredBodyId, selectedBodyId);
 requestAnimationFrame(frame);

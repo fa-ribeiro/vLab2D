@@ -6,7 +6,7 @@ vLab2D now has a small multi-body simulation engine, reproducible SVG visualizat
 
 Canvas is the primary visualization target. SVG remains a useful secondary renderer for static snapshots, debugging captures, exports, and documentation where maintaining it remains reasonable.
 
-Both renderers share `ViewportTransform` for viewport geometry, bidirectional world/display coordinate conversion, mutable world-space centering, and mutable display scale. The Canvas path additionally supports anchored interactive zoom, display-space picking of rendered body markers, and live hover highlighting.
+Both renderers share `ViewportTransform` for viewport geometry, bidirectional world/display coordinate conversion, mutable world-space centering, and mutable display scale. The Canvas path additionally supports anchored interactive zoom, display-space picking of rendered body markers, live hover highlighting, and persistent click selection.
 
 ### Simulation engine
 
@@ -115,15 +115,17 @@ The renderer exposes focused viewport operations and queries:
 - `setViewportScaleAroundDisplayPoint(...)` changes scale while preserving the world point underneath a Canvas display-space anchor;
 - `displayToWorldX(displayX)` and `displayToWorldY(displayY)` expose the transform's inverse scalar mapping without leaking the transform object itself;
 - `findBodyAtDisplayPoint(...)` tests detached snapshots against the rendered circular body markers and returns the nearest hit `BodyId`, or `undefined` when no marker contains the point;
-- `render(...)` accepts an optional body identifier to highlight for that frame while remaining stateless about which body is hovered.
+- `render(...)` accepts optional hovered and selected body identifiers for the current frame while remaining stateless about both interaction identities.
 
 The integer grid, axes, origin marker, and body positions all consume the same transform, so panning and zooming move and magnify the complete world view coherently.
 
-The live browser example adds pointer-drag panning, pointer-coordinate inspection, wheel/trackpad zoom, body picking, and hover highlighting. Browser input remains host responsibility: the example tracks one active pointer, uses pointer capture, converts browser CSS coordinates into Canvas drawing-buffer coordinates, normalizes wheel deltas, calculates an exponential zoom factor, clamps the requested scale to host-defined limits, and passes renderer-facing values rather than DOM event objects.
+The live browser example adds pointer-drag panning, pointer-coordinate inspection, wheel/trackpad zoom, body picking, hover highlighting, and persistent click selection. Browser input remains host responsibility: the example tracks one active pointer, uses pointer capture, converts browser CSS coordinates into Canvas drawing-buffer coordinates, normalizes wheel deltas, calculates an exponential zoom factor, clamps the requested scale to host-defined limits, and passes renderer-facing values rather than DOM event objects.
 
-For picking and hover, the host retains the latest detached snapshots used for rendering and passes those same snapshots to `findBodyAtDisplayPoint(...)`. It owns the transient hovered `BodyId` and supplies that identifier back to `render(...)` for the current frame.
+For picking, hover, and selection, the host retains detached observations rather than asking the renderer or engine to own interaction state. It owns both the transient hovered `BodyId` and the persistent selected `BodyId`, and supplies those identities to `render(...)` for the current frame.
 
-The pointer position is retained by the host and hover is recalculated every animation frame, not only on `pointermove`. Bodies continue moving while the pointer can remain stationary, so frame-time reevaluation keeps the body readout and visual highlight synchronized with the currently rendered observations.
+The pointer position is retained by the host and hover is recalculated every animation frame, not only on `pointermove`. Bodies continue moving while the pointer can remain stationary, so frame-time reevaluation keeps the body readout and hover ring synchronized with the currently rendered observations.
+
+Selection changes only after a primary-pointer interaction completes without moving beyond the host-defined click tolerance. Movement beyond that tolerance is treated as drag navigation: the viewport pans, but selection remains unchanged. Clicking a rendered body stores that body's `BodyId`; clicking empty Canvas clears selection. Pointer leave clears hover inspection but does not clear persistent selection.
 
 ```mermaid
 flowchart LR
@@ -140,15 +142,15 @@ flowchart LR
 
 The anchor-aware transform preserves the world coordinate underneath the pointer while the scale changes. The host currently prevents page scrolling during Canvas wheel zoom and owns scale limits and sensitivity; those are interaction policy rather than transform invariants.
 
-The coordinate and body readouts remain ordinary DOM presentation owned by the host. The transient hovered `BodyId` is also host-owned presentation state. Formatting such as decimal precision does not enter `ViewportTransform` or the renderer.
+The coordinate, hovered-body, and selected-body readouts remain ordinary DOM presentation owned by the host. The transient hovered `BodyId` and persistent selected `BodyId` are both host-owned interaction/presentation state. Formatting such as decimal precision does not enter `ViewportTransform` or the renderer.
 
 Body picking is deliberately a visualization query rather than an engine query. `KinematicWorld` currently stores kinematic position and velocity but no physical shape or radius. The hit radius comes from the Canvas renderer's display-space body marker, so placing the query in `KinematicWorld` would incorrectly turn presentation geometry into simulation geometry.
 
 When multiple rendered markers contain the pointer, the Canvas renderer chooses the hit whose rendered center is nearest to the pointer instead of depending on snapshot ordering, which is not part of the world's public contract.
 
-The renderer remains unaware of DOM pointer and wheel events, does not retain hover state between frames, and performs no simulation calculations or engine-state mutation.
+The renderer remains unaware of DOM pointer and wheel events, does not retain hover or selection state between frames, and performs no simulation calculations or engine-state mutation.
 
-Canvas regression tests cover forward and inverse coordinate mapping, spatial references, viewport centering, programmatic scale changes, display-space panning, anchor-preserving scale changes, body-marker hit testing, nearest-hit behavior, requested-body highlighting, frame clearing, and validation behavior.
+Canvas regression tests cover forward and inverse coordinate mapping, spatial references, viewport centering, programmatic scale changes, display-space panning, anchor-preserving scale changes, body-marker hit testing, nearest-hit behavior, hover highlighting, selection highlighting, combined hover-and-selection presentation, frame clearing, and validation behavior.
 
 ### SVG visualization
 
@@ -193,20 +195,22 @@ Interpolation between fixed simulation states remains deliberately deferred.
 
 ## Next step
 
-Use the completed hover/picking path to explore the smallest meaningful persistent inspection interaction.
+Use the completed persistent selection as the basis for the smallest useful selected-body inspector.
 
-The leading candidate is click selection:
+The leading candidate is a read-only position/velocity view:
 
-- distinguish transient hover from persistent selected-body identity;
-- keep selection outside authoritative simulation state;
-- define click semantics without interfering with pointer-drag panning;
-- reuse the existing `BodyId` and detached observations rather than creating a second body model;
-- keep selected-body details and richer inspector UI separate until selection ownership is proven.
+- resolve the selected `BodyId` against the latest detached snapshots;
+- display current position and velocity without introducing writable UI controls;
+- keep selection identity host-owned and keep authoritative body state inside `KinematicWorld`;
+- allow the inspector to follow the selected body's changing snapshots over time;
+- keep body mutation and drag manipulation separate until their ownership and validation requirements are concrete.
 
 Do not yet introduce:
 
+- editable body state;
 - drag-to-move bodies;
 - engine-owned physical shape solely to support interaction;
+- a general inspector framework;
 - a general styling/theme system;
 - a camera class;
 - transformation matrices;

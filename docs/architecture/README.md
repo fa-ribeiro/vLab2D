@@ -467,7 +467,8 @@ CanvasKinematicRenderer
     origin marker
     body drawing
     display-space body-marker hit testing
-    per-frame highlighted-body presentation
+    per-frame hover presentation
+    per-frame selection presentation
 ```
 
 Both renderers use `ViewportTransform` for coordinate placement while retaining rendering-technology-specific drawing behavior. Both expose programmatic viewport centering and scale changes. Canvas additionally accepts display-space pan deltas, exposes inverse display-to-world scalar queries, supports anchor-preserving scale changes, and can hit-test its rendered body markers, while browser pointer/wheel-event orchestration remains outside the renderer in host/example code.
@@ -581,7 +582,7 @@ sequenceDiagram
     Host->>World: getBodySnapshots()
     World-->>Host: detached snapshots
     Host->>Host: recompute hovered BodyId from snapshots + pointer
-    Host->>Renderer: render(snapshots, hovered BodyId)
+    Host->>Renderer: render(snapshots, hovered BodyId, selected BodyId)
     Host->>Browser: request next frame
 ```
 
@@ -593,9 +594,11 @@ The host also owns pointer and wheel interaction. It tracks the active pointer, 
 
 For wheel/trackpad zoom, the host normalizes wheel deltas, applies zoom sensitivity and minimum/maximum scale policy, prevents page scrolling while the Canvas owns the wheel interaction, and supplies an absolute requested scale together with the pointer's Canvas display-space anchor. `CanvasKinematicRenderer` delegates the anchor-preserving geometry to `ViewportTransform`.
 
-For picking and hover, the host retains the latest detached snapshots used for rendering and supplies those same observations to `CanvasKinematicRenderer.findBodyAtDisplayPoint(...)`. It owns the current pointer position and transient hovered `BodyId`, then supplies that identifier back to `render(...)` as per-frame presentation input.
+For picking, hover, and selection, the host owns interaction state while the engine continues to own authoritative body state. It retains the current pointer position, transient hovered `BodyId`, and persistent selected `BodyId`, then supplies the hover and selection identities to `render(...)` as per-frame presentation input.
 
-Hover is recomputed during the animation loop because simulation bodies move independently of pointer events. A stationary pointer can therefore gain or lose a hovered body as the rendered snapshots change. The renderer remains independent from DOM pointer/wheel-event APIs and does not persist hover identity.
+Hover is recomputed during the animation loop because simulation bodies move independently of pointer events. A stationary pointer can therefore gain or lose a hovered body as the rendered snapshots change.
+
+Selection changes only when a primary-pointer interaction completes without exceeding the host-defined movement tolerance. Once movement exceeds that tolerance, the interaction is treated as viewport dragging and does not alter selection. Clicking a body selects its `BodyId`; clicking empty Canvas clears selection. The renderer remains independent from DOM pointer/wheel-event APIs and persists neither hover nor selection identity.
 
 ```mermaid
 flowchart LR
@@ -706,6 +709,9 @@ It is useful to keep these categories separate.
 ✓ live body-under-pointer inspection
 ✓ transient host-owned hover identity
 ✓ per-frame Canvas hover highlighting
+✓ persistent host-owned selected-body identity
+✓ click-versus-drag interaction distinction
+✓ per-frame Canvas selection highlighting
 ✓ equivalent SVG and Canvas spatial references
 ✓ Canvas integer grid
 ✓ Canvas world axes
@@ -734,8 +740,8 @@ Possible future capabilities include:
 
 ```text
 ? pinch zoom
-? persistent body selection
 ? selected-body inspector
+? editable body controls
 ? experiment orchestration
 ? synchronized multiple worlds
 ? UI controls
@@ -929,7 +935,37 @@ The host recomputes hover after obtaining each frame's latest detached snapshots
 
 The same snapshot set drives hit testing and rendering, so the highlighted identity corresponds to the observations visible in that frame.
 
-No persistent selected-body state, click semantics, style/theme abstraction, `WorldBounds` value type, renderer hierarchy, camera model, transformation matrix framework, point abstraction, or gesture framework has been introduced.
+### Persistent click selection
+
+Selection is deliberately separate from hover.
+
+The browser host owns an optional selected `BodyId`. Unlike hover, selection is not recomputed from the pointer every frame. It changes only through an intentional click and therefore persists while the pointer moves away, leaves the Canvas, the viewport pans or zooms, and the selected body continues moving.
+
+A primary-pointer interaction begins as a possible click and also drives viewport panning. The host measures total movement from the pointer-down position in browser client coordinates. If movement exceeds a small tolerance, the interaction becomes a drag and selection remains unchanged. If the pointer is released without exceeding the tolerance, the release point is hit-tested against the current rendered observations: a hit replaces the selected identity, while an empty-space click clears it.
+
+```mermaid
+flowchart TD
+    DOWN["Primary pointer down"]
+    MOVE["Pointer movement"]
+    TOL["Movement exceeds click tolerance?"]
+    DRAG["Pan viewport"]
+    UP["Pointer up"]
+    PICK["Hit-test release point"]
+    SELECT["Store BodyId"]
+    CLEAR["Clear selection"]
+
+    DOWN --> MOVE --> TOL
+    TOL -->|yes| DRAG
+    TOL -->|no| UP --> PICK
+    PICK -->|body| SELECT
+    PICK -->|empty| CLEAR
+```
+
+Selection stores identity rather than a snapshot. Each new frame can therefore render the currently selected body from fresh detached observations without turning an old observation into persistent domain state.
+
+`CanvasKinematicRenderer` receives both hovered and selected identifiers as per-frame presentation input and draws distinct rings for each. A body can be both hovered and selected, while the renderer itself owns neither state.
+
+No editable body state, drag-to-move behavior, style/theme abstraction, `WorldBounds` value type, renderer hierarchy, camera model, transformation matrix framework, point abstraction, generic inspector framework, or gesture framework has been introduced.
 
 ---
 

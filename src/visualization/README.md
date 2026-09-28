@@ -97,9 +97,9 @@ Wheel normalization, zoom sensitivity, minimum and maximum scale, and suppressio
 
 Canvas also supports visual body picking through `findBodyAtDisplayPoint(...)`. The query receives detached snapshots and a Canvas drawing-buffer point, maps each body position through the same viewport transform used for rendering, and tests against the renderer's circular body-marker radius. When markers overlap, the nearest rendered center wins rather than relying on snapshot order.
 
-The renderer can also receive an optional highlighted `BodyId` during `render(...)`. It draws a simple halo around that body's existing marker but stores no hover identity itself.
+The renderer can also receive optional hovered and selected `BodyId` values during `render(...)`. It draws distinct rings around the corresponding body markers but stores neither interaction identity itself. The same body can display both states simultaneously.
 
-This is intentionally visualization geometry. The engine does not yet model physical body shape or radius, so body picking is not an engine/world query. The browser host reuses the latest rendered snapshots for both hit testing and drawing, owns the transient hovered `BodyId`, and recomputes hover every animation frame so moving bodies remain synchronized with a stationary pointer.
+This is intentionally visualization geometry. The engine does not yet model physical body shape or radius, so body picking is not an engine/world query. The browser host reuses detached observations for hit testing and drawing, owns the transient hovered `BodyId` and persistent selected `BodyId`, recomputes hover as bodies move, and changes selection only through click semantics.
 
 Clearing the previous frame remains deliberate. Trails should become an explicit visualization capability rather than appearing accidentally because old frames were left on the canvas.
 
@@ -213,8 +213,8 @@ The two concrete implementations should continue to teach us which concepts are 
 
 ## Direction
 
-Programmatic viewport centering and scale changes are supported by both concrete renderers. The Canvas browser example adds pointer-drag panning, live world-coordinate inspection, bounded pointer-anchored wheel/trackpad zoom, display-space body picking, and live hover highlighting.
+Programmatic viewport centering and scale changes are supported by both concrete renderers. The Canvas browser example adds pointer-drag panning, live world-coordinate inspection, bounded pointer-anchored wheel/trackpad zoom, display-space body picking, live hover highlighting, and persistent click selection.
 
-Anchor-preserving zoom is geometry owned by `ViewportTransform`; wheel interpretation, scale limits, sensitivity, browser event cancellation, CSS-to-Canvas coordinate conversion, inspection UI, and transient hover identity remain host policy. Body hit testing stays in Canvas visualization because the current pick radius is the renderer's display-space marker radius rather than engine-owned physical geometry. The renderer accepts a per-frame highlighted `BodyId` but does not own hover state.
+Anchor-preserving zoom is geometry owned by `ViewportTransform`; wheel interpretation, scale limits, sensitivity, browser event cancellation, CSS-to-Canvas coordinate conversion, inspection UI, transient hover identity, persistent selection identity, and click-versus-drag tolerance remain host policy. Body hit testing stays in Canvas visualization because the current pick radius is the renderer's display-space marker radius rather than engine-owned physical geometry. The renderer accepts per-frame hover and selection identities but owns neither state.
 
-The next likely inspection step is the smallest useful persistent click selection. Selected-body UI, drag manipulation, physical engine shapes, cameras, renderer interfaces, richer diagnostics, and generalized rendering abstractions remain deferred until concrete requirements establish their shape.
+The next likely inspection step is a small read-only selected-body inspector based on the latest detached snapshot for the selected `BodyId`. Editable state, drag manipulation, physical engine shapes, cameras, renderer interfaces, generalized inspector systems, richer diagnostics, and generalized rendering abstractions remain deferred until concrete requirements establish their shape.

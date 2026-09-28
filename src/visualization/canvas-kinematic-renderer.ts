@@ -9,6 +9,9 @@ const AXIS_OPACITY = 0.45;
 const HOVER_RING_PADDING = 4;
 const HOVER_RING_OPACITY = 0.6;
 
+const SELECTION_RING_PADDING = 8;
+const SELECTION_RING_OPACITY = 1;
+
 interface CanvasDrawingContext {
   clearRect(x: number, y: number, width: number, height: number): void;
 
@@ -200,7 +203,11 @@ export class CanvasKinematicRenderer {
    *
    * @param snapshots The detached body observations to render.
    */
-  public render(snapshots: readonly KinematicBodySnapshot[], highlightedBodyId?: BodyId): void {
+  public render(
+    snapshots: readonly KinematicBodySnapshot[],
+    hoveredBodyId?: BodyId,
+    selectedBodyId?: BodyId,
+  ): void {
     this.#context.clearRect(0, 0, this.#transform.width, this.#transform.height);
 
     this.#renderGrid();
@@ -208,11 +215,11 @@ export class CanvasKinematicRenderer {
     this.#renderOrigin();
 
     for (const snapshot of snapshots) {
-      this.#renderBody(snapshot, snapshot.id === highlightedBodyId);
+      this.#renderBody(snapshot, snapshot.id === hoveredBodyId, snapshot.id === selectedBodyId);
     }
   }
 
-  #renderBody(snapshot: KinematicBodySnapshot, highlighted: boolean): void {
+  #renderBody(snapshot: KinematicBodySnapshot, hovered: boolean, selected: boolean): void {
     const x = this.#transform.worldToDisplayX(snapshot.state.position.x);
     const y = this.#transform.worldToDisplayY(snapshot.state.position.y);
 
@@ -220,18 +227,27 @@ export class CanvasKinematicRenderer {
     this.#context.arc(x, y, this.#bodyRadius, 0, Math.PI * 2);
     this.#context.fill();
 
-    if (!highlighted) {
-      return;
+    if (hovered) {
+      this.#context.save();
+      this.#context.globalAlpha = HOVER_RING_OPACITY;
+
+      this.#context.beginPath();
+      this.#context.arc(x, y, this.#bodyRadius + HOVER_RING_PADDING, 0, Math.PI * 2);
+      this.#context.stroke();
+
+      this.#context.restore();
     }
 
-    this.#context.save();
-    this.#context.globalAlpha = HOVER_RING_OPACITY;
+    if (selected) {
+      this.#context.save();
+      this.#context.globalAlpha = SELECTION_RING_OPACITY;
 
-    this.#context.beginPath();
-    this.#context.arc(x, y, this.#bodyRadius + HOVER_RING_PADDING, 0, Math.PI * 2);
-    this.#context.stroke();
+      this.#context.beginPath();
+      this.#context.arc(x, y, this.#bodyRadius + SELECTION_RING_PADDING, 0, Math.PI * 2);
+      this.#context.stroke();
 
-    this.#context.restore();
+      this.#context.restore();
+    }
   }
 
   #renderOrigin(): void {

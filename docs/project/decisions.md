@@ -620,3 +620,19 @@ The host retains the current pointer client position and recomputes the hovered 
 The same `renderedSnapshots` observation set is therefore used to determine hover identity and to render both the bodies and the corresponding hover feedback. This keeps inspection synchronized with the visible frame without reading newer authoritative world state during input handling.
 
 Transient hover is distinct from persistent selection. This decision does not establish click semantics, selected-body ownership, selection persistence, drag manipulation, a style/theme system, or engine-owned interaction state.
+
+## D-058 — Selection is persistent host state changed by click, not drag
+
+**Status:** Accepted
+
+Persistent body selection is interaction/application state owned by the browser host. It is not authoritative simulation state and is not retained internally by `CanvasKinematicRenderer`.
+
+The host stores an optional selected `BodyId`. Selection changes only when a primary-pointer interaction completes as a click. Pointer movement is measured from the pointer-down position in browser client coordinates; once movement exceeds a small host-defined tolerance, the interaction is treated as viewport dragging and must not change selection.
+
+On a valid click, the host converts the release position into Canvas drawing-buffer coordinates and reuses `CanvasKinematicRenderer.findBodyAtDisplayPoint(...)` with the current detached observations. Clicking a rendered body selects its `BodyId`; clicking empty Canvas clears selection. Pointer cancellation, lost capture, pointer leave, body motion, panning, and zoom do not by themselves clear or replace the selected identity.
+
+Selection stores identity rather than a `KinematicBodySnapshot`. The selected body can therefore continue moving while new detached observations are produced each frame without making an old snapshot authoritative or persistent.
+
+`CanvasKinematicRenderer` remains stateless about interaction identity. Its `render(...)` operation receives the current hovered and selected body identifiers as per-frame presentation input and draws distinct display-space markers for those states. A body may be both hovered and selected at the same time.
+
+Click-versus-drag tolerance and gesture interpretation are browser-host policy. This decision does not establish editable body properties, selected-body inspector structure, drag-to-move behavior, engine-owned selection state, a generic interaction framework, or a general styling system.

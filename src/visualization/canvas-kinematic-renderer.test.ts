@@ -411,3 +411,48 @@ Deno.test("CanvasKinematicRenderer does not highlight another body", () => {
 
   assertEquals(arcCalls, [["arc", 120, 20, 6, 0, Math.PI * 2]]);
 });
+
+Deno.test("CanvasKinematicRenderer marks the selected body", () => {
+  const context = new RecordingCanvasContext();
+
+  const renderer = new CanvasKinematicRenderer(context, 200, 100, 10, 6);
+
+  const snapshots: readonly KinematicBodySnapshot[] = [
+    {
+      id: 7,
+      state: new KinematicState(new Vector2(2, 3), new Vector2(0, 0)),
+    },
+  ];
+
+  renderer.render(snapshots, undefined, 7);
+
+  const arcCalls = context.calls.filter(([name]) => name === "arc");
+
+  assertEquals(arcCalls, [
+    ["arc", 120, 20, 6, 0, Math.PI * 2],
+    ["arc", 120, 20, 14, 0, Math.PI * 2],
+  ]);
+});
+
+Deno.test("CanvasKinematicRenderer can show hover and selection on the same body", () => {
+  const context = new RecordingCanvasContext();
+
+  const renderer = new CanvasKinematicRenderer(context, 200, 100, 10, 6);
+
+  const snapshots: readonly KinematicBodySnapshot[] = [
+    {
+      id: 7,
+      state: new KinematicState(new Vector2(2, 3), new Vector2(0, 0)),
+    },
+  ];
+
+  renderer.render(snapshots, 7, 7);
+
+  const arcCalls = context.calls.filter(([name]) => name === "arc");
+
+  assertEquals(arcCalls, [
+    ["arc", 120, 20, 6, 0, Math.PI * 2],
+    ["arc", 120, 20, 10, 0, Math.PI * 2],
+    ["arc", 120, 20, 14, 0, Math.PI * 2],
+  ]);
+});
