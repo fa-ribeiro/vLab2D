@@ -46,6 +46,29 @@ External consumers receive detached observations rather than references to inter
 
 World stepping remains atomic: candidate states for all bodies are calculated and validated before any authoritative state is replaced.
 
+### Simulation orchestration
+
+`src/simulation/simulation.ts` now provides the real `Simulation` orchestration layer.
+
+A `Simulation`:
+
+- coordinates a fixed set of `1..N` unique Worlds;
+- preserves deterministic constructor order when stepping Worlds;
+- validates the timestep before touching any World;
+- passes the same valid `dt` to every active World;
+- records each member World as either `active` or terminally `failed`;
+- captures the original thrown value when a World fails;
+- continues stepping later Worlds after one World throws;
+- skips failed Worlds on subsequent steps;
+- exposes detached World membership through `getWorlds()`;
+- exposes detached execution observations through `getWorldStatus(world)`.
+
+Simulation owns orchestration status, not physical state. Each `World` remains authoritative over its bodies, gravity, integrator, and last valid runtime state.
+
+A World failure is therefore experimental information rather than a Simulation-wide abort condition. Because `World.step(...)` is atomic, a failed World remains at its last valid authoritative state while other active Worlds can continue evolving.
+
+Simulation deliberately has no clock, start/pause/run lifecycle, browser scheduling, renderer, Canvas dimensions, pointer input, body snapshot aggregation, retry API, or cross-World transaction.
+
 ### Shared viewport transformation
 
 `ViewportTransform` owns viewport geometry shared by the visualization paths.
@@ -195,7 +218,7 @@ flowchart LR
     RAF["requestAnimationFrame(timestamp)"]
     DELTA["Frame delta"]
     ACC["Time accumulator"]
-    STEP["0..N fixed world steps"]
+    STEP["0..N fixed Simulation steps"]
     SNAP["Detached snapshots"]
     RENDER["Canvas render"]
 
@@ -209,7 +232,7 @@ The current simulation timestep is:
 1 / 60 second
 ```
 
-A fast display may render frames without advancing the simulation. A slower display may require multiple fixed simulation steps before one render.
+A fast display may render frames without advancing the Simulation. A slower display may require multiple fixed Simulation steps before one render.
 
 The browser host limits unusually large frame deltas before adding them to the accumulator so a delayed or suspended tab does not attempt excessive simulation catch-up.
 
@@ -217,19 +240,22 @@ Interpolation between fixed simulation states remains deliberately deferred.
 
 ## Next step
 
-Continue **Phase 1C — Simulation / orchestration**.
+Continue **Phase 1D — Runtime**.
 
-Phase 1B is complete:
+Phase 1C is complete:
 
-- `BodyState` is structural World-owned runtime data;
-- `BodySnapshot` is the detached observation contract;
-- the obsolete single-state `KinematicSimulation` is retired;
-- `World` is now the general domain container name;
-- world-level environmental acceleration is named `gravity`;
-- `KinematicIntegrator` remains deliberately narrow and still receives acceleration as its mathematical input.
+- `Simulation` exists outside the engine layer;
+- Simulation coordinates a fixed `1..N` set of unique Worlds;
+- `simulation.step(dt)` deterministically steps every active World with the same timestep;
+- invalid Simulation timesteps are rejected before any World is touched;
+- a World exception is captured as that World's terminal failed status;
+- failure of one World does not stop later Worlds from advancing;
+- failed Worlds are skipped on future steps;
+- `getWorlds()` and `getWorldStatus(world)` provide detached orchestration observations;
+- physical state remains owned by each World.
 
-Phase 1C should introduce the smallest real `Simulation` concept needed to coordinate one or more Worlds through deterministic `step(dt)` orchestration.
+Phase 1D should extract browser wall-clock execution from the Canvas example. The Runtime layer should own `requestAnimationFrame`, frame-delta handling, fixed-timestep accumulation, and calling `simulation.step(...)`.
 
-It must not own browser scheduling, Canvas dimensions, pointer input, rendering, or `requestAnimationFrame`.
+Simulation must remain deterministic and host-independent.
 
 The phased strategy is maintained in [`roadmap.md`](roadmap.md).

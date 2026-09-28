@@ -16,15 +16,17 @@ The goal is not to predict the final system. It is to make the current system un
 
 ## 1. Architecture at a glance
 
-At the current checkpoint, vLab2D has three important runtime areas:
+At the current checkpoint, vLab2D has four important runtime areas:
 
 1. an independent simulation engine;
-2. visualization outside that engine;
-3. host/example code that composes the two.
+2. deterministic Simulation orchestration above one or more Worlds;
+3. visualization outside the engine and Simulation layers;
+4. host/example code that still owns browser/runtime scheduling.
 
 ```mermaid
 flowchart LR
     HOST["Host / Example"]
+    SIM["Simulation"]
 
     WORLD["World"]
     SNAP["Detached snapshots"]
@@ -32,6 +34,9 @@ flowchart LR
     TRANSFORM["ViewportTransform"]
     SVG["SvgKinematicRenderer"]
     CANVAS["CanvasKinematicRenderer"]
+
+    HOST --> SIM
+    SIM --> WORLD
 
     HOST --> WORLD
     WORLD --> SNAP
@@ -65,6 +70,9 @@ src/
 │   ├── world/
 │   └── mod.ts
 │
+├── simulation/
+│   └── simulation.ts
+│
 └── visualization/
     ├── canvas-kinematic-renderer.ts
     ├── svg-kinematic-renderer.ts
@@ -84,6 +92,7 @@ These areas have different responsibilities.
 | `src/engine/math/`       | Small mathematical values and operations used by the engine         |
 | `src/engine/kinematics/` | Numerical integration behavior for current kinematic body state     |
 | `src/engine/world/`      | Own collections of simulated bodies and their authoritative state   |
+| `src/simulation/`        | Coordinate deterministic stepping and per-World execution status    |
 | `src/visualization/`     | Convert observed simulation information into visual representations |
 | `examples/`              | Compose components into runnable scenarios                          |
 
@@ -98,15 +107,18 @@ vLab2D deliberately keeps dependencies pointing toward simulation concepts rathe
 ```mermaid
 flowchart TD
     EXAMPLE["Example / future application"]
+    SIM["Simulation"]
     VIS["Visualization"]
     API["Engine public API<br/>mod.ts"]
     WORLD["World"]
     KIN["Kinematics"]
     MATH["Math"]
 
+    EXAMPLE --> SIM
     EXAMPLE --> VIS
     EXAMPLE --> API
 
+    SIM --> API
     VIS --> API
 
     API --> WORLD
@@ -350,13 +362,13 @@ The world first calculates and validates every candidate state before committing
 
 ```mermaid
 sequenceDiagram
-    participant Host
+    participant Caller
     participant World as World
     participant Integrator as KinematicIntegrator
     participant Candidates as Candidate states
     participant State as Authoritative state
 
-    Host->>World: step(dt)
+    Caller->>World: step(dt)
     World->>World: validate dt
 
     loop every body
@@ -367,7 +379,7 @@ sequenceDiagram
     end
 
     World->>State: commit all candidates
-    World-->>Host: step complete
+    World-->>Caller: step complete
 ```
 
 The invariant is:
@@ -413,20 +425,69 @@ Unlike the earlier `KinematicState` class, `BodyState` has no constructor or beh
 
 ---
 
-## 11. Retired single-state simulation
+## 11. Simulation orchestration
 
-`KinematicSimulation` has been removed.
+The real `Simulation` layer now lives outside the engine:
 
-It originally established several useful invariants:
+```text
+src/simulation/simulation.ts
+```
 
-- authoritative state ownership;
-- validated state changes;
-- injected integration behavior;
-- candidate-before-commit stepping.
+Its responsibility is deliberately small:
 
-`World` now provides those responsibilities for actual body instances, so retaining a second single-state runtime would duplicate ownership concepts and conflict with the future meaning of `Simulation`.
+```text
+fixed World membership
+        +
+per-World execution status
+        +
+deterministic step(dt)
+```
 
-The future `Simulation` layer is reserved for orchestration of one or more Worlds rather than ownership of one body's position and velocity.
+```mermaid
+flowchart TD
+    SIM["Simulation"]
+    W1["World A<br/>active"]
+    W2["World B<br/>failed"]
+    W3["World C<br/>active"]
+    ERR["captured thrown value"]
+
+    SIM --> W1
+    SIM --> W2
+    SIM --> W3
+    W2 --> ERR
+```
+
+A Simulation contains `1..N` unique World references. Membership is fixed after construction and the supplied collection is copied so external array mutation cannot change the Simulation.
+
+`simulation.step(dt)` validates the timestep before any World is touched. For a valid timestep it visits active Worlds in constructor order and supplies the same `dt` to each.
+
+If a World throws while stepping, Simulation records that World as terminally failed and continues with later active Worlds. Failed Worlds are skipped on future steps.
+
+This makes failure part of the experiment rather than a Simulation-wide abort:
+
+```text
+World A  active  → continues
+World B  failed  → retains last valid World-owned state
+World C  active  → continues
+```
+
+World stepping itself remains atomic, so Simulation failure status does not mean invalid physical state was committed.
+
+`getWorlds()` exposes a detached membership collection containing the actual coordinated World references. `getWorldStatus(world)` exposes a detached `active` / `failed(error)` status, or `undefined` for a non-member.
+
+Simulation does **not** own:
+
+- body runtime state;
+- gravity or integrators;
+- body snapshots;
+- simulation time;
+- browser scheduling;
+- start/pause/run lifecycle;
+- rendering;
+- retry/reset behavior;
+- cross-World transactional rollback.
+
+The earlier `KinematicSimulation` remains retired. It owned one body's state; the current `Simulation` instead coordinates independent Worlds.
 
 ---
 
@@ -562,16 +623,17 @@ The transform was extracted only after SVG and Canvas independently demonstrated
 
 Example code currently acts as the composition root.
 
-The host decides:
+The host currently acts as the composition root and decides:
 
-- which integrator to use;
-- which gravity the world has;
+- which Worlds to create;
+- which integrator and gravity each World uses;
 - which bodies to create;
-- when the world advances;
+- which Worlds belong to the Simulation;
+- when the Simulation advances;
 - which renderer to create;
 - where output is displayed or written.
 
-The engine does not decide which renderer exists, and the renderer does not decide which world or integrator exists.
+The engine does not decide which renderer exists. Simulation does not decide when wall-clock execution occurs. The renderer does not decide which World, Simulation, or integrator exists.
 
 ---
 
@@ -583,7 +645,8 @@ The Canvas example separates simulation cadence from rendering cadence.
 sequenceDiagram
     participant Browser
     participant Host
-    participant World as World
+    participant Simulation
+    participant World
     participant Renderer as CanvasKinematicRenderer
 
     Browser->>Host: requestAnimationFrame(timestamp)
@@ -591,7 +654,8 @@ sequenceDiagram
     Host->>Host: add delta to accumulator
 
     loop while accumulator >= fixed timestep
-        Host->>World: step(fixed timestep)
+        Host->>Simulation: step(fixed timestep)
+        Simulation->>World: step(fixed timestep)
         Host->>Host: subtract fixed timestep
     end
 
@@ -606,7 +670,7 @@ sequenceDiagram
 
 Variable browser frame delta is used as scheduling input, not as the numerical integration timestep.
 
-The renderer remains unaware of `requestAnimationFrame` and of simulation stepping.
+The renderer remains unaware of `requestAnimationFrame` and of Simulation stepping. Simulation remains unaware of browser time and render cadence.
 
 The host also owns pointer and wheel interaction. It tracks the active pointer, uses browser pointer capture for dragging, and converts browser client coordinates from CSS space into Canvas drawing-buffer coordinates. Display-space deltas are passed to `CanvasKinematicRenderer.panViewportBy(...)`; absolute display coordinates are passed through the renderer's inverse mapping queries to produce the live world-coordinate readout and through its body-marker hit test to produce the live body readout.
 
@@ -710,6 +774,12 @@ It is useful to keep these categories separate.
 ✓ world-owned authoritative body state
 ✓ detached BodyState / BodySnapshot observations
 ✓ atomic world stepping
+✓ deterministic Simulation orchestration across 1..N Worlds
+✓ fixed unique Simulation World membership
+✓ per-World active / failed execution status
+✓ World-failure isolation while later Worlds continue
+✓ failed Worlds skipped on subsequent Simulation steps
+✓ detached Simulation membership / status observations
 ✓ independent SVG visualization
 ✓ independent Canvas 2D visualization
 ✓ shared ViewportTransform
@@ -763,8 +833,6 @@ Possible future capabilities include:
 ? pinch zoom
 ? selected-body velocity-vector diagnostic
 ? editable body controls
-? experiment orchestration
-? synchronized multiple worlds
 ? UI controls
 ? collision detection and response
 ? forces

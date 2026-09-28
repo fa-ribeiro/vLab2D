@@ -22,8 +22,10 @@ mindmap
       Future forces
       Future collision pipeline
     Simulation / Orchestration
-      One or more Worlds
+      Fixed 1..N World membership
       Deterministic stepping
+      Active / failed World status
+      Failure isolation
       Controlled comparisons
     Visualization
       Canvas primary
@@ -100,6 +102,26 @@ flowchart TD
 ```
 
 `Body` currently has no intrinsic properties. This is intentional during Phase 1.
+
+## Current Simulation relationship
+
+```mermaid
+flowchart TD
+    SIM["Simulation"]
+    W1["World A<br/>active"]
+    W2["World B<br/>failed"]
+    W3["World C<br/>active"]
+    ERR["captured failure"]
+
+    SIM --> W1
+    SIM --> W2
+    SIM --> W3
+    W2 --> ERR
+```
+
+Simulation owns fixed World membership and execution status only. Worlds continue to own their own physical state.
+
+For a valid timestep, `Simulation.step(dt)` visits active Worlds in deterministic constructor order. If one World throws, that World becomes terminally failed and later active Worlds still receive the same timestep. Failed Worlds are skipped on subsequent Simulation steps.
 
 ## Future cardinality direction
 

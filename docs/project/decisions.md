@@ -297,7 +297,7 @@ This follows the project principle that abstractions should emerge from concrete
 
 `World` later became the real multi-body state owner, preserving those invariants at world scope. Phase 1B.1 therefore retires the obsolete single-state `KinematicSimulation` rather than carrying two competing state-owning runtime concepts forward.
 
-The future `Simulation` concept has a different role: orchestration of one or more Worlds rather than ownership of one body's runtime state.
+The current `Simulation` concept has a different role: orchestration of one or more Worlds rather than ownership of one body's runtime state.
 
 ## D-039 — Kinematic integration is represented by a narrow strategy contract
 
@@ -749,7 +749,7 @@ For each relationship, decide independently:
 
 Current and intended examples include:
 
-- `Simulation` may coordinate one or more `World` instances;
+- `Simulation` coordinates one or more `World` instances;
 - `World` owns zero or more body runtime instances;
 - a future `Body` may have zero or more geometry attachments, allowing particle-like bodies and later compound bodies;
 - a geometry attachment refers to one shape definition;
@@ -795,7 +795,7 @@ The World creates authoritative `BodyState` values from `BodyInitialConditions`,
 
 `KinematicIntegrator` remains deliberately narrow. Its `integrate(...)` operation consumes a `BodyState`, acceleration, and timestep and returns a candidate `BodyState`. The kinematic qualifier therefore still communicates a real contract rather than historical naming.
 
-The earlier `KinematicSimulation` is removed. Its useful lessons—authoritative state ownership, validated candidate-before-commit updates, and injected integration behavior—are already represented by `World`. Keeping the old class would create a competing meaning for the future `Simulation` layer, which is reserved for orchestration of one or more Worlds.
+The earlier `KinematicSimulation` is removed. Its useful lessons—authoritative state ownership, validated candidate-before-commit updates, and injected integration behavior—are already represented by `World`. Keeping the old class would create a competing meaning for the `Simulation` layer, which now orchestrates one or more Worlds.
 
 No new physics or simulation behavior is introduced by this decision.
 
@@ -831,3 +831,60 @@ This refactor does not introduce constructor defaults. `World` still requires ex
 Example filenames and renderer names retain their current `kinematic` qualifier because those names still describe the examples' and renderers' present scope. They should broaden only when concrete capabilities justify it.
 
 No equations, timestep behavior, state ownership, observation semantics, or visualization behavior change as part of this decision.
+
+## D-068 — Simulation coordinates Worlds and isolates per-World execution failure
+
+**Status:** Accepted and implemented
+
+`Simulation` is the deterministic orchestration layer above `World`.
+
+A Simulation is created with a fixed set of `1..N` unique World references. The constructor copies the supplied collection so later caller mutation cannot change Simulation membership. The same World reference cannot appear more than once because doing so would cause that World to advance multiple times during one Simulation step.
+
+The minimal public API is:
+
+```text
+new Simulation(worlds)
+simulation.step(dt)
+simulation.getWorlds()
+simulation.getWorldStatus(world)
+```
+
+`getWorlds()` returns a detached membership collection containing the actual coordinated World references. Mutating the returned array cannot change Simulation membership; the Worlds themselves remain the same state-owning domain objects.
+
+`getWorldStatus(world)` reports a detached orchestration status:
+
+```text
+active
+failed(error)
+undefined for a non-member
+```
+
+`active` means the World remains eligible for future Simulation steps. The term deliberately avoids lifecycle concepts such as running, paused, or stopped, which belong to Runtime/application execution rather than deterministic Simulation orchestration.
+
+`Simulation.step(dt)` validates the timestep before touching any World. Invalid Simulation input therefore throws immediately without changing World execution statuses.
+
+For a valid timestep, Simulation visits member Worlds in deterministic constructor order. Every active World receives the same `dt` exactly once.
+
+If an individual `World.step(dt)` throws:
+
+1. Simulation captures the original thrown value;
+2. that World becomes terminally `failed`;
+3. later active Worlds are still stepped;
+4. the failed World is skipped on subsequent Simulation steps.
+
+A World failure is treated as experimental information rather than a reason to abort the entire multi-World comparison.
+
+Simulation owns only membership and execution status. It does not own or copy body runtime state, World gravity, integrators, or detached body snapshots. Because `World.step(...)` remains atomic, a World that fails during stepping remains at its last valid authoritative state.
+
+Phase 1C deliberately does not introduce:
+
+- Simulation time or a clock;
+- start, pause, resume, stop, or `run()`;
+- dynamic World add/remove operations;
+- retry, reset, or failed-to-active recovery;
+- browser scheduling or `requestAnimationFrame`;
+- rendering or Canvas dimensions;
+- aggregated physical snapshots;
+- cross-World transactional rollback.
+
+Those capabilities should be introduced only when concrete Runtime or experiment requirements establish their semantics.

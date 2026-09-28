@@ -1,4 +1,5 @@
 import { Body, SemiImplicitEulerIntegrator, Vector2, World } from "../src/engine/mod.ts";
+import { Simulation } from "../src/simulation/simulation.ts";
 import { SvgKinematicRenderer } from "../src/visualization/svg-kinematic-renderer.ts";
 
 const world = new World(new Vector2(0, -9.81), new SemiImplicitEulerIntegrator());
@@ -19,8 +20,10 @@ world.addBody(particle, {
   velocity: new Vector2(-1, 4),
 });
 
+const simulation = new Simulation([world]);
+
 for (let step = 0; step < 5; step++) {
-  world.step(0.1);
+  simulation.step(0.1);
 }
 
 const renderer = new SvgKinematicRenderer(800, 600, 40, 6);

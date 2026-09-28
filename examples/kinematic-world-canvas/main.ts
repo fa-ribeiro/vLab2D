@@ -5,6 +5,7 @@ import {
   Vector2,
   World,
 } from "../../src/engine/mod.ts";
+import { Simulation } from "../../src/simulation/simulation.ts";
 import { CanvasKinematicRenderer } from "../../src/visualization/canvas-kinematic-renderer.ts";
 
 const MIN_VIEWPORT_SCALE = 10;
@@ -67,11 +68,21 @@ const world = new World(new Vector2(0, -1), new SemiImplicitEulerIntegrator());
 
 const particle = new Body();
 
-world.addBody(particle, { position: new Vector2(-4, 3), velocity: new Vector2(1, 2) });
+world.addBody(particle, {
+  position: new Vector2(-4, 3),
+  velocity: new Vector2(1, 2),
+});
 
-world.addBody(particle, { position: new Vector2(0, 5) });
+world.addBody(particle, {
+  position: new Vector2(0, 5),
+});
 
-world.addBody(particle, { position: new Vector2(4, 2), velocity: new Vector2(-1, 2) });
+world.addBody(particle, {
+  position: new Vector2(4, 2),
+  velocity: new Vector2(-1, 2),
+});
+
+const simulation = new Simulation([world]);
 
 const renderer = new CanvasKinematicRenderer(context, canvas.width, canvas.height, 40, 6);
 
@@ -225,13 +236,17 @@ function refreshSelectedBodyInspection(): void {
 
   const { position, velocity } = snapshot.state;
 
-  selectedBodyPositionOutput.value = `Position: (${position.x.toFixed(2)}, ${position.y.toFixed(
-    2,
-  )})`;
+  selectedBodyPositionOutput.value = `Position: (${position.x.toFixed(2)}, ${
+    position.y.toFixed(
+      2,
+    )
+  })`;
 
-  selectedBodyVelocityOutput.value = `Velocity: (${velocity.x.toFixed(2)}, ${velocity.y.toFixed(
-    2,
-  )})`;
+  selectedBodyVelocityOutput.value = `Velocity: (${velocity.x.toFixed(2)}, ${
+    velocity.y.toFixed(
+      2,
+    )
+  })`;
 }
 
 canvas.addEventListener("pointermove", (event) => {
@@ -309,7 +324,7 @@ function frame(timestamp: number): void {
   accumulator += Math.min(frameDelta, MAX_FRAME_DELTA);
 
   while (accumulator >= FIXED_TIMESTEP) {
-    world.step(FIXED_TIMESTEP);
+    simulation.step(FIXED_TIMESTEP);
     accumulator -= FIXED_TIMESTEP;
   }
 

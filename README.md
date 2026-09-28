@@ -10,9 +10,9 @@ Eventually, vLab2D aims to make simulations not only runnable, but **observable*
 
 ## Project status
 
-**Current checkpoint:** Phase 1 architectural refactoring is in progress. `Body` is a reusable definition; `BodyInitialConditions` establish world-specific starting values; `BodyState` is the readonly runtime-data contract owned by `World`; and `BodySnapshot` provides detached observations. The obsolete single-state `KinematicSimulation` has been retired. Existing Canvas/SVG behavior, viewport interaction, picking, selection, and selected-body inspection remain intact.
+**Current checkpoint:** Phase 1 architectural refactoring is in progress. `Body` is a reusable definition; `World` owns body runtime state and gravity; and the new `Simulation` layer coordinates one or more Worlds through deterministic `step(dt)` calls while tracking per-World active/failed execution status. A failure in one World is isolated so the remaining active Worlds continue. Existing Canvas/SVG behavior, viewport interaction, picking, selection, and selected-body inspection remain intact.
 
-**Next step:** Phase 1C will introduce the smallest real `Simulation` orchestration concept for coordinating one or more Worlds through deterministic `step(dt)` calls, without browser scheduling or visualization responsibilities.
+**Next step:** Phase 1D will extract browser runtime scheduling from the Canvas example so wall-clock timing, fixed-timestep accumulation, and `requestAnimationFrame` drive `Simulation` without becoming Simulation responsibilities.
 
 See the [project documentation](docs/project/README.md) for the authoritative current status, project context, decisions, workflow, and continuity information.
 
@@ -41,6 +41,7 @@ vLab2D/
 ├── examples/             # runnable examples and visual experiments
 ├── src/
 │   ├── engine/           # self-contained simulation engine
+│   ├── simulation/       # deterministic multi-World orchestration
 │   └── visualization/    # static and live visualization
 ├── tests/                # project-level and integration tests
 ├── .gitignore

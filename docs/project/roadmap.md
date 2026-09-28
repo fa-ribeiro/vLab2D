@@ -133,19 +133,32 @@ This checkpoint makes the domain boundary explicit without changing equations, n
 
 ### 1C — Simulation / orchestration
 
-Introduce the smallest real `Simulation` concept only after the Body/World model is clear.
+**Status:** implemented.
 
-Intended responsibility:
+The first real `Simulation` is intentionally small and host-independent.
 
-- coordinate one or more Worlds;
-- provide deterministic `step(dt)` orchestration;
-- avoid browser scheduling and visualization responsibilities.
+Current result:
 
-Multi-world capability is a real project goal, so the design should not unnecessarily assume that Simulation permanently owns exactly one World.
+- Simulation coordinates a fixed set of `1..N` unique Worlds;
+- membership is copied at construction and cannot be changed through caller array mutation;
+- `getWorlds()` returns a detached membership observation;
+- every member World begins with `active` execution status;
+- `getWorldStatus(world)` reports `active`, `failed`, or `undefined` for a non-member;
+- `step(dt)` validates the timestep before touching any World;
+- every active World is stepped once, in deterministic constructor order, with the same `dt`;
+- when a World throws, Simulation records that World as terminally `failed`, retains the original thrown value, and continues with later Worlds;
+- failed Worlds are skipped on subsequent steps;
+- World physical state remains owned exclusively by each World;
+- Simulation does not aggregate body snapshots or provide a physical-state facade;
+- Simulation has no clock, start/pause/run lifecycle, browser scheduling, rendering, retry/reset behavior, or cross-World transaction.
+
+A World failure is treated as experimental output rather than a reason to abort the entire multi-World comparison.
 
 ### 1D — Runtime
 
-Extract host scheduling only after Simulation exists.
+**Status:** next.
+
+Extract host scheduling now that deterministic Simulation orchestration exists.
 
 Intended browser-runtime responsibilities include:
 
