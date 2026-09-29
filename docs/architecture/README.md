@@ -16,16 +16,17 @@ The goal is not to predict the final system. It is to make the current system un
 
 ## 1. Architecture at a glance
 
-At the current checkpoint, vLab2D has four important runtime areas:
+At the current checkpoint, vLab2D has four concrete architectural layers:
 
 1. an independent simulation engine;
 2. deterministic Simulation orchestration above one or more Worlds;
 3. visualization outside the engine and Simulation layers;
-4. host/example code that still owns browser/runtime scheduling.
+4. browser Runtime scheduling that drives Simulation while remaining independent from rendering.
 
 ```mermaid
 flowchart LR
     HOST["Host / Example"]
+    RUNTIME["BrowserSimulationRuntime"]
     SIM["Simulation"]
 
     WORLD["World"]
@@ -35,7 +36,8 @@ flowchart LR
     SVG["SvgKinematicRenderer"]
     CANVAS["CanvasKinematicRenderer"]
 
-    HOST --> SIM
+    HOST --> RUNTIME
+    RUNTIME --> SIM
     SIM --> WORLD
 
     HOST --> WORLD
@@ -73,6 +75,10 @@ src/
 ├── simulation/
 │   └── simulation.ts
 │
+├── runtime/
+│   └── browser/
+│       └── simulation-runtime.ts
+│
 └── visualization/
     ├── canvas-kinematic-renderer.ts
     ├── svg-kinematic-renderer.ts
@@ -85,16 +91,17 @@ examples/
 
 These areas have different responsibilities.
 
-| Area                     | Responsibility                                                      |
-| ------------------------ | ------------------------------------------------------------------- |
-| `src/engine/`            | Own and advance simulation state                                    |
-| `src/engine/mod.ts`      | Define the public consumer-facing engine boundary                   |
-| `src/engine/math/`       | Small mathematical values and operations used by the engine         |
-| `src/engine/kinematics/` | Numerical integration behavior for current kinematic body state     |
-| `src/engine/world/`      | Own collections of simulated bodies and their authoritative state   |
-| `src/simulation/`        | Coordinate deterministic stepping and per-World execution status    |
-| `src/visualization/`     | Convert observed simulation information into visual representations |
-| `examples/`              | Compose components into runnable scenarios                          |
+| Area                     | Responsibility                                                                |
+| ------------------------ | ----------------------------------------------------------------------------- |
+| `src/engine/`            | Own and advance simulation state                                              |
+| `src/engine/mod.ts`      | Define the public consumer-facing engine boundary                             |
+| `src/engine/math/`       | Small mathematical values and operations used by the engine                   |
+| `src/engine/kinematics/` | Numerical integration behavior for current kinematic body state               |
+| `src/engine/world/`      | Own collections of simulated bodies and their authoritative state             |
+| `src/simulation/`        | Coordinate deterministic stepping and per-World execution status              |
+| `src/runtime/browser/`   | Drive Simulation from browser wall-clock scheduling and fixed-timestep timing |
+| `src/visualization/`     | Convert observed simulation information into visual representations           |
+| `examples/`              | Compose components into runnable scenarios                                    |
 
 The folders are not intended as permanent framework layers. They exist because concrete implementation responsibilities have appeared.
 
@@ -107,6 +114,7 @@ vLab2D deliberately keeps dependencies pointing toward simulation concepts rathe
 ```mermaid
 flowchart TD
     EXAMPLE["Example / future application"]
+    RUNTIME["Browser Runtime"]
     SIM["Simulation"]
     VIS["Visualization"]
     API["Engine public API<br/>mod.ts"]
@@ -114,10 +122,11 @@ flowchart TD
     KIN["Kinematics"]
     MATH["Math"]
 
-    EXAMPLE --> SIM
+    EXAMPLE --> RUNTIME
     EXAMPLE --> VIS
     EXAMPLE --> API
 
+    RUNTIME --> SIM
     SIM --> API
     VIS --> API
 
@@ -629,48 +638,57 @@ The host currently acts as the composition root and decides:
 - which integrator and gravity each World uses;
 - which bodies to create;
 - which Worlds belong to the Simulation;
-- when the Simulation advances;
+- which browser Runtime configuration to use;
+- which frame callback observes and presents current state;
 - which renderer to create;
 - where output is displayed or written.
 
-The engine does not decide which renderer exists. Simulation does not decide when wall-clock execution occurs. The renderer does not decide which World, Simulation, or integrator exists.
+Runtime now decides when deterministic Simulation steps occur from browser wall-clock input. The engine does not decide which renderer exists. Simulation does not know about wall-clock execution. Runtime does not know how a frame is rendered. The renderer does not decide which World, Simulation, Runtime, or integrator exists.
 
 ---
 
 ## 15. Current browser runtime flow
 
-The Canvas example separates simulation cadence from rendering cadence.
+`BrowserSimulationRuntime` separates Simulation cadence from browser frame cadence.
 
 ```mermaid
 sequenceDiagram
     participant Browser
-    participant Host
+    participant Runtime as BrowserSimulationRuntime
     participant Simulation
     participant World
+    participant Host
     participant Renderer as CanvasKinematicRenderer
 
-    Browser->>Host: requestAnimationFrame(timestamp)
-    Host->>Host: calculate frame delta
-    Host->>Host: add delta to accumulator
+    Host->>Runtime: run()
+    Runtime->>Host: onFrame() initial presentation
+    Runtime->>Browser: requestAnimationFrame(callback)
+
+    Browser->>Runtime: callback(timestamp)
+    Runtime->>Runtime: establish first timestamp
+    Runtime->>Browser: request next frame
+
+    Browser->>Runtime: callback(timestamp)
+    Runtime->>Runtime: calculate + clamp frame delta
+    Runtime->>Runtime: add delta to accumulator
 
     loop while accumulator >= fixed timestep
-        Host->>Simulation: step(fixed timestep)
+        Runtime->>Simulation: step(fixed timestep)
         Simulation->>World: step(fixed timestep)
-        Host->>Host: subtract fixed timestep
+        Runtime->>Runtime: subtract fixed timestep
     end
 
+    Runtime->>Host: onFrame()
     Host->>World: getBodySnapshots()
     World-->>Host: detached snapshots
-    Host->>Host: recompute hovered BodyId from snapshots + pointer
-    Host->>Host: resolve selected BodyId against snapshots
-    Host->>Host: update selected-body position / velocity outputs
+    Host->>Host: refresh pointer / selection inspection
     Host->>Renderer: render(snapshots, hovered BodyId, selected BodyId)
-    Host->>Browser: request next frame
+    Runtime->>Browser: request next frame
 ```
 
-Variable browser frame delta is used as scheduling input, not as the numerical integration timestep.
+Variable browser frame delta is scheduling input only; fixed `Simulation.step(dt)` values remain the deterministic numerical progression.
 
-The renderer remains unaware of `requestAnimationFrame` and of Simulation stepping. Simulation remains unaware of browser time and render cadence.
+Runtime remains unaware of Canvas, snapshots, and interaction state. The renderer remains unaware of `requestAnimationFrame` and Simulation stepping. Simulation remains unaware of browser time and render cadence.
 
 The host also owns pointer and wheel interaction. It tracks the active pointer, uses browser pointer capture for dragging, and converts browser client coordinates from CSS space into Canvas drawing-buffer coordinates. Display-space deltas are passed to `CanvasKinematicRenderer.panViewportBy(...)`; absolute display coordinates are passed through the renderer's inverse mapping queries to produce the live world-coordinate readout and through its body-marker hit test to produce the live body readout.
 
@@ -706,6 +724,12 @@ Several project principles are now demonstrated by the implementation.
 ### Simulation and visualization are independent
 
 The engine contains no rendering dependency.
+
+### Runtime and Simulation are independent
+
+`BrowserSimulationRuntime` converts browser wall-clock cadence into fixed deterministic Simulation steps.
+
+Simulation does not know about `requestAnimationFrame`, frame timestamps, accumulators, or rendering callbacks.
 
 ### State ownership is explicit
 
@@ -808,8 +832,11 @@ It is useful to keep these categories separate.
 ✓ Canvas world axes
 ✓ Canvas world-origin marker
 ✓ external host/example composition
-✓ browser requestAnimationFrame host
-✓ fixed-timestep accumulator loop
+✓ BrowserSimulationRuntime
+✓ Runtime-owned requestAnimationFrame scheduling
+✓ Runtime-owned frame-delta clamping
+✓ Runtime-owned fixed-timestep accumulator loop
+✓ host-defined Runtime frame callback
 ✓ simulation/render cadence separation
 ```
 

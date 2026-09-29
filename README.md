@@ -10,9 +10,9 @@ Eventually, vLab2D aims to make simulations not only runnable, but **observable*
 
 ## Project status
 
-**Current checkpoint:** Phase 1 architectural refactoring is in progress. `Body` is a reusable definition; `World` owns body runtime state and gravity; and the new `Simulation` layer coordinates one or more Worlds through deterministic `step(dt)` calls while tracking per-World active/failed execution status. A failure in one World is isolated so the remaining active Worlds continue. Existing Canvas/SVG behavior, viewport interaction, picking, selection, and selected-body inspection remain intact.
+**Current checkpoint:** Phase 1 architectural refactoring now has concrete Body → World → Simulation → Runtime layers. `BrowserSimulationRuntime` owns browser animation-frame scheduling and fixed-timestep accumulation, drives deterministic `Simulation.step(dt)` calls, and invokes a host frame callback after stepping. Rendering and pointer interaction remain outside Runtime, while per-World failure isolation remains owned by Simulation.
 
-**Next step:** Phase 1D will extract browser runtime scheduling from the Canvas example so wall-clock timing, fixed-timestep accumulation, and `requestAnimationFrame` drive `Simulation` without becoming Simulation responsibilities.
+**Next step:** Phase 1E will review module/folder organization and simplify runnable examples around the now-established layer boundaries without adding simulation features.
 
 See the [project documentation](docs/project/README.md) for the authoritative current status, project context, decisions, workflow, and continuity information.
 
@@ -42,6 +42,7 @@ vLab2D/
 ├── src/
 │   ├── engine/           # self-contained simulation engine
 │   ├── simulation/       # deterministic multi-World orchestration
+│   ├── runtime/          # host execution and browser scheduling
 │   └── visualization/    # static and live visualization
 ├── tests/                # project-level and integration tests
 ├── .gitignore
@@ -61,7 +62,7 @@ The project currently has two concrete visualization paths:
 
 Both renderers use the shared `ViewportTransform` for bidirectional coordinate mapping, continuous visible-world geometry, mutable world-space centering, and mutable display scale while retaining rendering-technology-specific drawing behavior. Both renderers expose programmatic viewport centering and scale changes. Canvas additionally accepts display-space pan deltas, exposes scalar display-to-world queries for interaction, and can change scale around a display-space anchor without exposing the transform object itself.
 
-The browser Canvas example owns pointer and wheel-event orchestration and converts browser CSS coordinates into Canvas drawing-buffer units. It uses display-space deltas for panning, inverse mapping for a live world-coordinate readout, and bounded exponential wheel/trackpad scaling for pointer-anchored zoom. It also asks `CanvasKinematicRenderer` which rendered body marker, if any, contains the pointer, presents the resulting `BodyId` as ordinary DOM inspection output, and passes transient hover and persistent selection identities into rendering so they receive distinct visual rings. The host resolves the selected `BodyId` against the latest detached snapshots each frame to present live read-only position and velocity values without retaining a selected snapshot or reading mutable engine storage. Zoom sensitivity, wheel-delta normalization, minimum/maximum scale, click-versus-drag tolerance, hover state, selection state, and UI formatting remain host/application concerns rather than engine state.
+`BrowserSimulationRuntime` owns the live Canvas example's animation-frame scheduling, frame-delta clamping, fixed-timestep accumulation, and calls to `Simulation.step(...)`. The browser Canvas example still owns pointer and wheel-event orchestration and converts browser CSS coordinates into Canvas drawing-buffer units. It uses display-space deltas for panning, inverse mapping for a live world-coordinate readout, and bounded exponential wheel/trackpad scaling for pointer-anchored zoom. It also asks `CanvasKinematicRenderer` which rendered body marker, if any, contains the pointer, presents the resulting `BodyId` as ordinary DOM inspection output, and passes transient hover and persistent selection identities into rendering so they receive distinct visual rings. The host resolves the selected `BodyId` against the latest detached snapshots each frame to present live read-only position and velocity values without retaining a selected snapshot or reading mutable engine storage. Zoom sensitivity, wheel-delta normalization, minimum/maximum scale, click-versus-drag tolerance, hover state, selection state, and UI formatting remain host/application concerns rather than engine state.
 
 Canvas and canvas-like interactive rendering drive visualization design. SVG should remain working where support is natural and reasonably inexpensive, but Canvas features should not be compromised merely to preserve SVG parity.
 

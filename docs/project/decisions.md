@@ -440,24 +440,24 @@ As the architecture grows, `docs/architecture/README.md` remains the section ent
 
 ## D-048 — Browser rendering cadence is decoupled from simulation cadence
 
-**Status:** Accepted
+**Status:** Accepted; runtime ownership evolved by D-069
 
-The browser host advances simulation time using a fixed timestep rather than using the variable time between rendered frames directly as the physics timestep.
+Browser execution advances Simulation time using a fixed timestep rather than using the variable time between rendered frames directly as the numerical integration timestep.
 
-`requestAnimationFrame` timestamps measure elapsed real time. The host accumulates that elapsed time and performs zero or more fixed-size `World.step(...)` calls before rendering the latest committed world state.
+`requestAnimationFrame` timestamps measure elapsed real time. That elapsed time is accumulated and consumed through zero or more fixed-size `Simulation.step(...)` calls before the host presents the latest committed World state.
 
 This keeps:
 
 - simulation timestep stable;
 - numerical integration behavior independent from display refresh rate;
-- browser scheduling concerns outside the simulation engine;
+- browser scheduling concerns outside Simulation and the engine;
 - rendering frequency independent from simulation frequency.
 
-The browser host may cap unusually large frame deltas before adding them to the accumulator. This prevents a suspended or heavily delayed browser tab from attempting an excessive backlog of simulation steps when execution resumes.
+Unusually large frame deltas are capped before entering the accumulator so a suspended or heavily delayed browser tab does not attempt an excessive backlog of Simulation steps when execution resumes.
 
 Rendering currently uses the latest completed fixed-step state. Interpolation between simulation states is intentionally deferred until a concrete need justifies the additional state and presentation complexity.
 
-The current loop remains application/example code rather than being extracted into a reusable runtime abstraction. A dedicated simulation-loop abstraction should be introduced only if additional hosts or runtime requirements demonstrate that need.
+Phase 1D implements this established timing policy in `BrowserSimulationRuntime`; the Canvas example no longer owns the animation-frame accumulator loop itself.
 
 ## D-049 — World-to-display mapping is owned by a shared viewport transform
 
@@ -888,3 +888,43 @@ Phase 1C deliberately does not introduce:
 - cross-World transactional rollback.
 
 Those capabilities should be introduced only when concrete Runtime or experiment requirements establish their semantics.
+
+## D-069 — Browser Runtime owns wall-clock scheduling and fixed-timestep accumulation
+
+**Status:** Accepted and implemented
+
+`BrowserSimulationRuntime` is the first concrete Runtime implementation.
+
+It depends on a deterministic `Simulation` and owns browser execution mechanics that do not belong in Simulation itself:
+
+```text
+requestAnimationFrame
+wall-clock frame deltas
+maximum frame-delta clamping
+fixed-timestep accumulation
+repeated simulation.step(dt)
+host frame cadence
+```
+
+The Runtime receives explicit `fixedTimestep` and `maxFrameDelta` configuration together with an `onFrame` callback.
+
+`run()` owns application execution start. It invokes `onFrame` once immediately so current World state can be presented before the first browser animation timestamp arrives, then schedules animation frames. The first timestamp establishes the wall-clock baseline. Later timestamps are converted to elapsed seconds, clamped, accumulated, and consumed through zero or more fixed Simulation steps. After those steps, `onFrame` runs once for that browser frame.
+
+Calling `run()` more than once is idempotent so one Runtime instance cannot accidentally create duplicate animation loops.
+
+The host frame callback keeps rendering outside Runtime. Runtime does not import Canvas, renderers, World snapshots, DOM outputs, or interaction state. The current Canvas host uses `onFrame` to observe fresh World snapshots, refresh pointer/selection inspection, and render.
+
+Pointer and wheel interaction remain host/example responsibility in this phase. Their extraction is not required merely because browser scheduling moved into Runtime.
+
+The animation-frame request function is dependency-injected with the browser global as the default. This keeps the real host behavior simple while allowing deterministic tests without depending on actual browser scheduling.
+
+Phase 1D deliberately does not introduce:
+
+- pause, stop, resume, or restart semantics;
+- interpolation between fixed Simulation states;
+- a generalized scheduler interface or runtime hierarchy;
+- renderer ownership;
+- Canvas dimensions or browser input handling;
+- Simulation time or clock ownership.
+
+Those responsibilities should be added only when concrete requirements establish their semantics.

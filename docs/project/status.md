@@ -2,9 +2,9 @@
 
 ## Current checkpoint
 
-vLab2D now has a small multi-body simulation engine, reproducible SVG visualization, and live Canvas 2D animation with fixed simulation timing.
+vLab2D now has a small multi-body simulation engine, deterministic multi-World Simulation orchestration, a concrete browser Runtime, reproducible SVG visualization, and live Canvas 2D animation with fixed simulation timing.
 
-The project has entered **Phase 1 — Structure and lifecycle refactoring**. Feature growth is intentionally paused while existing behavior is reorganized around the emerging `Body → World → Simulation → Runtime` architecture.
+The project is in **Phase 1 — Structure and lifecycle refactoring**. Feature growth remains intentionally paused while the now-concrete `Body → World → Simulation → Runtime` boundaries are consolidated.
 
 Canvas is the primary visualization target. SVG remains a useful secondary renderer for static snapshots, debugging captures, exports, and documentation where maintaining it remains reasonable.
 
@@ -207,55 +207,61 @@ The shared transform has inverse coordinate mathematics and anchor-aware scale g
 
 SVG remains useful for reproducible snapshots, debugging captures, exports, and documentation images. Future visualization work should preserve SVG support when doing so remains natural and reasonably inexpensive, but SVG compatibility must not constrain useful Canvas capabilities.
 
-### Fixed-timestep browser loop
+### Browser Runtime
 
-Browser rendering is driven by `requestAnimationFrame`, but simulation advancement is independent from display refresh rate.
+`src/runtime/browser/simulation-runtime.ts` now owns browser-driven Simulation execution.
 
-The browser callback timestamp measures real elapsed time. That time is accumulated and consumed in fixed simulation steps:
+`BrowserSimulationRuntime` receives:
+
+- a `Simulation`;
+- a positive finite fixed timestep;
+- a positive finite maximum frame delta;
+- a host `onFrame` callback.
+
+`run()` presents the initial frame immediately, then schedules browser frames through `requestAnimationFrame`. The first browser timestamp establishes the wall-clock baseline. Later frame deltas are converted to seconds, clamped to the configured maximum, accumulated, and consumed through zero or more fixed `simulation.step(dt)` calls before `onFrame` runs once.
 
 ```mermaid
 flowchart LR
+    RUN["runtime.run()"]
+    INITIAL["Initial onFrame()"]
     RAF["requestAnimationFrame(timestamp)"]
-    DELTA["Frame delta"]
+    DELTA["Clamped frame delta"]
     ACC["Time accumulator"]
     STEP["0..N fixed Simulation steps"]
-    SNAP["Detached snapshots"]
-    RENDER["Canvas render"]
+    FRAME["Host onFrame()"]
 
-    RAF --> DELTA --> ACC --> STEP --> SNAP --> RENDER
-    RENDER --> RAF
+    RUN --> INITIAL --> RAF
+    RAF --> DELTA --> ACC --> STEP --> FRAME --> RAF
 ```
 
-The current simulation timestep is:
+The Canvas example currently configures:
 
 ```text
-1 / 60 second
+fixed timestep:     1 / 60 second
+maximum frame delta: 0.25 second
 ```
 
-A fast display may render frames without advancing the Simulation. A slower display may require multiple fixed Simulation steps before one render.
+The Runtime owns scheduling and accumulation, but not rendering. Its `onFrame` callback is host-defined; the current Canvas host uses it to obtain fresh World snapshots, refresh pointer/selection inspection, and invoke the renderer.
 
-The browser host limits unusually large frame deltas before adding them to the accumulator so a delayed or suspended tab does not attempt excessive simulation catch-up.
+The Runtime also does not own pointer/wheel interaction, Canvas dimensions, World state, or Simulation failure status. It continues scheduling even when individual Worlds become failed because Simulation contains those failures internally.
 
-Interpolation between fixed simulation states remains deliberately deferred.
+Calling `run()` more than once is idempotent. Pause/stop/restart lifecycle, interpolation, and alternative scheduling policies remain deliberately deferred.
 
 ## Next step
 
-Continue **Phase 1D — Runtime**.
+Continue **Phase 1E — Module/folder organization and boring examples**.
 
-Phase 1C is complete:
+Phase 1D is complete:
 
-- `Simulation` exists outside the engine layer;
-- Simulation coordinates a fixed `1..N` set of unique Worlds;
-- `simulation.step(dt)` deterministically steps every active World with the same timestep;
-- invalid Simulation timesteps are rejected before any World is touched;
-- a World exception is captured as that World's terminal failed status;
-- failure of one World does not stop later Worlds from advancing;
-- failed Worlds are skipped on future steps;
-- `getWorlds()` and `getWorldStatus(world)` provide detached orchestration observations;
-- physical state remains owned by each World.
+- `BrowserSimulationRuntime` exists under `src/runtime/browser/`;
+- Runtime owns `requestAnimationFrame` scheduling;
+- Runtime owns wall-clock frame-delta clamping and fixed-timestep accumulation;
+- Runtime drives deterministic `simulation.step(dt)` calls;
+- Runtime invokes a host `onFrame` callback after each processed browser frame;
+- `run()` owns application execution start and is idempotent;
+- rendering, pointer/wheel input, DOM formatting, and World observation remain outside Runtime;
+- Simulation remains host-independent and deterministic.
 
-Phase 1D should extract browser wall-clock execution from the Canvas example. The Runtime layer should own `requestAnimationFrame`, frame-delta handling, fixed-timestep accumulation, and calling `simulation.step(...)`.
-
-Simulation must remain deterministic and host-independent.
+Phase 1E should review the now-concrete folder/module boundaries, remove any residual organizational friction, and make runnable examples mostly composition. It should not add new simulation or visualization features.
 
 The phased strategy is maintained in [`roadmap.md`](roadmap.md).

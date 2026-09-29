@@ -3,10 +3,12 @@ import type { World } from "../engine/mod.ts";
 /**
  * Describes whether a World can still participate in Simulation stepping.
  */
-export type SimulationWorldStatus = { readonly status: "active" } | {
-  readonly status: "failed";
-  readonly error: unknown;
-};
+export type SimulationWorldStatus =
+  | { readonly status: "active" }
+  | {
+    readonly status: "failed";
+    readonly error: unknown;
+  };
 
 /**
  * Deterministically coordinates stepping of one or more Worlds.

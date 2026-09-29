@@ -5,6 +5,7 @@ import {
   Vector2,
   World,
 } from "../../src/engine/mod.ts";
+import { BrowserSimulationRuntime } from "../../src/runtime/browser/simulation-runtime.ts";
 import { Simulation } from "../../src/simulation/simulation.ts";
 import { CanvasKinematicRenderer } from "../../src/visualization/canvas-kinematic-renderer.ts";
 
@@ -22,7 +23,6 @@ if (canvasElement === null) {
   throw new Error("Simulation canvas was not found.");
 }
 const canvas: HTMLCanvasElement = canvasElement;
-
 const context = canvas.getContext("2d");
 if (context === null) {
   throw new Error("Canvas 2D rendering is not available.");
@@ -63,6 +63,100 @@ if (selectedBodyVelocityOutputElement === null) {
   throw new Error("Selected body velocity output was not found.");
 }
 const selectedBodyVelocityOutput: HTMLOutputElement = selectedBodyVelocityOutputElement;
+
+canvas.addEventListener("pointerdown", (event) => {
+  if (event.button !== 0 || activePointerId !== undefined) {
+    return;
+  }
+
+  activePointerId = event.pointerId;
+
+  previousPointerX = event.clientX;
+  previousPointerY = event.clientY;
+
+  pointerDownX = event.clientX;
+  pointerDownY = event.clientY;
+  pointerMovedBeyondClickTolerance = false;
+
+  canvas.setPointerCapture(event.pointerId);
+});
+
+canvas.addEventListener("pointerup", (event) => {
+  if (event.pointerId !== activePointerId) {
+    return;
+  }
+
+  if (!pointerMovedBeyondClickTolerance) {
+    const display = clientToDisplayCoordinates(event.clientX, event.clientY);
+
+    setSelectedBody(renderer.findBodyAtDisplayPoint(renderedSnapshots, display.x, display.y));
+  }
+});
+
+canvas.addEventListener("pointercancel", (event) => {
+  endPointerDrag(event.pointerId);
+});
+
+canvas.addEventListener("lostpointercapture", (event) => {
+  endPointerDrag(event.pointerId);
+});
+
+canvas.addEventListener("pointermove", (event) => {
+  if (event.pointerId === activePointerId) {
+    const deltaClientX = event.clientX - previousPointerX;
+    const deltaClientY = event.clientY - previousPointerY;
+
+    previousPointerX = event.clientX;
+    previousPointerY = event.clientY;
+
+    const totalDeltaX = event.clientX - pointerDownX;
+    const totalDeltaY = event.clientY - pointerDownY;
+
+    const movementSquared = totalDeltaX * totalDeltaX + totalDeltaY * totalDeltaY;
+
+    if (movementSquared > CLICK_MOVEMENT_TOLERANCE * CLICK_MOVEMENT_TOLERANCE) {
+      pointerMovedBeyondClickTolerance = true;
+    }
+
+    const bounds = canvas.getBoundingClientRect();
+
+    const deltaDisplayX = (deltaClientX * canvas.width) / bounds.width;
+
+    const deltaDisplayY = (deltaClientY * canvas.height) / bounds.height;
+
+    renderer.panViewportBy(deltaDisplayX, deltaDisplayY);
+  }
+
+  updatePointerInspection(event.clientX, event.clientY);
+});
+
+canvas.addEventListener("pointerleave", () => {
+  clearPointerInspection();
+});
+
+canvas.addEventListener(
+  "wheel",
+  (event) => {
+    event.preventDefault();
+
+    const display = clientToDisplayCoordinates(event.clientX, event.clientY);
+
+    const wheelDelta = normalizeWheelDelta(event);
+
+    const zoomFactor = Math.exp(-wheelDelta * ZOOM_SENSITIVITY);
+
+    const requestedScale = renderer.viewportScale * zoomFactor;
+
+    const nextScale = Math.min(
+      MAX_VIEWPORT_SCALE,
+      Math.max(MIN_VIEWPORT_SCALE, requestedScale),
+    );
+
+    renderer.setViewportScaleAroundDisplayPoint(nextScale, display.x, display.y);
+    updatePointerInspection(event.clientX, event.clientY);
+  },
+  { passive: false },
+);
 
 const world = new World(new Vector2(0, -1), new SemiImplicitEulerIntegrator());
 
@@ -105,23 +199,6 @@ let pointerDownX = 0;
 let pointerDownY = 0;
 let pointerMovedBeyondClickTolerance = false;
 
-canvas.addEventListener("pointerdown", (event) => {
-  if (event.button !== 0 || activePointerId !== undefined) {
-    return;
-  }
-
-  activePointerId = event.pointerId;
-
-  previousPointerX = event.clientX;
-  previousPointerY = event.clientY;
-
-  pointerDownX = event.clientX;
-  pointerDownY = event.clientY;
-  pointerMovedBeyondClickTolerance = false;
-
-  canvas.setPointerCapture(event.pointerId);
-});
-
 function setSelectedBody(bodyId: BodyId | undefined): void {
   selectedBodyId = bodyId;
 
@@ -135,26 +212,6 @@ function endPointerDrag(pointerId: number): void {
     activePointerId = undefined;
   }
 }
-
-canvas.addEventListener("pointerup", (event) => {
-  if (event.pointerId !== activePointerId) {
-    return;
-  }
-
-  if (!pointerMovedBeyondClickTolerance) {
-    const display = clientToDisplayCoordinates(event.clientX, event.clientY);
-
-    setSelectedBody(renderer.findBodyAtDisplayPoint(renderedSnapshots, display.x, display.y));
-  }
-});
-
-canvas.addEventListener("pointercancel", (event) => {
-  endPointerDrag(event.pointerId);
-});
-
-canvas.addEventListener("lostpointercapture", (event) => {
-  endPointerDrag(event.pointerId);
-});
 
 function clientToDisplayCoordinates(
   clientX: number,
@@ -249,93 +306,19 @@ function refreshSelectedBodyInspection(): void {
   })`;
 }
 
-canvas.addEventListener("pointermove", (event) => {
-  if (event.pointerId === activePointerId) {
-    const deltaClientX = event.clientX - previousPointerX;
-    const deltaClientY = event.clientY - previousPointerY;
-
-    previousPointerX = event.clientX;
-    previousPointerY = event.clientY;
-
-    const totalDeltaX = event.clientX - pointerDownX;
-    const totalDeltaY = event.clientY - pointerDownY;
-
-    const movementSquared = totalDeltaX * totalDeltaX + totalDeltaY * totalDeltaY;
-
-    if (movementSquared > CLICK_MOVEMENT_TOLERANCE * CLICK_MOVEMENT_TOLERANCE) {
-      pointerMovedBeyondClickTolerance = true;
-    }
-
-    const bounds = canvas.getBoundingClientRect();
-
-    const deltaDisplayX = (deltaClientX * canvas.width) / bounds.width;
-
-    const deltaDisplayY = (deltaClientY * canvas.height) / bounds.height;
-
-    renderer.panViewportBy(deltaDisplayX, deltaDisplayY);
-  }
-
-  updatePointerInspection(event.clientX, event.clientY);
-});
-
-canvas.addEventListener("pointerleave", () => {
-  clearPointerInspection();
-});
-
-canvas.addEventListener(
-  "wheel",
-  (event) => {
-    event.preventDefault();
-
-    const display = clientToDisplayCoordinates(event.clientX, event.clientY);
-
-    const wheelDelta = normalizeWheelDelta(event);
-
-    const zoomFactor = Math.exp(-wheelDelta * ZOOM_SENSITIVITY);
-
-    const requestedScale = renderer.viewportScale * zoomFactor;
-
-    const nextScale = Math.min(
-      MAX_VIEWPORT_SCALE,
-      Math.max(MIN_VIEWPORT_SCALE, requestedScale),
-    );
-
-    renderer.setViewportScaleAroundDisplayPoint(nextScale, display.x, display.y);
-    updatePointerInspection(event.clientX, event.clientY);
-  },
-  { passive: false },
-);
-
-let previousTimestamp: number | undefined;
-let accumulator = 0;
-
-function frame(timestamp: number): void {
-  if (previousTimestamp === undefined) {
-    previousTimestamp = timestamp;
-    requestAnimationFrame(frame);
-    return;
-  }
-
-  const frameDelta = (timestamp - previousTimestamp) / 1000;
-  previousTimestamp = timestamp;
-
-  // Avoid attempting to simulate a very large backlog after the browser
-  // suspends or heavily delays animation frames.
-  accumulator += Math.min(frameDelta, MAX_FRAME_DELTA);
-
-  while (accumulator >= FIXED_TIMESTEP) {
-    simulation.step(FIXED_TIMESTEP);
-    accumulator -= FIXED_TIMESTEP;
-  }
-
+function renderFrame(): void {
   renderedSnapshots = world.getBodySnapshots();
 
   refreshPointerInspection();
   refreshSelectedBodyInspection();
 
   renderer.render(renderedSnapshots, hoveredBodyId, selectedBodyId);
-  requestAnimationFrame(frame);
 }
 
-renderer.render(renderedSnapshots, hoveredBodyId, selectedBodyId);
-requestAnimationFrame(frame);
+const runtime = new BrowserSimulationRuntime(simulation, {
+  fixedTimestep: FIXED_TIMESTEP,
+  maxFrameDelta: MAX_FRAME_DELTA,
+  onFrame: renderFrame,
+});
+
+runtime.run();

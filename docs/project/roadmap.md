@@ -156,21 +156,29 @@ A World failure is treated as experimental output rather than a reason to abort 
 
 ### 1D — Runtime
 
-**Status:** next.
+**Status:** implemented.
 
-Extract host scheduling now that deterministic Simulation orchestration exists.
+The first concrete Runtime is browser-specific and intentionally narrow.
 
-Intended browser-runtime responsibilities include:
+Current result:
 
-- wall-clock frame scheduling;
-- fixed-timestep accumulation;
-- calling `simulation.step(...)`;
-- render cadence;
-- host/browser interaction mechanics where appropriate.
+- `BrowserSimulationRuntime` lives under `src/runtime/browser/`;
+- Runtime receives a `Simulation` and explicit fixed-timestep configuration;
+- `run()` invokes the initial host frame callback and starts browser animation-frame scheduling;
+- the first animation-frame timestamp establishes the wall-clock baseline;
+- later frame deltas are clamped before entering the accumulator;
+- accumulated wall time is consumed through zero or more deterministic `simulation.step(fixedTimestep)` calls;
+- the host `onFrame` callback runs once after the current browser frame's Simulation steps;
+- calling `run()` more than once does not create duplicate animation loops;
+- Runtime knows nothing about Canvas, renderers, body snapshots, pointer input, or DOM output;
+- pointer/wheel interaction remains in the current Canvas host because Phase 1D only extracts scheduling pressure that is already proven;
+- pause/stop/restart lifecycle, interpolation, and generalized scheduler abstractions remain deferred.
 
-`run()` belongs to Runtime/application execution rather than to the deterministic Simulation model.
+`run()` now belongs concretely to Runtime/application execution rather than to deterministic Simulation.
 
 ### 1E — Module/folder organization and boring examples
+
+**Status:** next.
 
 Reorganize folders as concrete responsibilities become stable.
 

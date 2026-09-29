@@ -105,28 +105,29 @@ The selected-body inspector is also host-owned and read-only. It resolves the pe
 
 Clearing the previous frame remains deliberate. Trails should become an explicit visualization capability rather than appearing accidentally because old frames were left on the canvas.
 
-The browser host controls repeated execution. The renderer itself has no knowledge of `requestAnimationFrame`.
+`BrowserSimulationRuntime` controls repeated browser execution. The renderer itself has no knowledge of `requestAnimationFrame`; the Canvas host supplies the Runtime frame callback that obtains fresh snapshots and invokes rendering.
 
 ## Animation timing
 
-The browser host separates rendering cadence from simulation cadence.
+`BrowserSimulationRuntime` separates browser frame cadence from deterministic Simulation cadence.
 
-`requestAnimationFrame` provides frame timestamps, which are converted into elapsed seconds and accumulated. The host consumes that accumulated time through fixed-size world steps before rendering the latest body snapshots.
+`requestAnimationFrame` provides frame timestamps. Runtime converts their differences into elapsed seconds, clamps unusually large deltas, accumulates the accepted time, and consumes it through fixed-size `Simulation.step(...)` calls. Runtime then invokes the host frame callback once.
 
 ```mermaid
 flowchart LR
     F[Browser frame]
-    D[Elapsed frame time]
-    A[Accumulator]
-    S[Fixed simulation steps]
+    D[Clamped elapsed time]
+    A[Runtime accumulator]
+    S[0..N fixed Simulation steps]
+    H[Host onFrame callback]
     R[Canvas render]
 
-    F --> D --> A --> S --> R
+    F --> D --> A --> S --> H --> R
 ```
 
-The renderer itself remains unaware of this timing mechanism. `CanvasKinematicRenderer` only draws the snapshots it receives.
+The host callback obtains fresh World snapshots and invokes `CanvasKinematicRenderer`. The renderer remains unaware of this timing mechanism and only draws the snapshots it receives.
 
-Variable frame delta is therefore a scheduling input rather than the numerical integration timestep.
+Variable frame delta is therefore scheduling input rather than the numerical integration timestep.
 
 ## Coordinate systems
 

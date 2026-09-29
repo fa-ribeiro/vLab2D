@@ -34,9 +34,11 @@ mindmap
       Diagnostics
       Multiple views
     Runtime
-      Browser scheduling
-      Fixed timestep loop
-      Host interactions
+      BrowserSimulationRuntime
+      requestAnimationFrame scheduling
+      Frame-delta clamping
+      Fixed timestep accumulator
+      Host frame callback
     Engineering values
       Intrinsic properties vs initial conditions vs runtime state
       Safe defaults
@@ -122,6 +124,27 @@ flowchart TD
 Simulation owns fixed World membership and execution status only. Worlds continue to own their own physical state.
 
 For a valid timestep, `Simulation.step(dt)` visits active Worlds in deterministic constructor order. If one World throws, that World becomes terminally failed and later active Worlds still receive the same timestep. Failed Worlds are skipped on subsequent Simulation steps.
+
+## Current Runtime relationship
+
+```mermaid
+flowchart LR
+    BROWSER["Browser animation frames"]
+    RUNTIME["BrowserSimulationRuntime"]
+    SIM["Simulation"]
+    HOST["Host onFrame callback"]
+    WORLD["World observations"]
+    VIS["Canvas visualization"]
+
+    BROWSER --> RUNTIME
+    RUNTIME -->|"0..N fixed step(dt)"| SIM
+    RUNTIME --> HOST
+    HOST --> WORLD --> VIS
+```
+
+Runtime owns wall-clock scheduling and fixed-timestep accumulation. Simulation remains deterministic and host-independent.
+
+The current Canvas host supplies the Runtime frame callback and still owns rendering, pointer/wheel interaction, selection/hover state, DOM inspection output, and World observation.
 
 ## Future cardinality direction
 
