@@ -580,23 +580,3 @@ Deno.test("CanvasKinematicRenderer rejects unsupported Rectangle picking", () =>
     "CanvasKinematicRenderer does not support Rectangle geometry yet.",
   );
 });
-
-Deno.test("CanvasKinematicRenderer rejects unsupported Rectangle picking", () => {
-  const context = new RecordingCanvasContext();
-  const renderer = new CanvasKinematicRenderer(context, 200, 100, 10, 6);
-
-  const snapshots: readonly BodySnapshot[] = [
-    createBodySnapshot(
-      7,
-      new Vector2(0, 0),
-      new Vector2(0, 0),
-      new Body({ shape: new Rectangle(2, 1) }),
-    ),
-  ];
-
-  assertThrows(
-    () => renderer.findBodyAtDisplayPoint(snapshots, 100, 50),
-    TypeError,
-    "CanvasKinematicRenderer does not support Rectangle geometry yet.",
-  );
-});

@@ -6,6 +6,7 @@ import {
   type BodySnapshot,
   type BodyState,
   Circle,
+  Rectangle,
   Vector2,
 } from "../engine/mod.ts";
 import { SvgKinematicRenderer } from "./svg-kinematic-renderer.ts";
@@ -220,3 +221,22 @@ Deno.test(
     assertStringIncludes(svg, '<circle data-body-id="7" cx="100" cy="50" r="3" />');
   },
 );
+
+Deno.test("SvgKinematicRenderer rejects unsupported Rectangle rendering", () => {
+  const renderer = new SvgKinematicRenderer(200, 100, 10, 3);
+
+  const snapshots: readonly BodySnapshot[] = [
+    createBodySnapshot(
+      7,
+      new Vector2(0, 0),
+      new Vector2(0, 0),
+      new Body({ shape: new Rectangle(2, 1) }),
+    ),
+  ];
+
+  assertThrows(
+    () => renderer.render(snapshots),
+    TypeError,
+    "SvgKinematicRenderer does not support Rectangle geometry yet.",
+  );
+});
