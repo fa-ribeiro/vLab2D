@@ -108,8 +108,9 @@ export class SvgKinematicRenderer {
       throw new TypeError("SvgKinematicRenderer does not support Rectangle geometry yet.");
     }
 
-    const radius =
-      shape === undefined ? this.#bodyRadius : shape.radius * this.#transform.pixelsPerUnit;
+    const radius = shape === undefined
+      ? this.#bodyRadius
+      : shape.radius * this.#transform.pixelsPerUnit;
 
     return `  <circle data-body-id="${snapshot.id}" cx="${x}" cy="${y}" r="${radius}" />`;
   }

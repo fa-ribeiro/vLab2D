@@ -185,7 +185,6 @@ export class CanvasKinematicRenderer {
    * body contains the point.
    * @throws {TypeError} If a supplied body uses Rectangle geometry, which this
    * renderer does not support yet.
-   *
    */
   public findBodyAtDisplayPoint(
     snapshots: readonly BodySnapshot[],
