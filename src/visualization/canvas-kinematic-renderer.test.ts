@@ -5,6 +5,7 @@ import {
   type BodyId,
   type BodySnapshot,
   type BodyState,
+  Circle,
   Vector2,
 } from "../engine/mod.ts";
 import { CanvasKinematicRenderer } from "./canvas-kinematic-renderer.ts";
@@ -17,10 +18,11 @@ function createBodySnapshot(
   id: BodyId,
   position: Vector2,
   velocity = new Vector2(0, 0),
+  definition = new Body(),
 ): BodySnapshot {
   return {
     id,
-    definition: new Body(),
+    definition,
     state: createBodyState(position, velocity),
   };
 }
@@ -416,4 +418,82 @@ Deno.test("CanvasKinematicRenderer can show hover and selection on the same body
     ["arc", 120, 20, 10, 0, Math.PI * 2],
     ["arc", 120, 20, 14, 0, Math.PI * 2],
   ]);
+});
+
+Deno.test("CanvasKinematicRenderer renders Circle radius in world units", () => {
+  const context = new RecordingCanvasContext();
+  const renderer = new CanvasKinematicRenderer(context, 200, 100, 10, 3);
+
+  const snapshots: readonly BodySnapshot[] = [
+    createBodySnapshot(
+      7,
+      new Vector2(2, 3),
+      new Vector2(0, 0),
+      new Body({ shape: new Circle(1.5) }),
+    ),
+  ];
+
+  renderer.render(snapshots);
+
+  const arcCalls = context.calls.filter(([name]) => name === "arc");
+
+  assertEquals(arcCalls, [["arc", 120, 20, 15, 0, Math.PI * 2]]);
+});
+
+Deno.test("CanvasKinematicRenderer scales Circle radius with the viewport", () => {
+  const context = new RecordingCanvasContext();
+  const renderer = new CanvasKinematicRenderer(context, 200, 100, 10, 3);
+
+  renderer.setViewportScale(20);
+
+  const snapshots: readonly BodySnapshot[] = [
+    createBodySnapshot(
+      7,
+      new Vector2(0, 0),
+      new Vector2(0, 0),
+      new Body({ shape: new Circle(1) }),
+    ),
+  ];
+
+  renderer.render(snapshots);
+
+  const arcCalls = context.calls.filter(([name]) => name === "arc");
+
+  assertEquals(arcCalls, [["arc", 100, 50, 20, 0, Math.PI * 2]]);
+});
+
+Deno.test(
+  "CanvasKinematicRenderer keeps shapeless body markers fixed across viewport scale",
+  () => {
+    const context = new RecordingCanvasContext();
+    const renderer = new CanvasKinematicRenderer(context, 200, 100, 10, 3);
+
+    renderer.setViewportScale(20);
+
+    const snapshots: readonly BodySnapshot[] = [createBodySnapshot(7, new Vector2(0, 0))];
+
+    renderer.render(snapshots);
+
+    const arcCalls = context.calls.filter(([name]) => name === "arc");
+
+    assertEquals(arcCalls, [["arc", 100, 50, 3, 0, Math.PI * 2]]);
+  },
+);
+
+Deno.test("CanvasKinematicRenderer keeps Circle picking on the fixed marker radius", () => {
+  const context = new RecordingCanvasContext();
+  const renderer = new CanvasKinematicRenderer(context, 200, 100, 10, 6);
+
+  const snapshots: readonly BodySnapshot[] = [
+    createBodySnapshot(
+      7,
+      new Vector2(0, 0),
+      new Vector2(0, 0),
+      new Body({ shape: new Circle(2) }),
+    ),
+  ];
+
+  // The Circle renders with radius 20, but picking intentionally remains
+  // fixed to the 6-display-unit presentation marker until Phase 2A.4.
+  assertEquals(renderer.findBodyAtDisplayPoint(snapshots, 115, 50), undefined);
 });

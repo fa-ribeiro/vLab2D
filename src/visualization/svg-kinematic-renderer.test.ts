@@ -5,6 +5,7 @@ import {
   type BodyId,
   type BodySnapshot,
   type BodyState,
+  Circle,
   Vector2,
 } from "../engine/mod.ts";
 import { SvgKinematicRenderer } from "./svg-kinematic-renderer.ts";
@@ -17,10 +18,11 @@ function createBodySnapshot(
   id: BodyId,
   position: Vector2,
   velocity = new Vector2(0, 0),
+  definition = new Body(),
 ): BodySnapshot {
   return {
     id,
-    definition: new Body(),
+    definition,
     state: createBodyState(position, velocity),
   };
 }
@@ -167,3 +169,54 @@ Deno.test("SvgKinematicRenderer renders using the changed viewport scale", () =>
 
   assertStringIncludes(svg, '<circle data-body-id="7" cx="120" cy="30" r="3" />');
 });
+
+Deno.test("SvgKinematicRenderer renders Circle radius in world units", () => {
+  const renderer = new SvgKinematicRenderer(200, 100, 10, 3);
+
+  const snapshots: readonly BodySnapshot[] = [
+    createBodySnapshot(
+      7,
+      new Vector2(2, 3),
+      new Vector2(0, 0),
+      new Body({ shape: new Circle(1.5) }),
+    ),
+  ];
+
+  const svg = renderer.render(snapshots);
+
+  assertStringIncludes(svg, '<circle data-body-id="7" cx="120" cy="20" r="15" />');
+});
+
+Deno.test("SvgKinematicRenderer scales Circle radius with the viewport", () => {
+  const renderer = new SvgKinematicRenderer(200, 100, 10, 3);
+
+  renderer.setViewportScale(20);
+
+  const snapshots: readonly BodySnapshot[] = [
+    createBodySnapshot(
+      7,
+      new Vector2(0, 0),
+      new Vector2(0, 0),
+      new Body({ shape: new Circle(1) }),
+    ),
+  ];
+
+  const svg = renderer.render(snapshots);
+
+  assertStringIncludes(svg, '<circle data-body-id="7" cx="100" cy="50" r="20" />');
+});
+
+Deno.test(
+  "SvgKinematicRenderer keeps shapeless body markers fixed across viewport scale",
+  () => {
+    const renderer = new SvgKinematicRenderer(200, 100, 10, 3);
+
+    renderer.setViewportScale(20);
+
+    const snapshots: readonly BodySnapshot[] = [createBodySnapshot(7, new Vector2(0, 0))];
+
+    const svg = renderer.render(snapshots);
+
+    assertStringIncludes(svg, '<circle data-body-id="7" cx="100" cy="50" r="3" />');
+  },
+);

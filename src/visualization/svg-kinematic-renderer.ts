@@ -99,7 +99,11 @@ export class SvgKinematicRenderer {
     const x = this.#transform.worldToDisplayX(snapshot.state.position.x);
     const y = this.#transform.worldToDisplayY(snapshot.state.position.y);
 
-    return `  <circle data-body-id="${snapshot.id}" cx="${x}" cy="${y}" r="${this.#bodyRadius}" />`;
+    const radius = snapshot.definition.shape === undefined
+      ? this.#bodyRadius
+      : snapshot.definition.shape.radius * this.#transform.pixelsPerUnit;
+
+    return `  <circle data-body-id="${snapshot.id}" cx="${x}" cy="${y}" r="${radius}" />`;
   }
 
   #renderOrigin(): string {

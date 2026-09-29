@@ -223,8 +223,12 @@ export class CanvasKinematicRenderer {
     const x = this.#transform.worldToDisplayX(snapshot.state.position.x);
     const y = this.#transform.worldToDisplayY(snapshot.state.position.y);
 
+    const radius = snapshot.definition.shape === undefined
+      ? this.#bodyRadius
+      : snapshot.definition.shape.radius * this.#transform.pixelsPerUnit;
+
     this.#context.beginPath();
-    this.#context.arc(x, y, this.#bodyRadius, 0, Math.PI * 2);
+    this.#context.arc(x, y, radius, 0, Math.PI * 2);
     this.#context.fill();
 
     if (hovered) {
@@ -232,7 +236,7 @@ export class CanvasKinematicRenderer {
       this.#context.globalAlpha = HOVER_RING_OPACITY;
 
       this.#context.beginPath();
-      this.#context.arc(x, y, this.#bodyRadius + HOVER_RING_PADDING, 0, Math.PI * 2);
+      this.#context.arc(x, y, radius + HOVER_RING_PADDING, 0, Math.PI * 2);
       this.#context.stroke();
 
       this.#context.restore();
@@ -243,7 +247,7 @@ export class CanvasKinematicRenderer {
       this.#context.globalAlpha = SELECTION_RING_OPACITY;
 
       this.#context.beginPath();
-      this.#context.arc(x, y, this.#bodyRadius + SELECTION_RING_PADDING, 0, Math.PI * 2);
+      this.#context.arc(x, y, radius + SELECTION_RING_PADDING, 0, Math.PI * 2);
       this.#context.stroke();
 
       this.#context.restore();
