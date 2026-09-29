@@ -3,7 +3,6 @@ import {
   BrowserSimulationRuntime,
   CanvasKinematicRenderer,
   Circle,
-  Rectangle,
   SemiImplicitEulerIntegrator,
   Simulation,
   Vector2,
