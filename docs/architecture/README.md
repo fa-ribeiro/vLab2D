@@ -221,7 +221,7 @@ For the multi-body runtime, that authority belongs to `World`.
 
 ```mermaid
 flowchart TD
-    BODY["Reusable Body definition"]
+    BODY["Reusable immutable Body definition"]
     INIT["BodyInitialConditions"]
     WORLD["World"]
     STORE[("private BodyId → WorldBody storage")]
@@ -229,22 +229,27 @@ flowchart TD
 
     COMMANDS["Validated commands<br/>addBody<br/>setGravity<br/>step"]
     QUERIES["Observation<br/>getBodyState<br/>getBodySnapshots"]
-    SNAPSHOTS["Detached BodyState / BodySnapshot"]
+    SNAPSHOT["BodySnapshot"]
+    DEF["shared immutable definition"]
+    OBSSTATE["detached BodyState"]
 
     BODY --> COMMANDS
     INIT --> COMMANDS
     COMMANDS --> WORLD
     WORLD --> STORE
+    STORE --> BODY
     STORE --> STATE
 
     STATE --> WORLD
     WORLD --> QUERIES
-    QUERIES --> SNAPSHOTS
+    QUERIES --> SNAPSHOT
+    BODY --> DEF --> SNAPSHOT
+    STATE --> OBSSTATE --> SNAPSHOT
 ```
 
-`BodyState` is runtime data, not an intrinsic property of `Body`. Consumers do not construct authoritative state or receive the world's internal storage.
+`BodyState` is runtime data, not an intrinsic property of `Body`. Consumers do not construct authoritative state or receive the world's internal mutable storage.
 
-A renderer can inspect a detached `BodySnapshot`, but changing that observation cannot change the world.
+`BodySnapshot` intentionally treats its two kinds of data differently: the immutable reusable `Body` definition is shared by reference, while World-owned runtime state is copied into a detached `BodyState` observation. A renderer can therefore discover intrinsic geometry without receiving writable World state.
 
 ---
 
@@ -310,7 +315,7 @@ This keeps the distinction explicit:
 Body                  intrinsic reusable definition
 BodyInitialConditions insertion configuration
 BodyState              World-owned runtime data
-BodySnapshot           detached observation
+BodySnapshot           identity + shared immutable definition + detached runtime observation
 ```
 
 ---
@@ -814,7 +819,7 @@ It is useful to keep these categories separate.
 ✓ reusable Body definitions + multi-body World
 ✓ world-local BodyId
 ✓ world-owned authoritative body state
-✓ detached BodyState / BodySnapshot observations
+✓ BodySnapshot observations with shared immutable definitions + detached BodyState
 ✓ atomic world stepping
 ✓ deterministic Simulation orchestration across 1..N Worlds
 ✓ fixed unique Simulation World membership
@@ -1018,9 +1023,9 @@ The browser host owns wheel/trackpad interpretation: browser-coordinate conversi
 
 ### Canvas body picking
 
-The first body-picking capability is intentionally tied to Canvas presentation geometry.
+The current body-picking capability is still intentionally tied to Canvas presentation geometry.
 
-`World` exposes detached body identity and kinematic state but does not currently define body shape or physical radius. `CanvasKinematicRenderer`, however, already owns the circular display marker used to draw each body. The renderer therefore has the information required to answer whether a Canvas drawing-buffer point lies inside a rendered marker without inventing engine geometry.
+`World` snapshots now expose each immutable Body definition, including optional Circle geometry. `CanvasKinematicRenderer` has not adopted that domain geometry yet, however: it still draws every body using its existing fixed display-space marker. Picking therefore continues to test the marker radius until the dedicated Circle-rendering and Circle-aware-picking slices change those presentation semantics explicitly.
 
 `findBodyAtDisplayPoint(...)` accepts detached snapshots and a display-space point. For each snapshot it maps the body's world position through the current viewport transform, compares squared display-space distance against the squared marker radius, and returns the nearest hit `BodyId`.
 

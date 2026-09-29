@@ -11,7 +11,7 @@ The project currently has two concrete visualization implementations:
 - `CanvasKinematicRenderer` for browser Canvas 2D rendering;
 - `SvgKinematicRenderer` for static SVG output.
 
-Both consume detached `BodySnapshot` values exposed by the simulation engine.
+`BodySnapshot` observations now carry a shared immutable Body definition together with detached runtime state. Both renderers consume that public observation contract rather than reaching into World internals.
 
 `ViewportTransform` provides bidirectional world/display coordinate mapping, continuous visible-world geometry, mutable world-space centering, mutable display scale, and anchor-preserving zoom geometry shared by the visualization layer.
 
@@ -99,7 +99,7 @@ Canvas also supports visual body picking through `findBodyAtDisplayPoint(...)`. 
 
 The renderer can also receive optional hovered and selected `BodyId` values during `render(...)`. It draws distinct rings around the corresponding body markers but stores neither interaction identity itself. The same body can display both states simultaneously.
 
-This is intentionally visualization geometry. The engine does not yet model physical body shape or radius, so body picking is not an engine/world query. `CanvasExampleHost` reuses detached observations for hit testing and drawing, owns the transient hovered `BodyId` and persistent selected `BodyId`, recomputes hover as bodies move, and changes selection only through click semantics.
+This is currently presentation geometry. The engine now models optional Circle geometry and exposes it through each snapshot's immutable Body definition, but the renderer has not adopted that geometry yet. Until the dedicated Circle rendering/picking slices do so, body picking intentionally continues to use the existing display-space marker radius. `CanvasExampleHost` reuses the same observations for hit testing and drawing, owns the transient hovered `BodyId` and persistent selected `BodyId`, recomputes hover as bodies move, and changes selection only through click semantics.
 
 The selected-body inspector is also owned by the example-local host and remains read-only. It resolves the persistent selected identity against the latest detached snapshots each frame and displays the matching body's current position and velocity. No selected snapshot is retained as persistent state.
 
@@ -220,4 +220,4 @@ Programmatic viewport centering and scale changes are supported by both concrete
 
 Anchor-preserving zoom is geometry owned by `ViewportTransform`; wheel interpretation, scale limits, sensitivity, browser event cancellation, CSS-to-Canvas coordinate conversion, inspection UI, transient hover identity, persistent selection identity, click-versus-drag tolerance, and inspector formatting remain host policy. Body hit testing stays in Canvas visualization because the current pick radius is the renderer's display-space marker radius rather than engine-owned physical geometry. The renderer accepts per-frame hover and selection identities but owns neither state.
 
-The inspector resolves the selected `BodyId` against fresh detached snapshots and never treats a retained snapshot as authoritative state. Phase 1 structural refactoring is complete; future visual features should continue to respect the same ownership boundaries. The selected-body velocity-vector diagnostic remains a later candidate. Editable state, drag manipulation, physical engine shapes, cameras, renderer interfaces, generalized inspector systems, diagnostic-overlay frameworks, and generalized rendering abstractions remain deferred until concrete requirements establish their shape.
+The inspector resolves the selected `BodyId` against fresh snapshots and never treats a retained runtime-state observation as authoritative state. Circle geometry is now available through the shared immutable Body definition in each snapshot; geometry-aware rendering is the next planned visualization step. The selected-body velocity-vector diagnostic remains a later candidate. Editable state, drag manipulation, cameras, renderer interfaces, generalized inspector systems, diagnostic-overlay frameworks, and generalized rendering abstractions remain deferred until concrete requirements establish their shape.

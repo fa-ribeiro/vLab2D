@@ -10,9 +10,9 @@ Eventually, vLab2D aims to make simulations not only runnable, but **observable*
 
 ## Project status
 
-**Current checkpoint:** Phase 2 has started with immutable Circle geometry. A reusable `Body` may now optionally reference one `Circle`, while `new Body()` remains a valid shapeless particle-like definition. Position and velocity remain World-owned runtime concerns.
+**Current checkpoint:** Phase 2A now carries immutable Body definition data through `BodySnapshot`. Each snapshot exposes world-local identity, the reusable `Body` definition (including optional Circle geometry), and detached World-owned runtime state.
 
-**Next step:** expose immutable Body geometry through detached World observations so Visualization can distinguish shapeless Bodies from Bodies carrying Circle geometry without reaching into World internals.
+**Next step:** render Circle geometry in Canvas and SVG using world-scaled radius while shapeless Bodies keep their fixed presentation marker.
 
 See the [project documentation](docs/project/README.md) for the authoritative current status, project context, decisions, workflow, and continuity information.
 

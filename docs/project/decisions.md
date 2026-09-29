@@ -1024,3 +1024,45 @@ Body → 0..N geometry attachments
 Rotational runtime state is also deferred. Circular symmetry means Circle orientation is not needed to describe its outline, but this does not imply that a circular Body cannot rotate physically. Box/Rectangle, rolling diagnostics, or another concrete requirement can introduce the pressure needed to model orientation and angular velocity.
 
 This checkpoint does not change World snapshots, rendering, picking, collision behavior, mass/material properties, or runtime stepping.
+
+## D-072 — BodySnapshot shares immutable definition data and detaches runtime state
+
+**Status:** Accepted and implemented
+
+Geometry creates the first concrete need for Visualization to observe intrinsic Body definition data together with World-owned runtime state.
+
+`BodySnapshot` therefore becomes:
+
+```text
+BodySnapshot
+├── id
+├── definition
+└── state
+```
+
+`definition` is the exact reusable `Body` reference supplied when the World runtime instance was created. It is intentionally shared rather than copied because Body definitions and their current Circle geometry are immutable intrinsic data.
+
+`state` remains a detached `BodyState` copy because position and velocity are authoritative mutable runtime state owned by the World.
+
+This distinction is intentional:
+
+```text
+shared by reference
+    immutable reusable definition
+
+copied for observation
+    mutable authoritative runtime state
+```
+
+The snapshot itself remains an observation rather than World storage. Consumers cannot add/remove World bodies or replace authoritative state through it.
+
+The design avoids:
+
+- copying Circle/Body definition data into every snapshot;
+- adding a Circle-specific `World.getBodyGeometry(...)` query;
+- exposing World internal `WorldBody` storage;
+- making Visualization retain a separate BodyId-to-definition registry.
+
+The same Body definition may be instantiated multiple times. Snapshots for those runtime instances therefore legitimately share the same `definition` reference while carrying independent `id` and `state` values.
+
+This checkpoint changes the observation contract but does not change rendering or picking behavior. Canvas and SVG continue using their existing fixed display markers until the Circle-rendering slice explicitly adopts domain geometry.

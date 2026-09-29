@@ -237,7 +237,7 @@ flowchart LR
     C --> ENG
     ENG --> STATE[(Authoritative mutable runtime state)]
     STATE --> ENG
-    ENG -->|detached snapshots / observations| Q
+    ENG -->|shared definitions + detached runtime observations| Q
 ```
 
-The engine remains the only authority allowed to mutate simulation state. Observation and control are separate concerns: outsiders may inspect safe representations of state and request changes, while the engine validates and applies those changes consistently.
+The engine remains the only authority allowed to mutate simulation runtime state. Observation and control are separate concerns: outsiders may inspect shared immutable definitions together with detached runtime-state representations and request changes, while the engine validates and applies those changes consistently.

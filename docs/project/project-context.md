@@ -127,7 +127,7 @@ Canvas and canvas-like interactive rendering are the primary visualization targe
 
 Visualization design should not collapse to the lowest common denominator between Canvas and SVG. If a useful Canvas capability does not map naturally to SVG, prefer the Canvas design and let SVG adapt, provide a reduced/static equivalent, or omit that feature rather than compromising the primary interactive path.
 
-The same simulation state may eventually be represented by multiple views or observers. Visualization consumes detached observations and should not become the owner of engine runtime state.
+The same simulation state may eventually be represented by multiple views or observers. Visualization consumes safe observations: immutable reusable definitions may be shared by reference, while authoritative mutable runtime state is exposed through detached values. Visualization should not become the owner of engine runtime state.
 
 Possible indicators include:
 
@@ -218,7 +218,7 @@ Phase 1 established concrete source boundaries:
 - `src/engine/` — self-contained simulation engine; `src/engine/mod.ts` is its narrower layer boundary;
 - `src/simulation/` — deterministic multi-World orchestration;
 - `src/runtime/` — host execution mechanics such as browser scheduling;
-- `src/visualization/` — rendering/diagnostic presentation concerns, outside the engine;
+- `src/visualization/` — rendering/diagnostic presentation concerns, outside the engine; consumes public observations rather than World internals;
 - `docs/project/` — continuity, decisions, status, workflow, environment, roadmap, and project map;
 - `tests/` — reserved for project-level/bootstrap tests; feature tests should normally be colocated.
 

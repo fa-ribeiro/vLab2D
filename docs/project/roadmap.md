@@ -254,20 +254,33 @@ Zero radius is not used to encode a particle. Absence of domain geometry remains
 
 #### 2A.2 — Geometry observation
 
-**Status:** next.
+**Status:** implemented.
 
-Establish how immutable Body definition information accompanies detached World observations so Visualization can distinguish:
+`BodySnapshot` now exposes three distinct categories:
 
 ```text
-shapeless Body
-Circle Body
+id
+    world-local runtime identity
+
+definition
+    shared immutable Body definition
+    includes optional Circle geometry
+
+state
+    detached World-owned runtime state
 ```
 
-without reaching into authoritative World internals.
+`World.getBodySnapshots()` returns the exact reusable Body definition reference supplied to `addBody(...)` together with a copied `BodyState`.
+
+Sharing the definition is deliberate: intrinsic immutable definition data does not become mutable World storage merely because a World instance refers to it. Runtime state remains detached.
+
+This lets Visualization distinguish a shapeless Body from a Circle Body without a shape-specific World query, geometry duplication, or access to World internals.
 
 #### 2A.3 — Circle rendering
 
-After the observation boundary is clear, render Circle radius as actual domain geometry scaled through the viewport.
+**Status:** next.
+
+Render Circle radius as actual domain geometry scaled through the viewport.
 
 Shapeless Bodies should retain a fixed presentation marker. This keeps domain geometry distinct from the visual marker used to make a geometry-free entity visible.
 

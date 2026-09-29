@@ -6,7 +6,7 @@ vLab2D now has a small multi-body simulation engine, deterministic multi-World S
 
 **Phase 1 — Structure and lifecycle refactoring is complete.** The project now has concrete `Body → World → Simulation → Runtime` boundaries, a separate Visualization layer, and a package-facing composition facade.
 
-**Phase 2 — Geometry / single-shape learning is active.** The first slice introduces immutable Circle geometry while preserving shapeless Bodies.
+**Phase 2 — Geometry / single-shape learning is active.** Circle geometry is established and detached World observations now expose the immutable Body definition needed by Visualization.
 
 Canvas is the primary visualization target. SVG remains a useful secondary renderer for static snapshots, debugging captures, exports, and documentation where maintaining it remains reasonable.
 
@@ -26,7 +26,7 @@ The public engine API currently provides:
 - `ExplicitEulerIntegrator`.
 - `SemiImplicitEulerIntegrator`.
 - `BodyId`, an opaque world-local identifier.
-- `BodySnapshot`, a detached observation of body identity and runtime state.
+- `BodySnapshot`, an observation of world-local identity, the reusable immutable Body definition, and detached runtime state.
 - `World`, which owns and advances multiple identified body runtime instances.
 
 The current Body/World lifecycle now distinguishes three categories explicitly:
@@ -53,6 +53,23 @@ Circle radius is expressed in world units and must be positive and finite.
 `new Body({ shape: new Circle(0.5) })` attaches one reusable Circle definition. The reference is retained directly because Circle is immutable.
 
 Phase 2 deliberately supports only zero-or-one Circle geometry at this checkpoint. No general `Shape` contract has been introduced yet; Box/Rectangle will provide a second concrete geometry variant and the evidence needed to generalize the abstraction.
+
+`BodySnapshot` now keeps the intrinsic/runtime split visible to observers:
+
+```text
+BodySnapshot
+    id
+        world-local runtime identity
+
+    definition
+        shared immutable Body definition
+        optional Circle geometry
+
+    state
+        detached World-owned position / velocity
+```
+
+The `definition` reference is intentionally shared rather than copied because Body definitions are reusable immutable intrinsic data, not authoritative mutable World state. The snapshot object and `state` observation remain detached from World storage.
 
 `World.addBody(...)` may instantiate the same `Body` definition multiple times. Each addition receives an independent world-local `BodyId` and independent runtime state. Position and velocity default to zero, and supplied vectors are copied before they become authoritative world state.
 
@@ -302,16 +319,17 @@ No folder rename was performed merely to match an aspirational tree. `kinematics
 
 ## Next step
 
-Continue **Phase 2A — Circle** with geometry observation.
+Continue **Phase 2A — Circle** with **2A.3 — Circle rendering**.
 
-The Circle domain model is established:
+The observation boundary is now established:
 
-- Circle is immutable reusable geometry in world units;
-- Body may optionally reference one Circle;
-- shapeless Bodies remain valid;
-- position and velocity remain World-owned runtime state;
-- no collision, mass, material, orientation, angular state, or compound geometry has been introduced.
+- `BodySnapshot.id` identifies the World runtime instance;
+- `BodySnapshot.definition` shares the immutable reusable Body definition;
+- `BodySnapshot.state` remains a detached runtime-state observation;
+- Circle geometry is therefore visible to Visualization without a shape-specific World query or access to World internals.
 
-The next small question is how immutable Body definition information should accompany detached World observations so Visualization can discover geometry without accessing World internals. Rendering and picking changes should follow only after that observation boundary is established.
+The next slice should make Canvas and SVG render Circle radius as domain geometry scaled through `ViewportTransform`, while shapeless Bodies retain their existing fixed display-space presentation marker.
+
+Picking should remain unchanged until **2A.4**, so rendering and interaction geometry evolve one concern at a time.
 
 The phased strategy is maintained in [`roadmap.md`](roadmap.md).
