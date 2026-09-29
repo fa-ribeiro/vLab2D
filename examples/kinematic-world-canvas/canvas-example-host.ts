@@ -95,31 +95,39 @@ export class CanvasExampleHost {
     this.#renderer.render(this.#renderedSnapshots, this.#hoveredBodyId, this.#selectedBodyId);
   }
 
+  // Wires browser input events to the example's interaction handlers.
   #attachInteractionHandlers(): void {
+    // Begins a possible click or viewport drag with the primary pointer.
     this.#canvas.addEventListener("pointerdown", (event) => {
       this.#handlePointerDown(event);
     });
 
+    // Completes click selection when the interaction stayed within tolerance.
     this.#canvas.addEventListener("pointerup", (event) => {
       this.#handlePointerUp(event);
     });
 
+    // Ends drag tracking if the browser cancels the active pointer.
     this.#canvas.addEventListener("pointercancel", (event) => {
       this.#endPointerDrag(event.pointerId);
     });
 
+    // Ends drag tracking if pointer capture is released outside the normal flow.
     this.#canvas.addEventListener("lostpointercapture", (event) => {
       this.#endPointerDrag(event.pointerId);
     });
 
+    // Pans during drag and refreshes pointer inspection.
     this.#canvas.addEventListener("pointermove", (event) => {
       this.#handlePointerMove(event);
     });
 
+    // Clears transient pointer inspection when the pointer leaves the Canvas.
     this.#canvas.addEventListener("pointerleave", () => {
       this.#clearPointerInspection();
     });
 
+    // Applies host zoom policy around the current pointer position.
     this.#canvas.addEventListener(
       "wheel",
       (event) => {
@@ -129,6 +137,7 @@ export class CanvasExampleHost {
     );
   }
 
+  // Starts a primary-pointer interaction as a possible click or drag.
   #handlePointerDown(event: PointerEvent): void {
     if (event.button !== 0 || this.#activePointerId !== undefined) {
       return;
@@ -146,6 +155,7 @@ export class CanvasExampleHost {
     this.#canvas.setPointerCapture(event.pointerId);
   }
 
+  // Turns a click-like pointer release into body selection.
   #handlePointerUp(event: PointerEvent): void {
     if (event.pointerId !== this.#activePointerId) {
       return;
@@ -160,6 +170,7 @@ export class CanvasExampleHost {
     }
   }
 
+  // Pans the viewport during drag and refreshes pointer inspection.
   #handlePointerMove(event: PointerEvent): void {
     if (event.pointerId === this.#activePointerId) {
       const deltaClientX = event.clientX - this.#previousPointerX;
@@ -188,6 +199,7 @@ export class CanvasExampleHost {
     this.#updatePointerInspection(event.clientX, event.clientY);
   }
 
+  // Normalizes wheel input and applies bounded pointer-anchored zoom.
   #handleWheel(event: WheelEvent): void {
     event.preventDefault();
 
@@ -207,22 +219,24 @@ export class CanvasExampleHost {
     this.#updatePointerInspection(event.clientX, event.clientY);
   }
 
+  // Stores selected identity and refreshes the read-only inspector.
   #setSelectedBody(bodyId: BodyId | undefined): void {
     this.#selectedBodyId = bodyId;
 
-    this.#selectedBodyOutput.value = bodyId === undefined
-      ? "Selected: —"
-      : `Selected: ${bodyId}`;
+    this.#selectedBodyOutput.value =
+      bodyId === undefined ? "Selected: —" : `Selected: ${bodyId}`;
 
     this.#refreshSelectedBodyInspection();
   }
 
+  // Stops drag tracking for the active pointer.
   #endPointerDrag(pointerId: number): void {
     if (pointerId === this.#activePointerId) {
       this.#activePointerId = undefined;
     }
   }
 
+  // Converts browser CSS coordinates to Canvas drawing-buffer coordinates.
   #clientToDisplayCoordinates(clientX: number, clientY: number): { x: number; y: number } {
     const bounds = this.#canvas.getBoundingClientRect();
 
@@ -232,6 +246,7 @@ export class CanvasExampleHost {
     };
   }
 
+  // Normalizes wheel delta modes into pixel-like host units.
   #normalizeWheelDelta(event: WheelEvent): number {
     switch (event.deltaMode) {
       case WheelEvent.DOM_DELTA_LINE:
@@ -245,6 +260,7 @@ export class CanvasExampleHost {
     }
   }
 
+  // Updates coordinate and hovered-body readouts for a pointer position.
   #updatePointerInspection(clientX: number, clientY: number): void {
     this.#pointerClientX = clientX;
     this.#pointerClientY = clientY;
@@ -262,11 +278,11 @@ export class CanvasExampleHost {
       display.y,
     );
 
-    this.#bodyOutput.value = this.#hoveredBodyId === undefined
-      ? "Body: —"
-      : `Body: ${this.#hoveredBodyId}`;
+    this.#bodyOutput.value =
+      this.#hoveredBodyId === undefined ? "Body: —" : `Body: ${this.#hoveredBodyId}`;
   }
 
+  // Re-resolves hover against the latest rendered snapshots.
   #refreshPointerInspection(): void {
     if (this.#pointerClientX === undefined || this.#pointerClientY === undefined) {
       this.#hoveredBodyId = undefined;
@@ -276,6 +292,7 @@ export class CanvasExampleHost {
     this.#updatePointerInspection(this.#pointerClientX, this.#pointerClientY);
   }
 
+  // Clears transient pointer position, hover, and readouts.
   #clearPointerInspection(): void {
     this.#pointerClientX = undefined;
     this.#pointerClientY = undefined;
@@ -285,6 +302,7 @@ export class CanvasExampleHost {
     this.#bodyOutput.value = "Body: —";
   }
 
+  // Resolves persistent selection against the latest snapshots.
   #refreshSelectedBodyInspection(): void {
     if (this.#selectedBodyId === undefined) {
       this.#selectedBodyPositionOutput.value = "Position: —";
@@ -302,20 +320,17 @@ export class CanvasExampleHost {
 
     const { position, velocity } = snapshot.state;
 
-    this.#selectedBodyPositionOutput.value = `Position: (${position.x.toFixed(2)}, ${
-      position.y.toFixed(
-        2,
-      )
-    })`;
+    this.#selectedBodyPositionOutput.value = `Position: (${position.x.toFixed(2)}, ${position.y.toFixed(
+      2,
+    )})`;
 
-    this.#selectedBodyVelocityOutput.value = `Velocity: (${velocity.x.toFixed(2)}, ${
-      velocity.y.toFixed(
-        2,
-      )
-    })`;
+    this.#selectedBodyVelocityOutput.value = `Velocity: (${velocity.x.toFixed(2)}, ${velocity.y.toFixed(
+      2,
+    )})`;
   }
 }
 
+// Resolves a required output element or fails early during host construction.
 function requireOutput(
   document: Document,
   selector: string,

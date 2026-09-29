@@ -12,6 +12,7 @@ import { CanvasExampleHost } from "./canvas-example-host.ts";
 const FIXED_TIMESTEP = 1 / 60;
 const MAX_FRAME_DELTA = 0.25;
 
+// Resolve the browser drawing surface and its Canvas 2D context.
 const canvas = document.querySelector<HTMLCanvasElement>("#simulation");
 
 if (canvas === null) {
@@ -24,6 +25,7 @@ if (context === null) {
   throw new Error("Canvas 2D rendering is not available.");
 }
 
+// Build and populate the simulated World independently from browser presentation.
 const world = new World(new Vector2(0, -1), new SemiImplicitEulerIntegrator());
 
 const particle = new Body();

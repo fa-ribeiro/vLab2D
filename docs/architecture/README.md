@@ -664,13 +664,14 @@ Runtime decides when deterministic Simulation steps occur from browser wall-cloc
 ```mermaid
 sequenceDiagram
     participant Browser
+    participant Main as Canvas main.ts
     participant Runtime as BrowserSimulationRuntime
     participant Simulation
     participant World
     participant Host as CanvasExampleHost
     participant Renderer as CanvasKinematicRenderer
 
-    Host->>Runtime: run() via main.ts
+    Main->>Runtime: run()
     Runtime->>Host: renderFrame() initial presentation
     Runtime->>Browser: requestAnimationFrame(callback)
 

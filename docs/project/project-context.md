@@ -51,7 +51,7 @@ The project should remain exploratory: we use known algorithms and established t
 
 ## 4. Current conceptual architecture
 
-The project now uses four conceptual layers as its architectural direction:
+The project uses four concrete conceptual layers:
 
 ```mermaid
 flowchart LR
@@ -102,18 +102,20 @@ Potential responsibilities as the engine grows:
 
 Simulation coordinates one or more independent Worlds.
 
-The intended deterministic core operation is conceptually:
+Its deterministic core operation is:
 
 ```text
 simulation.step(dt)
 ```
 
-Potential responsibilities:
+Current responsibilities include:
 
 - coordinate one or more Worlds;
 - synchronize stepping for controlled comparisons;
-- track simulation-level time if/when needed;
+- isolate per-World execution failure;
 - keep orchestration independent from browser scheduling and visualization.
+
+Simulation-level time remains deferred until a concrete need establishes its semantics.
 
 Multiple Worlds are a core experimental requirement rather than a speculative abstraction.
 
@@ -144,16 +146,17 @@ Possible indicators include:
 
 Runtime drives Simulation in a particular host environment.
 
-For a browser runtime, likely responsibilities include:
+The current browser Runtime owns:
 
-- wall-clock scheduling;
-- `requestAnimationFrame`;
+- wall-clock scheduling through `requestAnimationFrame`;
+- frame-delta clamping;
 - fixed-timestep accumulation;
 - calling deterministic simulation steps;
-- coordinating render cadence;
-- host-specific pointer/wheel/event mechanics where appropriate.
+- host frame cadence through a callback.
 
 `run()` belongs to runtime/application execution rather than to the deterministic Simulation model.
+
+Browser interaction and presentation policy remain outside Runtime. In the current Canvas example, the example-local `CanvasExampleHost` owns pointer/wheel events, hover and selection state, inspection outputs, and rendering.
 
 ### UI / Controls
 
@@ -207,28 +210,31 @@ Important learning themes:
 - chaotic systems / butterfly effect;
 - energy drift and stability.
 
-## 6. Repository boundary and architectural migration
+## 6. Repository boundaries
 
-The repository began with deliberately small boundaries:
+Phase 1 established concrete source boundaries:
 
-- `src/engine/` — self-contained simulation engine; `mod.ts` is its public consumer entry point;
+- `src/mod.ts` — package-facing composition facade;
+- `src/engine/` — self-contained simulation engine; `src/engine/mod.ts` is its narrower layer boundary;
+- `src/simulation/` — deterministic multi-World orchestration;
+- `src/runtime/` — host execution mechanics such as browser scheduling;
 - `src/visualization/` — rendering/diagnostic presentation concerns, outside the engine;
 - `docs/project/` — continuity, decisions, status, workflow, environment, roadmap, and project map;
 - `tests/` — reserved for project-level/bootstrap tests; feature tests should normally be colocated.
 
-The project is now incrementally moving toward the four-layer architecture rather than adding empty folders in advance.
-
-The likely direction is:
+The current source shape is:
 
 ```text
 src/
+├── mod.ts
 ├── engine/
 ├── simulation/
 ├── visualization/
 └── runtime/
+    └── browser/
 ```
 
-Deeper structure should still appear only when concrete responsibilities justify it.
+Deeper structure should continue to appear only when concrete responsibilities justify it.
 
 ## 7. Development roadmap
 
@@ -236,7 +242,7 @@ The current phased strategy lives in [`roadmap.md`](roadmap.md).
 
 At a high level:
 
-1. **Phase 1 — Structure and lifecycle refactoring:** no new features; reorganize current behavior around Body → World → Simulation → Runtime.
+1. **Phase 1 — Structure and lifecycle refactoring:** complete; current behavior was reorganized around Body → World → Simulation → Runtime.
 2. **Phase 2 — Geometry / single-shape learning:** introduce immutable Shape geometry incrementally while shapeless particle-like Bodies remain valid.
 3. **Phase 3 — Geometry becomes physics:** collision detection/response and related structure only when geometry creates a concrete need.
 4. **Phase 4+ — Richer bodies and presentation:** compound bodies, physical materials, appearance/textures, and other concepts only as previous phases justify them.
