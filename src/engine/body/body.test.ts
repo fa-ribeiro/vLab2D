@@ -1,7 +1,8 @@
 import { assertEquals, assertStrictEquals } from "@std/assert";
 
-import { Circle } from "../geometry/circle.ts";
 import { Body } from "./body.ts";
+import { Circle } from "../geometry/circle.ts";
+import { Rectangle } from "../geometry/rectangle.ts";
 
 Deno.test("Body is shapeless by default", () => {
   const body = new Body();
@@ -25,4 +26,22 @@ Deno.test("Circle geometry can be reused by multiple Body definitions", () => {
 
   assertStrictEquals(firstBody.shape, circle);
   assertStrictEquals(secondBody.shape, circle);
+});
+
+Deno.test("Body retains supplied Rectangle geometry", () => {
+  const rectangle = new Rectangle(4, 2);
+
+  const body = new Body({ shape: rectangle });
+
+  assertStrictEquals(body.shape, rectangle);
+});
+
+Deno.test("Rectangle geometry can be reused by multiple Body definitions", () => {
+  const rectangle = new Rectangle(4, 2);
+
+  const firstBody = new Body({ shape: rectangle });
+  const secondBody = new Body({ shape: rectangle });
+
+  assertStrictEquals(firstBody.shape, rectangle);
+  assertStrictEquals(secondBody.shape, rectangle);
 });

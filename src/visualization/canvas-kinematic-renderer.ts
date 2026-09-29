@@ -1,4 +1,4 @@
-import type { BodyId, BodySnapshot } from "../engine/mod.ts";
+import { type BodyId, type BodySnapshot, Circle } from "../engine/mod.ts";
 import { ViewportTransform } from "./viewport-transform.ts";
 
 const ORIGIN_MARKER_HALF_SIZE = 5;
@@ -196,9 +196,7 @@ export class CanvasKinematicRenderer {
       const bodyX = this.#transform.worldToDisplayX(snapshot.state.position.x);
       const bodyY = this.#transform.worldToDisplayY(snapshot.state.position.y);
 
-      const radius = snapshot.definition.shape === undefined
-        ? this.#bodyRadius
-        : snapshot.definition.shape.radius * this.#transform.pixelsPerUnit;
+      const radius = this.#bodyDisplayRadius(snapshot);
 
       const deltaX = displayX - bodyX;
       const deltaY = displayY - bodyY;
@@ -238,9 +236,7 @@ export class CanvasKinematicRenderer {
     const x = this.#transform.worldToDisplayX(snapshot.state.position.x);
     const y = this.#transform.worldToDisplayY(snapshot.state.position.y);
 
-    const radius = snapshot.definition.shape === undefined
-      ? this.#bodyRadius
-      : snapshot.definition.shape.radius * this.#transform.pixelsPerUnit;
+    const radius = this.#bodyDisplayRadius(snapshot);
 
     this.#context.beginPath();
     this.#context.arc(x, y, radius, 0, Math.PI * 2);
@@ -330,6 +326,20 @@ export class CanvasKinematicRenderer {
     this.#context.moveTo(x1, y1);
     this.#context.lineTo(x2, y2);
     this.#context.stroke();
+  }
+
+  #bodyDisplayRadius(snapshot: BodySnapshot): number {
+    const shape = snapshot.definition.shape;
+
+    if (shape === undefined) {
+      return this.#bodyRadius;
+    }
+
+    if (shape instanceof Circle) {
+      return shape.radius * this.#transform.pixelsPerUnit;
+    }
+
+    throw new TypeError("CanvasKinematicRenderer does not support Rectangle geometry yet.");
   }
 }
 

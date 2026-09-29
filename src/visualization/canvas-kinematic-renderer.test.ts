@@ -6,6 +6,7 @@ import {
   type BodySnapshot,
   type BodyState,
   Circle,
+  Rectangle,
   Vector2,
 } from "../engine/mod.ts";
 import { CanvasKinematicRenderer } from "./canvas-kinematic-renderer.ts";
@@ -538,4 +539,64 @@ Deno.test("CanvasKinematicRenderer scales Circle picking with the viewport", () 
   renderer.setViewportScale(20);
 
   assertEquals(renderer.findBodyAtDisplayPoint(snapshots, 115, 50), 7);
+});
+
+Deno.test("CanvasKinematicRenderer rejects unsupported Rectangle rendering", () => {
+  const context = new RecordingCanvasContext();
+  const renderer = new CanvasKinematicRenderer(context, 200, 100, 10, 6);
+
+  const snapshots: readonly BodySnapshot[] = [
+    createBodySnapshot(
+      7,
+      new Vector2(0, 0),
+      new Vector2(0, 0),
+      new Body({ shape: new Rectangle(2, 1) }),
+    ),
+  ];
+
+  assertThrows(
+    () => renderer.render(snapshots),
+    TypeError,
+    "CanvasKinematicRenderer does not support Rectangle geometry yet.",
+  );
+});
+
+Deno.test("CanvasKinematicRenderer rejects unsupported Rectangle picking", () => {
+  const context = new RecordingCanvasContext();
+  const renderer = new CanvasKinematicRenderer(context, 200, 100, 10, 6);
+
+  const snapshots: readonly BodySnapshot[] = [
+    createBodySnapshot(
+      7,
+      new Vector2(0, 0),
+      new Vector2(0, 0),
+      new Body({ shape: new Rectangle(2, 1) }),
+    ),
+  ];
+
+  assertThrows(
+    () => renderer.findBodyAtDisplayPoint(snapshots, 100, 50),
+    TypeError,
+    "CanvasKinematicRenderer does not support Rectangle geometry yet.",
+  );
+});
+
+Deno.test("CanvasKinematicRenderer rejects unsupported Rectangle picking", () => {
+  const context = new RecordingCanvasContext();
+  const renderer = new CanvasKinematicRenderer(context, 200, 100, 10, 6);
+
+  const snapshots: readonly BodySnapshot[] = [
+    createBodySnapshot(
+      7,
+      new Vector2(0, 0),
+      new Vector2(0, 0),
+      new Body({ shape: new Rectangle(2, 1) }),
+    ),
+  ];
+
+  assertThrows(
+    () => renderer.findBodyAtDisplayPoint(snapshots, 100, 50),
+    TypeError,
+    "CanvasKinematicRenderer does not support Rectangle geometry yet.",
+  );
 });

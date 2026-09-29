@@ -1,4 +1,4 @@
-import type { Circle } from "../geometry/circle.ts";
+import type { BodyShape } from "../geometry/body-shape.ts";
 import type { BodyOptions } from "./body-options.ts";
 
 /**
@@ -18,7 +18,7 @@ export class Body {
    * Phase 2 currently supports Circle geometry only. The reference is retained
    * directly because Circle is immutable and reusable.
    */
-  public readonly shape: Circle | undefined;
+  public readonly shape: BodyShape | undefined;
 
   /**
    * Creates a reusable body definition.

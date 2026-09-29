@@ -10,6 +10,8 @@
 export { Body } from "./body/body.ts";
 export type { BodyOptions } from "./body/body-options.ts";
 
+export type { BodyShape } from "./geometry/body-shape.ts";
+
 export { Circle } from "./geometry/circle.ts";
 export { Rectangle } from "./geometry/rectangle.ts";
 
