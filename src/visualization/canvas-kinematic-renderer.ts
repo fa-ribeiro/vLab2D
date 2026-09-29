@@ -1,4 +1,4 @@
-import { type BodyId, type BodySnapshot, Circle } from "../engine/mod.ts";
+import { type BodyId, type BodySnapshot, Circle, Rectangle } from "../engine/mod.ts";
 import { ViewportTransform } from "./viewport-transform.ts";
 
 const ORIGIN_MARKER_HALF_SIZE = 5;
@@ -26,6 +26,10 @@ interface CanvasDrawingContext {
   fill(): void;
 
   stroke(): void;
+
+  fillRect(x: number, y: number, width: number, height: number): void;
+
+  strokeRect(x: number, y: number, width: number, height: number): void;
 
   save(): void;
 
@@ -239,6 +243,48 @@ export class CanvasKinematicRenderer {
   #renderBody(snapshot: BodySnapshot, hovered: boolean, selected: boolean): void {
     const x = this.#transform.worldToDisplayX(snapshot.state.position.x);
     const y = this.#transform.worldToDisplayY(snapshot.state.position.y);
+
+    const shape = snapshot.definition.shape;
+
+    if (shape instanceof Rectangle) {
+      const width = shape.width * this.#transform.pixelsPerUnit;
+      const height = shape.height * this.#transform.pixelsPerUnit;
+
+      const left = x - width / 2;
+      const top = y - height / 2;
+
+      this.#context.fillRect(left, top, width, height);
+
+      if (hovered) {
+        this.#context.save();
+        this.#context.globalAlpha = HOVER_RING_OPACITY;
+
+        this.#context.strokeRect(
+          left - HOVER_RING_PADDING,
+          top - HOVER_RING_PADDING,
+          width + HOVER_RING_PADDING * 2,
+          height + HOVER_RING_PADDING * 2,
+        );
+
+        this.#context.restore();
+      }
+
+      if (selected) {
+        this.#context.save();
+        this.#context.globalAlpha = SELECTION_RING_OPACITY;
+
+        this.#context.strokeRect(
+          left - SELECTION_RING_PADDING,
+          top - SELECTION_RING_PADDING,
+          width + SELECTION_RING_PADDING * 2,
+          height + SELECTION_RING_PADDING * 2,
+        );
+
+        this.#context.restore();
+      }
+
+      return;
+    }
 
     const radius = this.#bodyDisplayRadius(snapshot);
 

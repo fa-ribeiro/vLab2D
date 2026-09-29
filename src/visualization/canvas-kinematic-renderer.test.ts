@@ -61,6 +61,14 @@ class RecordingCanvasContext {
     this.calls.push(["stroke"]);
   }
 
+  fillRect(x: number, y: number, width: number, height: number): void {
+    this.calls.push(["fillRect", x, y, width, height]);
+  }
+
+  strokeRect(x: number, y: number, width: number, height: number): void {
+    this.calls.push(["strokeRect", x, y, width, height]);
+  }
+
   save(): void {
     this.calls.push(["save"]);
   }
@@ -541,24 +549,72 @@ Deno.test("CanvasKinematicRenderer scales Circle picking with the viewport", () 
   assertEquals(renderer.findBodyAtDisplayPoint(snapshots, 115, 50), 7);
 });
 
-Deno.test("CanvasKinematicRenderer rejects unsupported Rectangle rendering", () => {
+Deno.test("CanvasKinematicRenderer renders Rectangle dimensions in world units", () => {
   const context = new RecordingCanvasContext();
-  const renderer = new CanvasKinematicRenderer(context, 200, 100, 10, 6);
+  const renderer = new CanvasKinematicRenderer(context, 200, 100, 10, 3);
+
+  const snapshots: readonly BodySnapshot[] = [
+    createBodySnapshot(
+      7,
+      new Vector2(2, 1),
+      new Vector2(0, 0),
+      new Body({ shape: new Rectangle(4, 2) }),
+    ),
+  ];
+
+  renderer.render(snapshots);
+
+  const fillRectCalls = context.calls.filter(([name]) => name === "fillRect");
+
+  assertEquals(fillRectCalls, [["fillRect", 100, 30, 40, 20]]);
+});
+
+Deno.test("CanvasKinematicRenderer scales Rectangle dimensions with the viewport", () => {
+  const context = new RecordingCanvasContext();
+  const renderer = new CanvasKinematicRenderer(context, 200, 100, 10, 3);
+
+  renderer.setViewportScale(20);
 
   const snapshots: readonly BodySnapshot[] = [
     createBodySnapshot(
       7,
       new Vector2(0, 0),
       new Vector2(0, 0),
-      new Body({ shape: new Rectangle(2, 1) }),
+      new Body({ shape: new Rectangle(4, 2) }),
     ),
   ];
 
-  assertThrows(
-    () => renderer.render(snapshots),
-    TypeError,
-    "CanvasKinematicRenderer does not support Rectangle geometry yet.",
-  );
+  renderer.render(snapshots);
+
+  const fillRectCalls = context.calls.filter(([name]) => name === "fillRect");
+
+  assertEquals(fillRectCalls, [["fillRect", 60, 30, 80, 40]]);
+});
+
+Deno.test("CanvasKinematicRenderer sizes interaction rings around Rectangle geometry", () => {
+  const context = new RecordingCanvasContext();
+  const renderer = new CanvasKinematicRenderer(context, 200, 100, 10, 3);
+
+  const snapshots: readonly BodySnapshot[] = [
+    createBodySnapshot(
+      7,
+      new Vector2(2, 1),
+      new Vector2(0, 0),
+      new Body({ shape: new Rectangle(4, 2) }),
+    ),
+  ];
+
+  renderer.render(snapshots, 7, 7);
+
+  const fillRectCalls = context.calls.filter(([name]) => name === "fillRect");
+  const strokeRectCalls = context.calls.filter(([name]) => name === "strokeRect");
+
+  assertEquals(fillRectCalls, [["fillRect", 100, 30, 40, 20]]);
+
+  assertEquals(strokeRectCalls, [
+    ["strokeRect", 96, 26, 48, 28],
+    ["strokeRect", 92, 22, 56, 36],
+  ]);
 });
 
 Deno.test("CanvasKinematicRenderer rejects unsupported Rectangle picking", () => {

@@ -1,4 +1,4 @@
-import { type BodySnapshot, Circle } from "../engine/mod.ts";
+import { type BodySnapshot, Circle, Rectangle } from "../engine/mod.ts";
 import { ViewportTransform } from "./viewport-transform.ts";
 
 const ORIGIN_MARKER_HALF_SIZE = 5;
@@ -103,6 +103,15 @@ export class SvgKinematicRenderer {
     const y = this.#transform.worldToDisplayY(snapshot.state.position.y);
 
     const shape = snapshot.definition.shape;
+
+    if (shape instanceof Rectangle) {
+      const width = shape.width * this.#transform.pixelsPerUnit;
+      const height = shape.height * this.#transform.pixelsPerUnit;
+
+      return `  <rect data-body-id="${snapshot.id}" x="${x - width / 2}" y="${
+        y - height / 2
+      }" width="${width}" height="${height}" />`;
+    }
 
     if (shape !== undefined && !(shape instanceof Circle)) {
       throw new TypeError("SvgKinematicRenderer does not support Rectangle geometry yet.");

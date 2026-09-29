@@ -222,21 +222,38 @@ Deno.test(
   },
 );
 
-Deno.test("SvgKinematicRenderer rejects unsupported Rectangle rendering", () => {
+Deno.test("SvgKinematicRenderer renders Rectangle dimensions in world units", () => {
   const renderer = new SvgKinematicRenderer(200, 100, 10, 3);
+
+  const snapshots: readonly BodySnapshot[] = [
+    createBodySnapshot(
+      7,
+      new Vector2(2, 1),
+      new Vector2(0, 0),
+      new Body({ shape: new Rectangle(4, 2) }),
+    ),
+  ];
+
+  const svg = renderer.render(snapshots);
+
+  assertStringIncludes(svg, '<rect data-body-id="7" x="100" y="30" width="40" height="20" />');
+});
+
+Deno.test("SvgKinematicRenderer scales Rectangle dimensions with the viewport", () => {
+  const renderer = new SvgKinematicRenderer(200, 100, 10, 3);
+
+  renderer.setViewportScale(20);
 
   const snapshots: readonly BodySnapshot[] = [
     createBodySnapshot(
       7,
       new Vector2(0, 0),
       new Vector2(0, 0),
-      new Body({ shape: new Rectangle(2, 1) }),
+      new Body({ shape: new Rectangle(4, 2) }),
     ),
   ];
 
-  assertThrows(
-    () => renderer.render(snapshots),
-    TypeError,
-    "SvgKinematicRenderer does not support Rectangle geometry yet.",
-  );
+  const svg = renderer.render(snapshots);
+
+  assertStringIncludes(svg, '<rect data-body-id="7" x="60" y="30" width="80" height="40" />');
 });
