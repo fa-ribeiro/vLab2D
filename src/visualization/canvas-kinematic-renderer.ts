@@ -159,17 +159,17 @@ export class CanvasKinematicRenderer {
   }
 
   /**
-   * Finds the nearest body hit by the renderer's fixed display-space
-   * picking radius.
+   * Finds the nearest body hit by its display-space picking radius.
    *
-   * Picking intentionally remains independent of Body geometry. Shapeless
-   * bodies and bodies with geometry currently use the same picking radius.
+   * Shapeless bodies use the renderer's fixed presentation radius.
+   * Circle bodies use their world-space radius transformed by the current
+   * viewport scale.
    *
    * @param snapshots Detached body observations to test.
    * @param displayX Horizontal point coordinate in Canvas drawing-buffer units.
    * @param displayY Vertical point coordinate in Canvas drawing-buffer units.
    * @returns The identifier of the nearest hit body, or `undefined` when no
-   * body falls within the picking radius.
+   * body contains the point.
    */
   public findBodyAtDisplayPoint(
     snapshots: readonly BodySnapshot[],
@@ -183,14 +183,15 @@ export class CanvasKinematicRenderer {
       const bodyX = this.#transform.worldToDisplayX(snapshot.state.position.x);
       const bodyY = this.#transform.worldToDisplayY(snapshot.state.position.y);
 
+      const radius = snapshot.definition.shape === undefined
+        ? this.#bodyRadius
+        : snapshot.definition.shape.radius * this.#transform.pixelsPerUnit;
+
       const deltaX = displayX - bodyX;
       const deltaY = displayY - bodyY;
       const distanceSquared = deltaX * deltaX + deltaY * deltaY;
 
-      if (
-        distanceSquared <= this.#bodyRadius * this.#bodyRadius &&
-        distanceSquared < nearestDistanceSquared
-      ) {
+      if (distanceSquared <= radius * radius && distanceSquared < nearestDistanceSquared) {
         nearestBodyId = snapshot.id;
         nearestDistanceSquared = distanceSquared;
       }
@@ -224,10 +225,9 @@ export class CanvasKinematicRenderer {
     const x = this.#transform.worldToDisplayX(snapshot.state.position.x);
     const y = this.#transform.worldToDisplayY(snapshot.state.position.y);
 
-    const radius =
-      snapshot.definition.shape === undefined
-        ? this.#bodyRadius
-        : snapshot.definition.shape.radius * this.#transform.pixelsPerUnit;
+    const radius = snapshot.definition.shape === undefined
+      ? this.#bodyRadius
+      : snapshot.definition.shape.radius * this.#transform.pixelsPerUnit;
 
     this.#context.beginPath();
     this.#context.arc(x, y, radius, 0, Math.PI * 2);

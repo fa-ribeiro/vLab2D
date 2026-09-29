@@ -480,7 +480,7 @@ Deno.test(
   },
 );
 
-Deno.test("CanvasKinematicRenderer keeps Circle picking on the fixed marker radius", () => {
+Deno.test("CanvasKinematicRenderer picks Circle using its rendered geometry radius", () => {
   const context = new RecordingCanvasContext();
   const renderer = new CanvasKinematicRenderer(context, 200, 100, 10, 6);
 
@@ -493,9 +493,7 @@ Deno.test("CanvasKinematicRenderer keeps Circle picking on the fixed marker radi
     ),
   ];
 
-  // The Circle renders with radius 20, but picking intentionally remains
-  // fixed to the 6-display-unit presentation marker until Phase 2A.4.
-  assertEquals(renderer.findBodyAtDisplayPoint(snapshots, 115, 50), undefined);
+  assertEquals(renderer.findBodyAtDisplayPoint(snapshots, 115, 50), 7);
 });
 
 Deno.test("CanvasKinematicRenderer sizes interaction rings around Circle geometry", () => {
@@ -520,4 +518,24 @@ Deno.test("CanvasKinematicRenderer sizes interaction rings around Circle geometr
     ["arc", 100, 50, 24, 0, Math.PI * 2],
     ["arc", 100, 50, 28, 0, Math.PI * 2],
   ]);
+});
+
+Deno.test("CanvasKinematicRenderer scales Circle picking with the viewport", () => {
+  const context = new RecordingCanvasContext();
+  const renderer = new CanvasKinematicRenderer(context, 200, 100, 10, 6);
+
+  const snapshots: readonly BodySnapshot[] = [
+    createBodySnapshot(
+      7,
+      new Vector2(0, 0),
+      new Vector2(0, 0),
+      new Body({ shape: new Circle(1) }),
+    ),
+  ];
+
+  assertEquals(renderer.findBodyAtDisplayPoint(snapshots, 115, 50), undefined);
+
+  renderer.setViewportScale(20);
+
+  assertEquals(renderer.findBodyAtDisplayPoint(snapshots, 115, 50), 7);
 });
