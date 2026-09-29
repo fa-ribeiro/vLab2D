@@ -2,9 +2,6 @@ import type { Circle } from "./circle.ts";
 import type { Rectangle } from "./rectangle.ts";
 
 /**
- * Optional intrinsic geometry attached to this reusable definition.
- *
- * The reference is retained directly because supported Body geometry is
- * immutable and reusable.
+ * Intrinsic geometry currently supported by a Body definition.
  */
 export type BodyShape = Circle | Rectangle;

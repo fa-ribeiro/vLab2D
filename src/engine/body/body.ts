@@ -13,11 +13,12 @@ import type { BodyOptions } from "./body-options.ts";
  */
 export class Body {
   /**
-   * Optional intrinsic geometry attached to this reusable definition.
-   *
-   * Phase 2 currently supports Circle geometry only. The reference is retained
-   * directly because Circle is immutable and reusable.
-   */
+/**
+ * Optional intrinsic geometry attached to this reusable definition.
+ *
+ * The reference is retained directly because supported Body geometry is
+ * immutable and reusable.
+ */
   public readonly shape: BodyShape | undefined;
 
   /**

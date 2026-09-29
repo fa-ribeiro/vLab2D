@@ -77,6 +77,8 @@ export class SvgKinematicRenderer {
    *
    * @param snapshots The detached body observations to render.
    * @returns A complete SVG document as text.
+   * @throws {TypeError} If a supplied body uses Rectangle geometry, which this
+   * renderer does not support yet.
    */
   public render(snapshots: readonly BodySnapshot[]): string {
     const bodies = snapshots.map((snapshot) => this.#renderBody(snapshot)).join("\n");
@@ -106,9 +108,8 @@ export class SvgKinematicRenderer {
       throw new TypeError("SvgKinematicRenderer does not support Rectangle geometry yet.");
     }
 
-    const radius = shape === undefined
-      ? this.#bodyRadius
-      : shape.radius * this.#transform.pixelsPerUnit;
+    const radius =
+      shape === undefined ? this.#bodyRadius : shape.radius * this.#transform.pixelsPerUnit;
 
     return `  <circle data-body-id="${snapshot.id}" cx="${x}" cy="${y}" r="${radius}" />`;
   }

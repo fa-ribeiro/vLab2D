@@ -183,6 +183,9 @@ export class CanvasKinematicRenderer {
    * @param displayY Vertical point coordinate in Canvas drawing-buffer units.
    * @returns The identifier of the nearest hit body, or `undefined` when no
    * body contains the point.
+   * @throws {TypeError} If a supplied body uses Rectangle geometry, which this
+   * renderer does not support yet.
+   *
    */
   public findBodyAtDisplayPoint(
     snapshots: readonly BodySnapshot[],
@@ -215,6 +218,8 @@ export class CanvasKinematicRenderer {
    * Clears the viewport and renders the supplied body snapshots.
    *
    * @param snapshots The detached body observations to render.
+   * @throws {TypeError} If a supplied body uses Rectangle geometry, which this
+   * renderer does not support yet.
    */
   public render(
     snapshots: readonly BodySnapshot[],
