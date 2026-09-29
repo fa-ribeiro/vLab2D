@@ -234,6 +234,8 @@ is now represented directly by the Canvas entry point.
 
 ### 2A — Circle
 
+**Status:** complete.
+
 Circle is the proof-of-concept geometry used to learn the Body/geometry relationship before generalizing a Shape abstraction.
 
 #### 2A.1 — Circle domain model
@@ -278,17 +280,39 @@ This lets Visualization distinguish a shapeless Body from a Circle Body without 
 
 #### 2A.3 — Circle rendering
 
-**Status:** next.
+**Status:** implemented.
 
-Render Circle radius as actual domain geometry scaled through the viewport.
+Circle radius is rendered as actual domain geometry scaled through the viewport:
 
-Shapeless Bodies should retain a fixed presentation marker. This keeps domain geometry distinct from the visual marker used to make a geometry-free entity visible.
+```text
+rendered Circle radius = Circle.radius × pixelsPerUnit
+```
+
+Canvas and SVG both use that world-scaled radius for Circle Bodies. Shapeless Bodies retain a fixed display-space presentation marker, preserving the distinction between domain geometry and the visual marker used to make a geometry-free entity visible.
+
+Canvas hover and selection rings follow the body's rendered extent, so the rings scale with Circle geometry while remaining fixed around shapeless markers.
 
 #### 2A.4 — Circle-aware picking
 
-Once Circle rendering exists, revisit Canvas picking so finite Circle geometry can participate through its rendered/domain extent while shapeless Bodies can continue using presentation-marker picking.
+**Status:** implemented.
+
+Canvas picking now follows the same extent distinction used for body presentation:
+
+```text
+shapeless Body
+    pick radius = fixed presentation-marker radius
+
+Circle Body
+    pick radius = Circle.radius × pixelsPerUnit
+```
+
+When multiple body extents contain the pointer, the nearest rendered center remains the selected hit rather than snapshot order deciding the result.
+
+Picking remains a Visualization concern: the query operates in Canvas display space, transforms observed domain geometry for interaction, and still supports presentation-only fallback geometry for shapeless Bodies. Geometry-aware picking is therefore not a collision or physics system.
 
 ### 2B — Box / Rectangle
+
+**Status:** next.
 
 Box/Rectangle is the planned second concrete geometry variant.
 
@@ -300,6 +324,8 @@ It should be introduced only after Circle has clarified the basic geometry model
 - shape-local orientation when later needed.
 
 A Circle can also rotate physically even though circular symmetry makes orientation irrelevant to its outline. Deferring rotational runtime state during Circle work must not be interpreted as a claim that circular Bodies cannot rotate.
+
+The Box/Rectangle slice should begin from concrete requirements and tests rather than introducing these abstractions in advance.
 
 ### Longer-term geometry cardinality
 

@@ -52,6 +52,19 @@ export class CanvasKinematicRenderer {
   readonly #transform: ViewportTransform;
   readonly #bodyRadius: number;
 
+  /**
+   * Creates a Canvas kinematic renderer.
+   *
+   * @param context The Canvas-like drawing context used for rendering.
+   * @param width The viewport width in Canvas drawing-buffer units.
+   * @param height The viewport height in Canvas drawing-buffer units.
+   * @param pixelsPerUnit The number of Canvas display units representing one
+   * world unit.
+   * @param bodyRadius The fixed display-space radius used for shapeless body
+   * markers.
+   * @throws {RangeError} If the viewport dimensions, scale, or body radius are
+   * not positive and finite.
+   */
   public constructor(
     context: CanvasDrawingContext,
     width: number,

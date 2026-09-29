@@ -34,7 +34,8 @@ export class SvgKinematicRenderer {
    * @param height The SVG viewport height in display units.
    * @param pixelsPerUnit The number of display units representing one world
    * unit.
-   * @param bodyRadius The radius used to draw each body in display units.
+   * @param bodyRadius The fixed display-space radius used for shapeless body
+   * markers.
    * @throws {RangeError} If any supplied value is not positive and finite.
    */
   public constructor(width: number, height: number, pixelsPerUnit: number, bodyRadius = 4) {

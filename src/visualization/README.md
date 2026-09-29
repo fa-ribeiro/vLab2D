@@ -11,7 +11,7 @@ The project currently has two concrete visualization implementations:
 - `CanvasKinematicRenderer` for browser Canvas 2D rendering;
 - `SvgKinematicRenderer` for static SVG output.
 
-`BodySnapshot` observations now carry a shared immutable Body definition together with detached runtime state. Both renderers consume that public observation contract rather than reaching into World internals.
+`BodySnapshot` observations carry a shared immutable Body definition together with detached runtime state. Both renderers consume that public observation contract rather than reaching into World internals.
 
 `ViewportTransform` provides bidirectional world/display coordinate mapping, continuous visible-world geometry, mutable world-space centering, mutable display scale, and anchor-preserving zoom geometry shared by the visualization layer.
 
@@ -37,7 +37,19 @@ It currently renders:
 2. a horizontal world X axis;
 3. a vertical world Y axis;
 4. a world-origin marker;
-5. body markers above the spatial reference elements.
+5. body markers or Circle geometry above the spatial reference elements.
+
+Body presentation distinguishes domain geometry from presentation-only fallback geometry:
+
+```text
+shapeless Body
+    rendered radius = fixed renderer bodyRadius
+
+Circle Body
+    rendered radius = Circle.radius × pixelsPerUnit
+```
+
+A shapeless Body has no domain spatial extent, so the renderer uses a fixed display-space marker to keep it visible. A Circle Body carries finite domain geometry expressed in world units, so its rendered radius changes with the viewport scale.
 
 The SVG renderer exposes `setViewportCenter(...)` for shared programmatic world-space centering and `setViewportScale(...)` for shared programmatic scale changes. Although `ViewportTransform` also supports inverse display-to-world mapping and anchor-aware scale changes, the SVG renderer does not expose those Canvas-oriented interaction queries because no concrete SVG consumer currently needs them.
 
@@ -95,11 +107,33 @@ The example-local `CanvasExampleHost` owns pointer and wheel interaction. It tra
 
 Wheel normalization, zoom sensitivity, minimum and maximum scale, and suppression of browser page scrolling during Canvas zoom are host policy. The renderer itself does not depend on Pointer Events, Wheel Events, or other DOM input APIs, and presentation formatting remains host/UI responsibility.
 
-Canvas also supports visual body picking through `findBodyAtDisplayPoint(...)`. The query receives detached snapshots and a Canvas drawing-buffer point, maps each body position through the same viewport transform used for rendering, and tests against the renderer's circular body-marker radius. When markers overlap, the nearest rendered center wins rather than relying on snapshot order.
+Canvas body rendering follows the same shapeless-versus-Circle distinction as SVG:
 
-The renderer can also receive optional hovered and selected `BodyId` values during `render(...)`. It draws distinct rings around the corresponding body markers but stores neither interaction identity itself. The same body can display both states simultaneously.
+```text
+shapeless Body
+    rendered radius = fixed renderer bodyRadius
 
-This is currently presentation geometry. The engine now models optional Circle geometry and exposes it through each snapshot's immutable Body definition, but the renderer has not adopted that geometry yet. Until the dedicated Circle rendering/picking slices do so, body picking intentionally continues to use the existing display-space marker radius. `CanvasExampleHost` reuses the same observations for hit testing and drawing, owns the transient hovered `BodyId` and persistent selected `BodyId`, recomputes hover as bodies move, and changes selection only through click semantics.
+Circle Body
+    rendered radius = Circle.radius × pixelsPerUnit
+```
+
+The renderer can receive optional hovered and selected `BodyId` values during `render(...)`. It draws distinct rings around the corresponding body's actual rendered extent while storing neither interaction identity itself. The same body can display both states simultaneously. For Circle Bodies the rings therefore scale with Circle geometry; for shapeless Bodies they remain fixed around the presentation marker.
+
+Canvas also supports visual body picking through `findBodyAtDisplayPoint(...)`. The query receives detached snapshots and a Canvas drawing-buffer point, maps each body position through the same viewport transform used for rendering, and applies the same extent policy used for body presentation:
+
+```text
+shapeless Body
+    pick radius = fixed renderer bodyRadius
+
+Circle Body
+    pick radius = Circle.radius × pixelsPerUnit
+```
+
+When body extents overlap, the nearest rendered center wins rather than snapshot order deciding the result.
+
+Body hit testing remains a Visualization query even though Circle domain geometry now participates. The engine owns the intrinsic Circle radius in world units; Visualization owns the mapping of that observed geometry into Canvas display space and the interaction query performed there. Shapeless Bodies additionally require a presentation-only fallback radius. Geometry-aware picking therefore does not imply collision detection or any other physical interaction between simulated bodies.
+
+`CanvasExampleHost` reuses the same observations for hit testing and drawing, owns the transient hovered `BodyId` and persistent selected `BodyId`, recomputes hover as bodies move, and changes selection only through click semantics.
 
 The selected-body inspector is also owned by the example-local host and remains read-only. It resolves the persistent selected identity against the latest detached snapshots each frame and displays the matching body's current position and velocity. No selected snapshot is retained as persistent state.
 
@@ -198,7 +232,7 @@ The current renderers have intentionally different output models.
 
 ```mermaid
 flowchart TD
-    S[Kinematic body snapshots]
+    S[Body snapshots]
 
     SVG[SvgKinematicRenderer]
     CANVAS[CanvasKinematicRenderer]
@@ -218,6 +252,6 @@ The two concrete implementations should continue to teach us which concepts are 
 
 Programmatic viewport centering and scale changes are supported by both concrete renderers. The Canvas browser example adds pointer-drag panning, live world-coordinate inspection, bounded pointer-anchored wheel/trackpad zoom, display-space body picking, live hover highlighting, persistent click selection, and read-only live selected-body inspection.
 
-Anchor-preserving zoom is geometry owned by `ViewportTransform`; wheel interpretation, scale limits, sensitivity, browser event cancellation, CSS-to-Canvas coordinate conversion, inspection UI, transient hover identity, persistent selection identity, click-versus-drag tolerance, and inspector formatting remain host policy. Body hit testing stays in Canvas visualization because the current pick radius is the renderer's display-space marker radius rather than engine-owned physical geometry. The renderer accepts per-frame hover and selection identities but owns neither state.
+Anchor-preserving zoom is geometry owned by `ViewportTransform`; wheel interpretation, scale limits, sensitivity, browser event cancellation, CSS-to-Canvas coordinate conversion, inspection UI, transient hover identity, persistent selection identity, click-versus-drag tolerance, and inspector formatting remain host policy. Body hit testing stays in Canvas Visualization because the query maps observed geometry into display space and combines it with presentation-only fallback geometry for shapeless Bodies. The renderer accepts per-frame hover and selection identities but owns neither state.
 
-The inspector resolves the selected `BodyId` against fresh snapshots and never treats a retained runtime-state observation as authoritative state. Circle geometry is now available through the shared immutable Body definition in each snapshot; geometry-aware rendering is the next planned visualization step. The selected-body velocity-vector diagnostic remains a later candidate. Editable state, drag manipulation, cameras, renderer interfaces, generalized inspector systems, diagnostic-overlay frameworks, and generalized rendering abstractions remain deferred until concrete requirements establish their shape.
+The inspector resolves the selected `BodyId` against fresh snapshots and never treats a retained runtime-state observation as authoritative state. Circle geometry is now carried end-to-end through observation, rendering, and Canvas picking. Box/Rectangle is the planned second concrete geometry variant and the next source of pressure for broader shape/orientation design. The selected-body velocity-vector diagnostic remains a later candidate. Editable state, drag manipulation, cameras, renderer interfaces, generalized inspector systems, diagnostic-overlay frameworks, and generalized rendering abstractions remain deferred until concrete requirements establish their shape.

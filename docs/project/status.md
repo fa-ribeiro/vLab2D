@@ -2,15 +2,15 @@
 
 ## Current checkpoint
 
-vLab2D now has a small multi-body simulation engine, deterministic multi-World Simulation orchestration, a concrete browser Runtime, reproducible SVG visualization, live Canvas 2D animation with fixed simulation timing, and its first intrinsic geometry definition.
+vLab2D now has a small multi-body simulation engine, deterministic multi-World Simulation orchestration, a concrete browser Runtime, reproducible SVG visualization, live Canvas 2D animation with fixed simulation timing, and its first intrinsic geometry model carried through domain definition, observation, rendering, and Canvas picking.
 
 **Phase 1 — Structure and lifecycle refactoring is complete.** The project now has concrete `Body → World → Simulation → Runtime` boundaries, a separate Visualization layer, and a package-facing composition facade.
 
-**Phase 2 — Geometry / single-shape learning is active.** Circle geometry is established and detached World observations now expose the immutable Body definition needed by Visualization.
+**Phase 2 — Geometry / single-shape learning is active. Phase 2A — Circle is complete.** Circle geometry is established as immutable Body definition data, exposed through detached World observations, rendered in world-scaled form by Canvas and SVG, and used by Canvas picking. Shapeless Bodies remain valid and continue to use fixed display-space presentation markers.
 
 Canvas is the primary visualization target. SVG remains a useful secondary renderer for static snapshots, debugging captures, exports, and documentation where maintaining it remains reasonable.
 
-Both renderers share `ViewportTransform` for viewport geometry, bidirectional world/display coordinate conversion, mutable world-space centering, and mutable display scale. The Canvas path additionally supports anchored interactive zoom, display-space picking of rendered body markers, live hover highlighting, persistent click selection, and live read-only selected-body inspection.
+Both renderers share `ViewportTransform` for viewport geometry, bidirectional world/display coordinate conversion, mutable world-space centering, and mutable display scale. The Canvas path additionally supports anchored interactive zoom, display-space picking that follows each body's current presentation extent, live hover highlighting, persistent click selection, and live read-only selected-body inspection.
 
 ### Simulation engine
 
@@ -52,9 +52,9 @@ Circle radius is expressed in world units and must be positive and finite.
 
 `new Body({ shape: new Circle(0.5) })` attaches one reusable Circle definition. The reference is retained directly because Circle is immutable.
 
-Phase 2 deliberately supports only zero-or-one Circle geometry at this checkpoint. No general `Shape` contract has been introduced yet; Box/Rectangle will provide a second concrete geometry variant and the evidence needed to generalize the abstraction.
+The completed Circle checkpoint deliberately supports only zero-or-one Circle geometry. No general `Shape` contract has been introduced yet; Box/Rectangle will provide a second concrete geometry variant and the evidence needed to generalize the abstraction.
 
-`BodySnapshot` now keeps the intrinsic/runtime split visible to observers:
+`BodySnapshot` keeps the intrinsic/runtime split visible to observers:
 
 ```text
 BodySnapshot
@@ -81,7 +81,7 @@ World stepping remains atomic: candidate states for all bodies are calculated an
 
 ### Simulation orchestration
 
-`src/simulation/simulation.ts` now provides the real `Simulation` orchestration layer.
+`src/simulation/simulation.ts` provides the real `Simulation` orchestration layer.
 
 A `Simulation`:
 
@@ -180,6 +180,18 @@ origin
 bodies
 ```
 
+Body presentation now distinguishes domain geometry from presentation-only fallback geometry:
+
+```text
+shapeless Body
+    rendered radius = fixed renderer bodyRadius
+
+Circle Body
+    rendered radius = Circle.radius × pixelsPerUnit
+```
+
+Hover and selection rings are drawn around the body's actual rendered radius, so they follow Circle geometry as the viewport scale changes while remaining fixed around shapeless presentation markers.
+
 The renderer exposes focused viewport operations and queries:
 
 - `setViewportCenter(worldX, worldY)` delegates world-space centering to `ViewportTransform`;
@@ -188,7 +200,7 @@ The renderer exposes focused viewport operations and queries:
 - `viewportScale` exposes the current scale read-only for host interaction policy;
 - `setViewportScaleAroundDisplayPoint(...)` changes scale while preserving the world point underneath a Canvas display-space anchor;
 - `displayToWorldX(displayX)` and `displayToWorldY(displayY)` expose the transform's inverse scalar mapping without leaking the transform object itself;
-- `findBodyAtDisplayPoint(...)` tests detached snapshots against the rendered circular body markers and returns the nearest hit `BodyId`, or `undefined` when no marker contains the point;
+- `findBodyAtDisplayPoint(...)` tests detached snapshots using the same extent policy as body presentation: shapeless Bodies use the fixed display-space marker radius, while Circle Bodies use their world-space radius scaled through the current viewport; the nearest hit `BodyId` is returned, or `undefined` when no body contains the point;
 - `render(...)` accepts optional hovered and selected body identifiers for the current frame while remaining stateless about both interaction identities.
 
 The integer grid, axes, origin marker, and body positions all consume the same transform, so panning and zooming move and magnify the complete world view coherently.
@@ -222,21 +234,23 @@ The anchor-aware transform preserves the world coordinate underneath the pointer
 
 The coordinate, hovered-body, selected-body, position, and velocity readouts remain ordinary DOM presentation owned by the host. The transient hovered `BodyId` and persistent selected `BodyId` are both host-owned interaction/presentation state. The inspector derives current values from detached observations rather than retaining a selected snapshot. Formatting such as decimal precision does not enter `ViewportTransform`, the renderer, or the engine.
 
-Body picking is deliberately a visualization query rather than an engine query. `World` currently stores kinematic position and velocity but no physical shape or radius. The hit radius comes from the Canvas renderer's display-space body marker, so placing the query in `World` would incorrectly turn presentation geometry into simulation geometry.
+Body picking is deliberately a Visualization query rather than an engine query. The engine owns intrinsic Circle radius in world units, but Visualization owns the mapping of observed geometry into Canvas display space and the interaction query performed there. Shapeless Bodies additionally require a presentation-only fallback radius that has no domain spatial extent. Geometry-aware picking therefore does not make picking a collision or physics responsibility.
 
-When multiple rendered markers contain the pointer, the Canvas renderer chooses the hit whose rendered center is nearest to the pointer instead of depending on snapshot ordering, which is not part of the world's public contract.
+When multiple body extents contain the pointer, the Canvas renderer chooses the hit whose rendered center is nearest to the pointer instead of depending on snapshot ordering, which is not part of the world's public contract.
 
 The renderer remains unaware of DOM pointer and wheel events, does not retain hover or selection state between frames, and performs no simulation calculations or engine-state mutation.
 
-Canvas regression tests cover forward and inverse coordinate mapping, spatial references, viewport centering, programmatic scale changes, display-space panning, anchor-preserving scale changes, body-marker hit testing, nearest-hit behavior, hover highlighting, selection highlighting, combined hover-and-selection presentation, frame clearing, and validation behavior.
+Canvas regression tests cover forward and inverse coordinate mapping, spatial references, viewport centering, programmatic scale changes, display-space panning, anchor-preserving scale changes, shapeless-marker hit testing, Circle geometry rendering and zoom scaling, Circle-aware picking and zoom scaling, nearest-hit behavior, hover highlighting, selection highlighting, interaction rings around Circle geometry, combined hover-and-selection presentation, frame clearing, and validation behavior.
 
 ### SVG visualization
 
 `SvgKinematicRenderer` remains the secondary static visualization path.
 
-It renders the same basic spatial references and consumes the same continuous visible bounds, while retaining SVG-specific output behavior. `setViewportCenter(...)` exposes shared programmatic world-space centering, and `setViewportScale(...)` exposes shared programmatic viewport scale changes where those geometry operations map naturally to SVG.
+It renders the same basic spatial references and consumes the same continuous visible bounds, while retaining SVG-specific output behavior. Shapeless Bodies use the renderer's fixed display-space marker radius, while Circle Bodies render their world-space radius scaled through `ViewportTransform`.
 
-The shared transform has inverse coordinate mathematics and anchor-aware scale geometry, but the SVG renderer does not expose Canvas-oriented inverse or anchored-interaction queries because no concrete SVG consumer currently needs them. Focused SVG regression tests verify displaced mapping and programmatic scale changes.
+`setViewportCenter(...)` exposes shared programmatic world-space centering, and `setViewportScale(...)` exposes shared programmatic viewport scale changes where those geometry operations map naturally to SVG.
+
+The shared transform has inverse coordinate mathematics and anchor-aware scale geometry, but the SVG renderer does not expose Canvas-oriented inverse or anchored-interaction queries because no concrete SVG consumer currently needs them. Focused SVG regression tests verify displaced mapping, programmatic scale changes, fixed shapeless markers, and world-scaled Circle rendering.
 
 SVG remains useful for reproducible snapshots, debugging captures, exports, and documentation images. Future visualization work should preserve SVG support when doing so remains natural and reasonably inexpensive, but SVG compatibility must not constrain useful Canvas capabilities.
 
@@ -319,17 +333,13 @@ No folder rename was performed merely to match an aspirational tree. `kinematics
 
 ## Next step
 
-Continue **Phase 2A — Circle** with **2A.3 — Circle rendering**.
+**Phase 2A — Circle is complete.** The four Circle slices now establish one coherent end-to-end geometry path:
 
-The observation boundary is now established:
+- **2A.1 — Circle domain model:** immutable reusable Circle geometry belongs to the Body definition;
+- **2A.2 — Geometry observation:** `BodySnapshot` shares the immutable Body definition while keeping World-owned runtime state detached;
+- **2A.3 — Circle rendering:** Canvas and SVG map Circle radius from world units into display units while shapeless Bodies retain fixed presentation markers;
+- **2A.4 — Circle-aware picking:** Canvas uses the same extent distinction for interaction, with world-scaled Circle geometry and fixed-marker fallback for shapeless Bodies.
 
-- `BodySnapshot.id` identifies the World runtime instance;
-- `BodySnapshot.definition` shares the immutable reusable Body definition;
-- `BodySnapshot.state` remains a detached runtime-state observation;
-- Circle geometry is therefore visible to Visualization without a shape-specific World query or access to World internals.
-
-The next slice should make Canvas and SVG render Circle radius as domain geometry scaled through `ViewportTransform`, while shapeless Bodies retain their existing fixed display-space presentation marker.
-
-Picking should remain unchanged until **2A.4**, so rendering and interaction geometry evolve one concern at a time.
+The next planned geometry pressure is **Phase 2B — Box / Rectangle**. It should begin from the concrete requirements of a second shape rather than by introducing a generic `Shape` abstraction in advance. Box/Rectangle is expected to provide the evidence needed to revisit generalized shape typing and orientation-related runtime state.
 
 The phased strategy is maintained in [`roadmap.md`](roadmap.md).

@@ -95,7 +95,7 @@ Potential responsibilities as the engine grows:
 - numerical integration;
 - gravity and other environment properties;
 - forces when concrete equations require them;
-- geometry and collision behavior when later phases justify them;
+- geometry, with collision behavior only when later phases justify it;
 - deterministic stepping where practical.
 
 ### Simulation / Orchestration
@@ -128,6 +128,8 @@ Canvas and canvas-like interactive rendering are the primary visualization targe
 Visualization design should not collapse to the lowest common denominator between Canvas and SVG. If a useful Canvas capability does not map naturally to SVG, prefer the Canvas design and let SVG adapt, provide a reduced/static equivalent, or omit that feature rather than compromising the primary interactive path.
 
 The same simulation state may eventually be represented by multiple views or observers. Visualization consumes safe observations: immutable reusable definitions may be shared by reference, while authoritative mutable runtime state is exposed through detached values. Visualization should not become the owner of engine runtime state.
+
+Domain geometry may inform presentation and interaction without moving those concerns into the engine. Visualization remains responsible for mapping observed geometry into display space and may also use presentation-only fallback geometry when a domain definition has no spatial extent. Visualization hit testing is therefore distinct from physical collision behavior.
 
 Possible indicators include:
 
@@ -243,7 +245,7 @@ The current phased strategy lives in [`roadmap.md`](roadmap.md).
 At a high level:
 
 1. **Phase 1 — Structure and lifecycle refactoring:** complete; current behavior was reorganized around Body → World → Simulation → Runtime.
-2. **Phase 2 — Geometry / single-shape learning:** introduce immutable Shape geometry incrementally while shapeless particle-like Bodies remain valid.
+2. **Phase 2 — Geometry / single-shape learning:** introduce immutable concrete geometry incrementally while shapeless particle-like Bodies remain valid; Circle is the first concrete variant, and Box/Rectangle provides the next pressure for broader shape/orientation abstractions.
 3. **Phase 3 — Geometry becomes physics:** collision detection/response and related structure only when geometry creates a concrete need.
 4. **Phase 4+ — Richer bodies and presentation:** compound bodies, physical materials, appearance/textures, and other concepts only as previous phases justify them.
 
