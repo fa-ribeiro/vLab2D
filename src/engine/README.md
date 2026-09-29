@@ -4,12 +4,14 @@
 
 ## Responsibility
 
-The engine will eventually own and advance authoritative simulation state. It must remain independent from rendering, UI layout, debugging panels, and other presentation concerns.
+The engine owns and advances authoritative World state. It remains independent from rendering, UI layout, browser scheduling, debugging panels, and other presentation concerns.
 
-External code should interact with the engine through its public entry point, `mod.ts`:
+`src/engine/mod.ts` is the public boundary of the **engine layer**:
 
 - **observation/query APIs** expose safe read-only information;
 - **command/control APIs** request validated state changes;
 - mutable internal state must not leak to consumers.
 
-We will add internal folders only when concrete features require them. For example, an `integrators/` folder should appear when integrators actually exist, not because we expect them someday.
+Code composing the complete vLab2D package should normally import from the root [`src/mod.ts`](../mod.ts) facade instead. The engine entry point remains useful for narrower layer dependencies such as Simulation and Visualization.
+
+Internal folders continue to appear only when concrete responsibilities justify them. Existing names such as `kinematics/` should not be reorganized merely to match a speculative final tree.

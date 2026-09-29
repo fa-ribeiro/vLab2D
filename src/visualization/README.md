@@ -91,7 +91,7 @@ The grid omits zero-coordinate lines because those positions are represented by 
 
 Spatial references and body positions use the shared `ViewportTransform`. `setViewportCenter(...)` changes which world position occupies the display center, `setViewportScale(...)` changes magnification while preserving that center, and `panViewportBy(...)` accepts finite Canvas display-space deltas and converts them into world-center movement. `displayToWorldX(...)` and `displayToWorldY(...)` expose inverse scalar mapping for interaction without exposing the transform object itself. `viewportScale` exposes the current scale read-only, and `setViewportScaleAroundDisplayPoint(...)` delegates anchor-preserving scale changes for interactive zoom.
 
-The live browser host owns pointer and wheel interaction. It tracks one active pointer for dragging, uses pointer capture, converts browser CSS coordinates into Canvas drawing-buffer coordinates, and forwards display-space deltas to `panViewportBy(...)`. The same drawing-buffer coordinates can be queried through the inverse mapping to report the world coordinate underneath the pointer or used as the anchor for wheel/trackpad zoom.
+The example-local `CanvasExampleHost` owns pointer and wheel interaction. It tracks one active pointer for dragging, uses pointer capture, converts browser CSS coordinates into Canvas drawing-buffer coordinates, and forwards display-space deltas to `panViewportBy(...)`. The same drawing-buffer coordinates can be queried through the inverse mapping to report the world coordinate underneath the pointer or used as the anchor for wheel/trackpad zoom.
 
 Wheel normalization, zoom sensitivity, minimum and maximum scale, and suppression of browser page scrolling during Canvas zoom are host policy. The renderer itself does not depend on Pointer Events, Wheel Events, or other DOM input APIs, and presentation formatting remains host/UI responsibility.
 
@@ -99,9 +99,9 @@ Canvas also supports visual body picking through `findBodyAtDisplayPoint(...)`. 
 
 The renderer can also receive optional hovered and selected `BodyId` values during `render(...)`. It draws distinct rings around the corresponding body markers but stores neither interaction identity itself. The same body can display both states simultaneously.
 
-This is intentionally visualization geometry. The engine does not yet model physical body shape or radius, so body picking is not an engine/world query. The browser host reuses detached observations for hit testing and drawing, owns the transient hovered `BodyId` and persistent selected `BodyId`, recomputes hover as bodies move, and changes selection only through click semantics.
+This is intentionally visualization geometry. The engine does not yet model physical body shape or radius, so body picking is not an engine/world query. `CanvasExampleHost` reuses detached observations for hit testing and drawing, owns the transient hovered `BodyId` and persistent selected `BodyId`, recomputes hover as bodies move, and changes selection only through click semantics.
 
-The selected-body inspector is also host-owned and read-only. It resolves the persistent selected identity against the latest detached snapshots each frame and displays the matching body's current position and velocity. No selected snapshot is retained as persistent state.
+The selected-body inspector is also owned by the example-local host and remains read-only. It resolves the persistent selected identity against the latest detached snapshots each frame and displays the matching body's current position and velocity. No selected snapshot is retained as persistent state.
 
 Clearing the previous frame remains deliberate. Trails should become an explicit visualization capability rather than appearing accidentally because old frames were left on the canvas.
 
@@ -125,7 +125,7 @@ flowchart LR
     F --> D --> A --> S --> H --> R
 ```
 
-The host callback obtains fresh World snapshots and invokes `CanvasKinematicRenderer`. The renderer remains unaware of this timing mechanism and only draws the snapshots it receives.
+The Runtime callback delegates to `CanvasExampleHost.renderFrame()`, which obtains fresh World snapshots and invokes `CanvasKinematicRenderer`. The renderer remains unaware of this timing mechanism and only draws the snapshots it receives.
 
 Variable frame delta is therefore scheduling input rather than the numerical integration timestep.
 
@@ -220,4 +220,4 @@ Programmatic viewport centering and scale changes are supported by both concrete
 
 Anchor-preserving zoom is geometry owned by `ViewportTransform`; wheel interpretation, scale limits, sensitivity, browser event cancellation, CSS-to-Canvas coordinate conversion, inspection UI, transient hover identity, persistent selection identity, click-versus-drag tolerance, and inspector formatting remain host policy. Body hit testing stays in Canvas visualization because the current pick radius is the renderer's display-space marker radius rather than engine-owned physical geometry. The renderer accepts per-frame hover and selection identities but owns neither state.
 
-The inspector resolves the selected `BodyId` against fresh detached snapshots and never treats a retained snapshot as authoritative state. Visual feature development is currently paused during Phase 1 architectural refactoring; the selected-body velocity-vector diagnostic remains a later candidate once the structural work is complete. Editable state, drag manipulation, physical engine shapes, cameras, renderer interfaces, generalized inspector systems, diagnostic-overlay frameworks, and generalized rendering abstractions remain deferred until concrete requirements establish their shape.
+The inspector resolves the selected `BodyId` against fresh detached snapshots and never treats a retained snapshot as authoritative state. Phase 1 structural refactoring is complete; future visual features should continue to respect the same ownership boundaries. The selected-body velocity-vector diagnostic remains a later candidate. Editable state, drag manipulation, physical engine shapes, cameras, renderer interfaces, generalized inspector systems, diagnostic-overlay frameworks, and generalized rendering abstractions remain deferred until concrete requirements establish their shape.

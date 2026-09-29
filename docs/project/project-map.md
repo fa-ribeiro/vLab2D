@@ -39,6 +39,10 @@ mindmap
       Frame-delta clamping
       Fixed timestep accumulator
       Host frame callback
+    Public composition
+      src/mod.ts facade
+      Boring runnable examples
+      Example-local browser host
     Engineering values
       Intrinsic properties vs initial conditions vs runtime state
       Safe defaults
@@ -146,6 +150,31 @@ Runtime owns wall-clock scheduling and fixed-timestep accumulation. Simulation r
 
 The current Canvas host supplies the Runtime frame callback and still owns rendering, pointer/wheel interaction, selection/hover state, DOM inspection output, and World observation.
 
+## Current package composition boundary
+
+```mermaid
+flowchart TD
+    API["src/mod.ts<br/>package facade"]
+    ENGINE["Engine / Domain"]
+    SIM["Simulation"]
+    RUNTIME["Browser Runtime"]
+    VIS["Canvas / SVG visualization"]
+    MAIN["Example main.ts"]
+    HOST["CanvasExampleHost<br/>example-local"]
+
+    API -. re-exports .-> ENGINE
+    API -. re-exports .-> SIM
+    API -. re-exports .-> RUNTIME
+    API -. re-exports .-> VIS
+
+    MAIN --> API
+    MAIN --> HOST
+```
+
+`src/mod.ts` is the convenient package-facing import surface. It does not replace the narrower layer boundaries used internally.
+
+The Canvas entry point remains the composition root, while DOM and interaction mechanics live in an example-local host because they have not earned a reusable source-level abstraction.
+
 ## Future cardinality direction
 
 Cardinality is decided per relationship rather than assumed to be one-to-one.
@@ -172,8 +201,8 @@ The Body/geometry part of this diagram is a future direction rather than current
 
 ```mermaid
 flowchart LR
-    P1["Phase 1<br/>Structure + lifecycle"]
-    P2["Phase 2<br/>Geometry"]
+    P1["Phase 1<br/>Structure + lifecycle<br/>complete"]
+    P2["Phase 2<br/>Geometry<br/>next"]
     P3["Phase 3<br/>Collision / shape physics"]
     P4["Phase 4+<br/>Compound bodies / materials / appearance"]
 

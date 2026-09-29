@@ -10,9 +10,9 @@ Eventually, vLab2D aims to make simulations not only runnable, but **observable*
 
 ## Project status
 
-**Current checkpoint:** Phase 1 architectural refactoring now has concrete Body → World → Simulation → Runtime layers. `BrowserSimulationRuntime` owns browser animation-frame scheduling and fixed-timestep accumulation, drives deterministic `Simulation.step(dt)` calls, and invokes a host frame callback after stepping. Rendering and pointer interaction remain outside Runtime, while per-World failure isolation remains owned by Simulation.
+**Current checkpoint:** Phase 1 structural refactoring is complete. The implemented flow is `Body → World → Simulation → Runtime`, Visualization remains an observer, and `src/mod.ts` now provides the package-facing composition facade. The Canvas entry point is intentionally small: example-specific DOM interaction lives in an example-local host rather than being promoted into Runtime or the engine.
 
-**Next step:** Phase 1E will review module/folder organization and simplify runnable examples around the now-established layer boundaries without adding simulation features.
+**Next step:** begin Phase 2 with the smallest useful geometry/Shape slice while preserving shapeless Bodies and the ownership boundaries established in Phase 1.
 
 See the [project documentation](docs/project/README.md) for the authoritative current status, project context, decisions, workflow, and continuity information.
 
@@ -40,6 +40,7 @@ vLab2D/
 │   └── project/          # project context, decisions, workflow and continuity
 ├── examples/             # runnable examples and visual experiments
 ├── src/
+│   ├── mod.ts            # package-facing composition facade
 │   ├── engine/           # self-contained simulation engine
 │   ├── simulation/       # deterministic multi-World orchestration
 │   ├── runtime/          # host execution and browser scheduling
@@ -51,9 +52,9 @@ vLab2D/
 └── README.md
 ```
 
-The simulation engine is designed as a **self-contained module**. External systems such as renderers, debuggers, inspectors, user interfaces, and experiment runners interact with the engine through its public API rather than directly modifying its internal state.
+The simulation engine is designed as a **self-contained module**. `src/engine/mod.ts` remains its layer-specific public boundary, while `src/mod.ts` re-exports the package-facing concepts used to compose complete experiments.
 
-Visualization remains outside the engine boundary.
+External systems such as renderers, debuggers, inspectors, user interfaces, and experiment runners interact with the engine through public APIs rather than directly modifying its internal state. Visualization remains outside the engine boundary.
 
 The project currently has two concrete visualization paths:
 
@@ -62,7 +63,7 @@ The project currently has two concrete visualization paths:
 
 Both renderers use the shared `ViewportTransform` for bidirectional coordinate mapping, continuous visible-world geometry, mutable world-space centering, and mutable display scale while retaining rendering-technology-specific drawing behavior. Both renderers expose programmatic viewport centering and scale changes. Canvas additionally accepts display-space pan deltas, exposes scalar display-to-world queries for interaction, and can change scale around a display-space anchor without exposing the transform object itself.
 
-`BrowserSimulationRuntime` owns the live Canvas example's animation-frame scheduling, frame-delta clamping, fixed-timestep accumulation, and calls to `Simulation.step(...)`. The browser Canvas example still owns pointer and wheel-event orchestration and converts browser CSS coordinates into Canvas drawing-buffer units. It uses display-space deltas for panning, inverse mapping for a live world-coordinate readout, and bounded exponential wheel/trackpad scaling for pointer-anchored zoom. It also asks `CanvasKinematicRenderer` which rendered body marker, if any, contains the pointer, presents the resulting `BodyId` as ordinary DOM inspection output, and passes transient hover and persistent selection identities into rendering so they receive distinct visual rings. The host resolves the selected `BodyId` against the latest detached snapshots each frame to present live read-only position and velocity values without retaining a selected snapshot or reading mutable engine storage. Zoom sensitivity, wheel-delta normalization, minimum/maximum scale, click-versus-drag tolerance, hover state, selection state, and UI formatting remain host/application concerns rather than engine state.
+`BrowserSimulationRuntime` owns the live Canvas example's animation-frame scheduling, frame-delta clamping, fixed-timestep accumulation, and calls to `Simulation.step(...)`. The example-local `CanvasExampleHost` owns pointer and wheel-event orchestration and converts browser CSS coordinates into Canvas drawing-buffer units. It uses display-space deltas for panning, inverse mapping for a live world-coordinate readout, and bounded exponential wheel/trackpad scaling for pointer-anchored zoom. It also asks `CanvasKinematicRenderer` which rendered body marker, if any, contains the pointer, presents the resulting `BodyId` as ordinary DOM inspection output, and passes transient hover and persistent selection identities into rendering so they receive distinct visual rings. The host resolves the selected `BodyId` against the latest detached snapshots each frame to present live read-only position and velocity values without retaining a selected snapshot or reading mutable engine storage. Zoom sensitivity, wheel-delta normalization, minimum/maximum scale, click-versus-drag tolerance, hover state, selection state, and UI formatting remain host/application concerns rather than engine state.
 
 Canvas and canvas-like interactive rendering drive visualization design. SVG should remain working where support is natural and reasonably inexpensive, but Canvas features should not be compromised merely to preserve SVG parity.
 

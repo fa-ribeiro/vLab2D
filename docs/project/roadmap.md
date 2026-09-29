@@ -69,6 +69,8 @@ The same reusable definition may create multiple independent runtime instances.
 
 ## Phase 1 — Structure and lifecycle refactoring
 
+**Status:** complete.
+
 **Primary goal:** reorganize the behavior that already exists. Do not add new simulation features.
 
 Phase 1 should progressively move the project toward:
@@ -178,17 +180,30 @@ Current result:
 
 ### 1E — Module/folder organization and boring examples
 
-**Status:** next.
+**Status:** implemented.
 
-Reorganize folders as concrete responsibilities become stable.
+Phase 1 closes with consolidation rather than another architectural expansion.
 
-The likely direction is:
+Current result:
+
+- `src/mod.ts` is the package-facing composition facade;
+- `src/engine/mod.ts` remains the narrower engine-layer boundary;
+- runnable examples import package-facing concepts from `src/mod.ts`;
+- Canvas-specific DOM interaction and presentation state moved from `main.ts` into the example-local `canvas-example-host.ts`;
+- Canvas `main.ts` now reads primarily as composition: create World/body definitions, create Simulation, create renderer/host, create Runtime, run;
+- SVG remains a similarly direct deterministic composition example;
+- no reusable interaction framework was introduced because there is still only one concrete browser-interaction consumer;
+- no source-folder rename was performed solely to match an aspirational tree;
+- `kinematics/` and the current renderer names remain because their responsibilities are still accurate.
+
+The implemented Phase 1 source shape is:
 
 ```text
 src/
+├── mod.ts
 ├── engine/
 │   ├── body/
-│   ├── integration/
+│   ├── kinematics/
 │   ├── math/
 │   └── world/
 ├── simulation/
@@ -197,22 +212,23 @@ src/
     └── browser/
 ```
 
-This tree remains a direction, not a requirement to create empty folders in advance.
-
-A major Phase 1 acceptance criterion is that runnable examples become mostly composition:
+Phase 1 acceptance criterion:
 
 ```text
 create definitions
 create World
 add bodies with initial conditions
 create Simulation
-create Runtime/View
+create renderer / example host
+create Runtime
 run
 ```
 
-`examples/.../main.ts` should become intentionally boring.
+is now represented directly by the Canvas entry point.
 
 ## Phase 2 — Geometry / single-shape learning
+
+**Status:** next.
 
 **Primary goal:** introduce the Shape concept only after Phase 1 establishes stable ownership and lifecycle boundaries.
 

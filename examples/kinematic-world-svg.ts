@@ -1,6 +1,11 @@
-import { Body, SemiImplicitEulerIntegrator, Vector2, World } from "../src/engine/mod.ts";
-import { Simulation } from "../src/simulation/simulation.ts";
-import { SvgKinematicRenderer } from "../src/visualization/svg-kinematic-renderer.ts";
+import {
+  Body,
+  SemiImplicitEulerIntegrator,
+  Simulation,
+  SvgKinematicRenderer,
+  Vector2,
+  World,
+} from "../src/mod.ts";
 
 const world = new World(new Vector2(0, -9.81), new SemiImplicitEulerIntegrator());
 

@@ -4,7 +4,7 @@
 
 vLab2D now has a small multi-body simulation engine, deterministic multi-World Simulation orchestration, a concrete browser Runtime, reproducible SVG visualization, and live Canvas 2D animation with fixed simulation timing.
 
-The project is in **Phase 1 — Structure and lifecycle refactoring**. Feature growth remains intentionally paused while the now-concrete `Body → World → Simulation → Runtime` boundaries are consolidated.
+**Phase 1 — Structure and lifecycle refactoring is complete.** The project now has concrete `Body → World → Simulation → Runtime` boundaries, a separate Visualization layer, and a package-facing composition facade.
 
 Canvas is the primary visualization target. SVG remains a useful secondary renderer for static snapshots, debugging captures, exports, and documentation where maintaining it remains reasonable.
 
@@ -247,21 +247,57 @@ The Runtime also does not own pointer/wheel interaction, Canvas dimensions, Worl
 
 Calling `run()` more than once is idempotent. Pause/stop/restart lifecycle, interpolation, and alternative scheduling policies remain deliberately deferred.
 
+### Package facade and example composition
+
+`src/mod.ts` is now the package-facing composition facade.
+
+It re-exports the established concepts needed by runnable experiments:
+
+- Engine/domain concepts from `src/engine/mod.ts`;
+- `Simulation` and its World-status observation type;
+- `BrowserSimulationRuntime` and its options type;
+- the concrete Canvas and SVG renderers.
+
+Layer-specific modules remain in place. In particular, `src/engine/mod.ts` is still the engine-layer boundary used where a narrower dependency is appropriate.
+
+The Canvas example now separates composition from example-specific browser mechanics:
+
+```text
+main.ts
+    create World + Bodies
+    create Simulation
+    create renderer
+    create example host
+    create Runtime
+    run
+
+canvas-example-host.ts
+    DOM outputs
+    pointer / wheel events
+    picking
+    hover / selection
+    inspector formatting
+    per-frame rendering
+```
+
+`CanvasExampleHost` deliberately remains under `examples/`. There is still only one concrete consumer for those policies, so moving them into `src/runtime/` or inventing a reusable interaction framework would be premature.
+
+No folder rename was performed merely to match an aspirational tree. `kinematics/`, the current renderer names, and the established source boundaries remain because their present responsibilities are still accurate.
+
 ## Next step
 
-Continue **Phase 1E — Module/folder organization and boring examples**.
+Begin **Phase 2 — Geometry / single-shape learning**.
 
-Phase 1D is complete:
+Phase 1 is complete:
 
-- `BrowserSimulationRuntime` exists under `src/runtime/browser/`;
-- Runtime owns `requestAnimationFrame` scheduling;
-- Runtime owns wall-clock frame-delta clamping and fixed-timestep accumulation;
-- Runtime drives deterministic `simulation.step(dt)` calls;
-- Runtime invokes a host `onFrame` callback after each processed browser frame;
-- `run()` owns application execution start and is idempotent;
-- rendering, pointer/wheel input, DOM formatting, and World observation remain outside Runtime;
-- Simulation remains host-independent and deterministic.
+- reusable `Body` definitions are separate from World-owned runtime state;
+- `World` owns body instances, gravity, integration, and detached observations;
+- `Simulation` coordinates `1..N` Worlds and isolates per-World failure;
+- `BrowserSimulationRuntime` owns browser scheduling and fixed-timestep accumulation;
+- Visualization remains independent from simulation authority;
+- `src/mod.ts` provides the package-facing composition facade;
+- runnable examples now emphasize composition, with Canvas-specific interaction kept example-local.
 
-Phase 1E should review the now-concrete folder/module boundaries, remove any residual organizational friction, and make runnable examples mostly composition. It should not add new simulation or visualization features.
+The first Phase 2 slice should establish the smallest useful immutable geometry concept without adding collision behavior, materials, mass, or compound-body machinery. Shapeless Bodies must remain valid.
 
 The phased strategy is maintained in [`roadmap.md`](roadmap.md).

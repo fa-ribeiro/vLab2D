@@ -66,6 +66,7 @@ The current source tree exposes the architecture directly:
 
 ```text
 src/
+├── mod.ts
 ├── engine/
 │   ├── kinematics/
 │   ├── math/
@@ -86,6 +87,8 @@ src/
 
 examples/
 ├── kinematic-world-canvas/
+│   ├── canvas-example-host.ts
+│   └── main.ts
 └── kinematic-world-svg.ts
 ```
 
@@ -93,6 +96,7 @@ These areas have different responsibilities.
 
 | Area                     | Responsibility                                                                |
 | ------------------------ | ----------------------------------------------------------------------------- |
+| `src/mod.ts`             | Provide the package-facing composition facade                                 |
 | `src/engine/`            | Own and advance simulation state                                              |
 | `src/engine/mod.ts`      | Define the public consumer-facing engine boundary                             |
 | `src/engine/math/`       | Small mathematical values and operations used by the engine                   |
@@ -103,7 +107,7 @@ These areas have different responsibilities.
 | `src/visualization/`     | Convert observed simulation information into visual representations           |
 | `examples/`              | Compose components into runnable scenarios                                    |
 
-The folders are not intended as permanent framework layers. They exist because concrete implementation responsibilities have appeared.
+The folders are not intended as permanent framework layers. They exist because concrete implementation responsibilities have appeared. Phase 1 deliberately stops here rather than renaming accurate folders merely to match an earlier speculative tree.
 
 ---
 
@@ -114,17 +118,21 @@ vLab2D deliberately keeps dependencies pointing toward simulation concepts rathe
 ```mermaid
 flowchart TD
     EXAMPLE["Example / future application"]
+    PACKAGE["Package facade<br/>src/mod.ts"]
     RUNTIME["Browser Runtime"]
     SIM["Simulation"]
     VIS["Visualization"]
-    API["Engine public API<br/>mod.ts"]
+    API["Engine layer API<br/>src/engine/mod.ts"]
     WORLD["World"]
     KIN["Kinematics"]
     MATH["Math"]
 
-    EXAMPLE --> RUNTIME
-    EXAMPLE --> VIS
-    EXAMPLE --> API
+    EXAMPLE --> PACKAGE
+
+    PACKAGE -. re-exports .-> RUNTIME
+    PACKAGE -. re-exports .-> SIM
+    PACKAGE -. re-exports .-> VIS
+    PACKAGE -. re-exports .-> API
 
     RUNTIME --> SIM
     SIM --> API
@@ -630,20 +638,22 @@ The transform was extracted only after SVG and Canvas independently demonstrated
 
 ## 14. Host/application responsibility
 
-Example code currently acts as the composition root.
+Example `main.ts` files act as composition roots.
 
-The host currently acts as the composition root and decides:
+The Canvas composition root decides:
 
 - which Worlds to create;
 - which integrator and gravity each World uses;
 - which bodies to create;
 - which Worlds belong to the Simulation;
 - which browser Runtime configuration to use;
-- which frame callback observes and presents current state;
+- which example-local host presents current state;
 - which renderer to create;
 - where output is displayed or written.
 
-Runtime now decides when deterministic Simulation steps occur from browser wall-clock input. The engine does not decide which renderer exists. Simulation does not know about wall-clock execution. Runtime does not know how a frame is rendered. The renderer does not decide which World, Simulation, Runtime, or integrator exists.
+The Canvas-specific DOM and interaction mechanics live in `CanvasExampleHost`, which remains under `examples/kinematic-world-canvas/`. It owns pointer/wheel handling, hover and selection identity, inspection outputs, and per-frame rendering because those policies currently have one concrete consumer.
+
+Runtime decides when deterministic Simulation steps occur from browser wall-clock input. The engine does not decide which renderer exists. Simulation does not know about wall-clock execution. Runtime does not know how a frame is rendered. The renderer does not decide which World, Simulation, Runtime, or integrator exists.
 
 ---
 
@@ -657,11 +667,11 @@ sequenceDiagram
     participant Runtime as BrowserSimulationRuntime
     participant Simulation
     participant World
-    participant Host
+    participant Host as CanvasExampleHost
     participant Renderer as CanvasKinematicRenderer
 
-    Host->>Runtime: run()
-    Runtime->>Host: onFrame() initial presentation
+    Host->>Runtime: run() via main.ts
+    Runtime->>Host: renderFrame() initial presentation
     Runtime->>Browser: requestAnimationFrame(callback)
 
     Browser->>Runtime: callback(timestamp)
@@ -678,7 +688,7 @@ sequenceDiagram
         Runtime->>Runtime: subtract fixed timestep
     end
 
-    Runtime->>Host: onFrame()
+    Runtime->>Host: renderFrame()
     Host->>World: getBodySnapshots()
     World-->>Host: detached snapshots
     Host->>Host: refresh pointer / selection inspection
@@ -749,7 +759,9 @@ Integrators implement a small behavior contract rather than participating in a d
 
 ### Public boundaries are deliberate
 
-External engine consumers are expected to import from `src/engine/mod.ts`.
+Complete package consumers should normally import from `src/mod.ts`.
+
+`src/engine/mod.ts` remains the narrower engine-layer boundary for internal layers and consumers that intentionally depend only on engine/domain concepts.
 
 ### Abstractions are introduced from concrete needs
 
@@ -789,7 +801,8 @@ It is useful to keep these categories separate.
 ### Implemented
 
 ```text
-✓ public engine boundary through mod.ts
+✓ package-facing composition facade through src/mod.ts
+✓ public engine-layer boundary through src/engine/mod.ts
 ✓ mathematical Vector2 values
 ✓ readonly BodyState runtime-data contract
 ✓ replaceable kinematic integrators
@@ -832,6 +845,8 @@ It is useful to keep these categories separate.
 ✓ Canvas world axes
 ✓ Canvas world-origin marker
 ✓ external host/example composition
+✓ example-local CanvasExampleHost for DOM interaction and rendering policy
+✓ intentionally small Canvas main.ts composition root
 ✓ BrowserSimulationRuntime
 ✓ Runtime-owned requestAnimationFrame scheduling
 ✓ Runtime-owned frame-delta clamping

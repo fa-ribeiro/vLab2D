@@ -928,3 +928,54 @@ Phase 1D deliberately does not introduce:
 - Simulation time or clock ownership.
 
 Those responsibilities should be added only when concrete requirements establish their semantics.
+
+## D-070 — Package composition uses a root facade while example-specific interaction stays local
+
+**Status:** Accepted and implemented
+
+Phase 1E closes the structural refactor by making the established architecture easier to compose without introducing new runtime behavior.
+
+`src/mod.ts` is the package-facing composition facade. It re-exports the currently established public concepts needed by complete experiments:
+
+```text
+Engine/domain concepts
+Simulation
+BrowserSimulationRuntime
+CanvasKinematicRenderer
+SvgKinematicRenderer
+```
+
+`src/engine/mod.ts` remains the public boundary of the engine layer. Internal layers may continue depending on that narrower module where doing so preserves a clearer dependency boundary.
+
+Runnable examples should prefer `src/mod.ts` rather than importing each architectural layer through deep source paths. The facade is a convenience boundary; it does not change ownership or dependency direction inside the implementation.
+
+The Canvas example's DOM interaction, pointer/wheel policy, hover/selection state, inspection formatting, and per-frame rendering are moved into an example-local `CanvasExampleHost`.
+
+The host deliberately remains under:
+
+```text
+examples/kinematic-world-canvas/
+```
+
+rather than `src/runtime/` or `src/visualization/`.
+
+There is currently one concrete consumer for this combined browser-interaction policy. Promoting it into reusable source architecture would therefore create an abstraction before repeated pressure establishes a stable contract.
+
+`main.ts` remains the composition root and should be intentionally boring:
+
+```text
+create World and bodies
+create Simulation
+create renderer
+create example host
+create Runtime
+run
+```
+
+Phase 1E also deliberately avoids organizational churn that has no behavioral or conceptual payoff. In particular:
+
+- `kinematics/` is not renamed merely because an earlier roadmap sketch used `integration/`;
+- renderer class/file names are not broadened before geometry changes what they render;
+- no generic application, host, renderer, interaction, or dependency-injection framework is introduced.
+
+Phase 1 is considered structurally complete after this consolidation.
