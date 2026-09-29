@@ -2,6 +2,7 @@ import {
   Body,
   BrowserSimulationRuntime,
   CanvasKinematicRenderer,
+  Circle,
   SemiImplicitEulerIntegrator,
   Simulation,
   Vector2,
@@ -33,6 +34,10 @@ const particle = new Body();
 world.addBody(particle, { position: new Vector2(-4, 3), velocity: new Vector2(1, 2) });
 world.addBody(particle, { position: new Vector2(0, 5) });
 world.addBody(particle, { position: new Vector2(4, 2), velocity: new Vector2(-1, 2) });
+
+const circle = new Body({ shape: new Circle(1) });
+
+world.addBody(circle, { position: new Vector2(2, 3) });
 
 const simulation = new Simulation([world]);
 

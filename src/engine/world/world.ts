@@ -129,17 +129,22 @@ export class World {
   }
 
   /**
-   * Returns detached snapshots of all bodies currently owned by the world.
+   * Returns observations of all bodies currently owned by the world.
    *
-   * The returned array and body states are independent from the world's
-   * authoritative storage. Their order should not be interpreted as part of the
-   * world's public contract.
+   * The returned array and runtime states are detached from authoritative World
+   * storage. Each snapshot intentionally shares the immutable reusable Body
+   * definition that was supplied to `addBody(...)`, allowing observers to read
+   * intrinsic properties such as geometry without duplicating definition data.
+   *
+   * Snapshot order should not be interpreted as part of the world's public
+   * contract.
    *
    * @returns A snapshot for every body currently in the world.
    */
   public getBodySnapshots(): readonly BodySnapshot[] {
     return Array.from(this.#bodies, ([id, worldBody]): BodySnapshot => ({
       id,
+      definition: worldBody.definition,
       state: copyState(worldBody.state),
     }));
   }

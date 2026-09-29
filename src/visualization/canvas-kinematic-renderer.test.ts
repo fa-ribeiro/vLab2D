@@ -1,10 +1,28 @@
 import { assertEquals, assertThrows } from "@std/assert";
 
-import { type BodySnapshot, type BodyState, Vector2 } from "../engine/mod.ts";
+import {
+  Body,
+  type BodyId,
+  type BodySnapshot,
+  type BodyState,
+  Vector2,
+} from "../engine/mod.ts";
 import { CanvasKinematicRenderer } from "./canvas-kinematic-renderer.ts";
 
 function createBodyState(position: Vector2, velocity: Vector2): BodyState {
   return { position, velocity };
+}
+
+function createBodySnapshot(
+  id: BodyId,
+  position: Vector2,
+  velocity = new Vector2(0, 0),
+): BodySnapshot {
+  return {
+    id,
+    definition: new Body(),
+    state: createBodyState(position, velocity),
+  };
 }
 
 class RecordingCanvasContext {
@@ -53,12 +71,7 @@ Deno.test("CanvasKinematicRenderer maps world coordinates to Canvas coordinates"
   const context = new RecordingCanvasContext();
   const renderer = new CanvasKinematicRenderer(context, 200, 100, 10, 3);
 
-  const snapshots: readonly BodySnapshot[] = [
-    {
-      id: 7,
-      state: createBodyState(new Vector2(2, 3), new Vector2(0, 0)),
-    },
-  ];
+  const snapshots: readonly BodySnapshot[] = [createBodySnapshot(7, new Vector2(2, 3))];
 
   renderer.render(snapshots);
 
@@ -192,12 +205,7 @@ Deno.test("CanvasKinematicRenderer renders relative to the viewport world center
 
   renderer.setViewportCenter(3, -2);
 
-  const snapshots: readonly BodySnapshot[] = [
-    {
-      id: 7,
-      state: createBodyState(new Vector2(3, -2), new Vector2(0, 0)),
-    },
-  ];
+  const snapshots: readonly BodySnapshot[] = [createBodySnapshot(7, new Vector2(3, -2))];
 
   renderer.render(snapshots);
 
@@ -243,12 +251,7 @@ Deno.test("CanvasKinematicRenderer pans by display-space displacement", () => {
 
   renderer.panViewportBy(20, 10);
 
-  const snapshots: readonly BodySnapshot[] = [
-    {
-      id: 7,
-      state: createBodyState(new Vector2(-2, 1), new Vector2(0, 0)),
-    },
-  ];
+  const snapshots: readonly BodySnapshot[] = [createBodySnapshot(7, new Vector2(-2, 1))];
 
   renderer.render(snapshots);
 
@@ -277,12 +280,7 @@ Deno.test("CanvasKinematicRenderer renders using the changed viewport scale", ()
   renderer.setViewportCenter(3, -2);
   renderer.setViewportScale(20);
 
-  const snapshots: readonly BodySnapshot[] = [
-    {
-      id: 7,
-      state: createBodyState(new Vector2(4, -1), new Vector2(0, 0)),
-    },
-  ];
+  const snapshots: readonly BodySnapshot[] = [createBodySnapshot(7, new Vector2(4, -1))];
 
   renderer.render(snapshots);
 
@@ -316,12 +314,7 @@ Deno.test("CanvasKinematicRenderer finds a body at a display-space point", () =>
   const context = new RecordingCanvasContext();
   const renderer = new CanvasKinematicRenderer(context, 200, 100, 10, 6);
 
-  const snapshots: readonly BodySnapshot[] = [
-    {
-      id: 7,
-      state: createBodyState(new Vector2(2, 3), new Vector2(0, 0)),
-    },
-  ];
+  const snapshots: readonly BodySnapshot[] = [createBodySnapshot(7, new Vector2(2, 3))];
 
   assertEquals(renderer.findBodyAtDisplayPoint(snapshots, 120, 20), 7);
 });
@@ -330,12 +323,7 @@ Deno.test("CanvasKinematicRenderer returns undefined outside body markers", () =
   const context = new RecordingCanvasContext();
   const renderer = new CanvasKinematicRenderer(context, 200, 100, 10, 6);
 
-  const snapshots: readonly BodySnapshot[] = [
-    {
-      id: 7,
-      state: createBodyState(new Vector2(2, 3), new Vector2(0, 0)),
-    },
-  ];
+  const snapshots: readonly BodySnapshot[] = [createBodySnapshot(7, new Vector2(2, 3))];
 
   assertEquals(renderer.findBodyAtDisplayPoint(snapshots, 127, 20), undefined);
 });
@@ -347,12 +335,7 @@ Deno.test("CanvasKinematicRenderer hit testing follows viewport transformation",
   renderer.setViewportCenter(3, -2);
   renderer.setViewportScale(20);
 
-  const snapshots: readonly BodySnapshot[] = [
-    {
-      id: 7,
-      state: createBodyState(new Vector2(4, -1), new Vector2(0, 0)),
-    },
-  ];
+  const snapshots: readonly BodySnapshot[] = [createBodySnapshot(7, new Vector2(4, -1))];
 
   assertEquals(renderer.findBodyAtDisplayPoint(snapshots, 120, 30), 7);
 });
@@ -362,14 +345,8 @@ Deno.test("CanvasKinematicRenderer picks the nearest hit body", () => {
   const renderer = new CanvasKinematicRenderer(context, 200, 100, 10, 10);
 
   const snapshots: readonly BodySnapshot[] = [
-    {
-      id: 1,
-      state: createBodyState(new Vector2(0, 0), new Vector2(0, 0)),
-    },
-    {
-      id: 2,
-      state: createBodyState(new Vector2(1, 0), new Vector2(0, 0)),
-    },
+    createBodySnapshot(1, new Vector2(0, 0)),
+    createBodySnapshot(2, new Vector2(1, 0)),
   ];
 
   assertEquals(renderer.findBodyAtDisplayPoint(snapshots, 108, 50), 2);
@@ -380,12 +357,7 @@ Deno.test("CanvasKinematicRenderer highlights the requested body", () => {
 
   const renderer = new CanvasKinematicRenderer(context, 200, 100, 10, 6);
 
-  const snapshots: readonly BodySnapshot[] = [
-    {
-      id: 7,
-      state: createBodyState(new Vector2(2, 3), new Vector2(0, 0)),
-    },
-  ];
+  const snapshots: readonly BodySnapshot[] = [createBodySnapshot(7, new Vector2(2, 3))];
 
   renderer.render(snapshots, 7);
 
@@ -402,12 +374,7 @@ Deno.test("CanvasKinematicRenderer does not highlight another body", () => {
 
   const renderer = new CanvasKinematicRenderer(context, 200, 100, 10, 6);
 
-  const snapshots: readonly BodySnapshot[] = [
-    {
-      id: 7,
-      state: createBodyState(new Vector2(2, 3), new Vector2(0, 0)),
-    },
-  ];
+  const snapshots: readonly BodySnapshot[] = [createBodySnapshot(7, new Vector2(2, 3))];
 
   renderer.render(snapshots, 8);
 
@@ -421,12 +388,7 @@ Deno.test("CanvasKinematicRenderer marks the selected body", () => {
 
   const renderer = new CanvasKinematicRenderer(context, 200, 100, 10, 6);
 
-  const snapshots: readonly BodySnapshot[] = [
-    {
-      id: 7,
-      state: createBodyState(new Vector2(2, 3), new Vector2(0, 0)),
-    },
-  ];
+  const snapshots: readonly BodySnapshot[] = [createBodySnapshot(7, new Vector2(2, 3))];
 
   renderer.render(snapshots, undefined, 7);
 
@@ -443,12 +405,7 @@ Deno.test("CanvasKinematicRenderer can show hover and selection on the same body
 
   const renderer = new CanvasKinematicRenderer(context, 200, 100, 10, 6);
 
-  const snapshots: readonly BodySnapshot[] = [
-    {
-      id: 7,
-      state: createBodyState(new Vector2(2, 3), new Vector2(0, 0)),
-    },
-  ];
+  const snapshots: readonly BodySnapshot[] = [createBodySnapshot(7, new Vector2(2, 3))];
 
   renderer.render(snapshots, 7, 7);
 

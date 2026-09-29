@@ -1,21 +1,34 @@
 import { assert, assertStringIncludes, assertThrows } from "@std/assert";
 
-import { type BodySnapshot, type BodyState, Vector2 } from "../engine/mod.ts";
+import {
+  Body,
+  type BodyId,
+  type BodySnapshot,
+  type BodyState,
+  Vector2,
+} from "../engine/mod.ts";
 import { SvgKinematicRenderer } from "./svg-kinematic-renderer.ts";
 
 function createBodyState(position: Vector2, velocity: Vector2): BodyState {
   return { position, velocity };
 }
 
+function createBodySnapshot(
+  id: BodyId,
+  position: Vector2,
+  velocity = new Vector2(0, 0),
+): BodySnapshot {
+  return {
+    id,
+    definition: new Body(),
+    state: createBodyState(position, velocity),
+  };
+}
+
 Deno.test("SvgKinematicRenderer maps mathematical world coordinates to SVG coordinates", () => {
   const renderer = new SvgKinematicRenderer(200, 100, 10, 3);
 
-  const snapshots: readonly BodySnapshot[] = [
-    {
-      id: 7,
-      state: createBodyState(new Vector2(2, 3), new Vector2(0, 0)),
-    },
-  ];
+  const snapshots: readonly BodySnapshot[] = [createBodySnapshot(7, new Vector2(2, 3))];
 
   const svg = renderer.render(snapshots);
 
@@ -26,14 +39,8 @@ Deno.test("SvgKinematicRenderer renders every supplied body snapshot", () => {
   const renderer = new SvgKinematicRenderer(200, 100, 10, 2);
 
   const snapshots: readonly BodySnapshot[] = [
-    {
-      id: 1,
-      state: createBodyState(new Vector2(-5, -2), new Vector2(0, 0)),
-    },
-    {
-      id: 2,
-      state: createBodyState(new Vector2(4, 1), new Vector2(0, 0)),
-    },
+    createBodySnapshot(1, new Vector2(-5, -2)),
+    createBodySnapshot(2, new Vector2(4, 1)),
   ];
 
   const svg = renderer.render(snapshots);
@@ -123,12 +130,7 @@ Deno.test("SvgKinematicRenderer renders relative to the viewport world center", 
 
   renderer.setViewportCenter(3, -2);
 
-  const snapshots: readonly BodySnapshot[] = [
-    {
-      id: 7,
-      state: createBodyState(new Vector2(3, -2), new Vector2(0, 0)),
-    },
-  ];
+  const snapshots: readonly BodySnapshot[] = [createBodySnapshot(7, new Vector2(3, -2))];
 
   const svg = renderer.render(snapshots);
 
@@ -159,12 +161,7 @@ Deno.test("SvgKinematicRenderer renders using the changed viewport scale", () =>
   renderer.setViewportCenter(3, -2);
   renderer.setViewportScale(20);
 
-  const snapshots: readonly BodySnapshot[] = [
-    {
-      id: 7,
-      state: createBodyState(new Vector2(4, -1), new Vector2(0, 0)),
-    },
-  ];
+  const snapshots: readonly BodySnapshot[] = [createBodySnapshot(7, new Vector2(4, -1))];
 
   const svg = renderer.render(snapshots);
 

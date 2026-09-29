@@ -1,9 +1,10 @@
 import { assert, assertEquals, assertStrictEquals, assertThrows } from "@std/assert";
 
 import { Body } from "../body/body.ts";
+import { Circle } from "../geometry/circle.ts";
 import type { KinematicIntegrator } from "../kinematics/kinematic-integrator.ts";
-import type { BodyState } from "./body-state.ts";
 import { Vector2 } from "../math/vector2.ts";
+import type { BodyState } from "./body-state.ts";
 import { World } from "./world.ts";
 
 function assertVector(actual: Vector2, expectedX: number, expectedY: number): void {
@@ -349,11 +350,28 @@ Deno.test("World exposes snapshots of all bodies", () => {
   assert(first !== undefined);
   assert(second !== undefined);
 
+  assertStrictEquals(first.definition, body);
   assertVector(first.state.position, 1, 2);
   assertVector(first.state.velocity, 3, 4);
 
+  assertStrictEquals(second.definition, body);
   assertVector(second.state.position, 10, 20);
   assertVector(second.state.velocity, 30, 40);
+});
+
+Deno.test("World snapshots expose Circle geometry through the Body definition", () => {
+  const world = new World(new Vector2(0, -10), new StubIntegrator((state) => state));
+
+  const circle = new Circle(2);
+  const body = new Body({ shape: circle });
+
+  const bodyId = world.addBody(body);
+
+  const snapshot = world.getBodySnapshots().find(({ id }) => id === bodyId);
+
+  assert(snapshot !== undefined);
+  assertStrictEquals(snapshot.definition, body);
+  assertStrictEquals(snapshot.definition.shape, circle);
 });
 
 Deno.test("World exposes an empty body snapshot collection when empty", () => {
@@ -362,7 +380,7 @@ Deno.test("World exposes an empty body snapshot collection when empty", () => {
   assertEquals(world.getBodySnapshots(), []);
 });
 
-Deno.test("World body snapshots cannot mutate authoritative world state", () => {
+Deno.test("World body snapshots detach runtime state from authoritative world state", () => {
   const world = new World(new Vector2(0, -10), new StubIntegrator((state) => state));
 
   const bodyId = world.addBody(new Body(), {
@@ -374,8 +392,8 @@ Deno.test("World body snapshots cannot mutate authoritative world state", () => 
 
   const observedState = snapshots[0].state;
 
-  // Deliberately bypass TypeScript's readonly contract to verify that the
-  // observation object is detached from authoritative world state.
+  // Deliberately bypass TypeScript's readonly contract to verify that
+  // observed runtime values are not authoritative World state.
   (observedState.position as { x: number }).x = 999;
 
   const authoritativeSnapshot = world.getBodyState(bodyId);
