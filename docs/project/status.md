@@ -2,9 +2,11 @@
 
 ## Current checkpoint
 
-vLab2D now has a small multi-body simulation engine, deterministic multi-World Simulation orchestration, a concrete browser Runtime, reproducible SVG visualization, and live Canvas 2D animation with fixed simulation timing.
+vLab2D now has a small multi-body simulation engine, deterministic multi-World Simulation orchestration, a concrete browser Runtime, reproducible SVG visualization, live Canvas 2D animation with fixed simulation timing, and its first intrinsic geometry definition.
 
 **Phase 1 — Structure and lifecycle refactoring is complete.** The project now has concrete `Body → World → Simulation → Runtime` boundaries, a separate Visualization layer, and a package-facing composition facade.
+
+**Phase 2 — Geometry / single-shape learning is active.** The first slice introduces immutable Circle geometry while preserving shapeless Bodies.
 
 Canvas is the primary visualization target. SVG remains a useful secondary renderer for static snapshots, debugging captures, exports, and documentation where maintaining it remains reasonable.
 
@@ -15,7 +17,9 @@ Both renderers share `ViewportTransform` for viewport geometry, bidirectional wo
 The public engine API currently provides:
 
 - `Vector2`, an immutable two-dimensional vector value.
-- `Body`, a reusable body definition with no intrinsic properties yet.
+- `Circle`, immutable circular geometry expressed in simulation/world units.
+- `Body`, a reusable body definition with optional Circle geometry.
+- `BodyOptions`, optional intrinsic Body configuration.
 - `BodyInitialConditions`, optional world-specific initial position and velocity.
 - `BodyState`, a readonly runtime-state contract containing position and velocity.
 - `KinematicIntegrator`, a narrow strategy contract for advancing `BodyState` from acceleration.
@@ -28,8 +32,12 @@ The public engine API currently provides:
 The current Body/World lifecycle now distinguishes three categories explicitly:
 
 ```text
+Circle
+    immutable reusable geometry definition
+
 Body
     reusable intrinsic definition
+    optional Circle geometry
 
 BodyInitialConditions
     world-specific position / velocity supplied at insertion
@@ -37,6 +45,14 @@ BodyInitialConditions
 BodyState inside World
     authoritative evolving runtime state
 ```
+
+Circle radius is expressed in world units and must be positive and finite.
+
+`new Body()` remains valid and has no domain geometry. For current capabilities it can continue to behave as a particle-like entity with identity and motion but no spatial extent.
+
+`new Body({ shape: new Circle(0.5) })` attaches one reusable Circle definition. The reference is retained directly because Circle is immutable.
+
+Phase 2 deliberately supports only zero-or-one Circle geometry at this checkpoint. No general `Shape` contract has been introduced yet; Box/Rectangle will provide a second concrete geometry variant and the evidence needed to generalize the abstraction.
 
 `World.addBody(...)` may instantiate the same `Body` definition multiple times. Each addition receives an independent world-local `BodyId` and independent runtime state. Position and velocity default to zero, and supplied vectors are copied before they become authoritative world state.
 
@@ -286,18 +302,16 @@ No folder rename was performed merely to match an aspirational tree. `kinematics
 
 ## Next step
 
-Begin **Phase 2 — Geometry / single-shape learning**.
+Continue **Phase 2A — Circle** with geometry observation.
 
-Phase 1 is complete:
+The Circle domain model is established:
 
-- reusable `Body` definitions are separate from World-owned runtime state;
-- `World` owns body instances, gravity, integration, and detached observations;
-- `Simulation` coordinates `1..N` Worlds and isolates per-World failure;
-- `BrowserSimulationRuntime` owns browser scheduling and fixed-timestep accumulation;
-- Visualization remains independent from simulation authority;
-- `src/mod.ts` provides the package-facing composition facade;
-- runnable examples now emphasize composition, with Canvas-specific interaction kept example-local.
+- Circle is immutable reusable geometry in world units;
+- Body may optionally reference one Circle;
+- shapeless Bodies remain valid;
+- position and velocity remain World-owned runtime state;
+- no collision, mass, material, orientation, angular state, or compound geometry has been introduced.
 
-The first Phase 2 slice should establish the smallest useful immutable geometry concept without adding collision behavior, materials, mass, or compound-body machinery. Shapeless Bodies must remain valid.
+The next small question is how immutable Body definition information should accompany detached World observations so Visualization can discover geometry without accessing World internals. Rendering and picking changes should follow only after that observation boundary is established.
 
 The phased strategy is maintained in [`roadmap.md`](roadmap.md).

@@ -223,8 +223,9 @@ export class CanvasExampleHost {
   #setSelectedBody(bodyId: BodyId | undefined): void {
     this.#selectedBodyId = bodyId;
 
-    this.#selectedBodyOutput.value =
-      bodyId === undefined ? "Selected: —" : `Selected: ${bodyId}`;
+    this.#selectedBodyOutput.value = bodyId === undefined
+      ? "Selected: —"
+      : `Selected: ${bodyId}`;
 
     this.#refreshSelectedBodyInspection();
   }
@@ -278,8 +279,9 @@ export class CanvasExampleHost {
       display.y,
     );
 
-    this.#bodyOutput.value =
-      this.#hoveredBodyId === undefined ? "Body: —" : `Body: ${this.#hoveredBodyId}`;
+    this.#bodyOutput.value = this.#hoveredBodyId === undefined
+      ? "Body: —"
+      : `Body: ${this.#hoveredBodyId}`;
   }
 
   // Re-resolves hover against the latest rendered snapshots.
@@ -320,13 +322,17 @@ export class CanvasExampleHost {
 
     const { position, velocity } = snapshot.state;
 
-    this.#selectedBodyPositionOutput.value = `Position: (${position.x.toFixed(2)}, ${position.y.toFixed(
-      2,
-    )})`;
+    this.#selectedBodyPositionOutput.value = `Position: (${position.x.toFixed(2)}, ${
+      position.y.toFixed(
+        2,
+      )
+    })`;
 
-    this.#selectedBodyVelocityOutput.value = `Velocity: (${velocity.x.toFixed(2)}, ${velocity.y.toFixed(
-      2,
-    )})`;
+    this.#selectedBodyVelocityOutput.value = `Velocity: (${velocity.x.toFixed(2)}, ${
+      velocity.y.toFixed(
+        2,
+      )
+    })`;
   }
 }
 

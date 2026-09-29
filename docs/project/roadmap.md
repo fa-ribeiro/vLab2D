@@ -228,50 +228,77 @@ is now represented directly by the Canvas entry point.
 
 ## Phase 2 — Geometry / single-shape learning
 
+**Status:** active.
+
+**Primary goal:** introduce geometry incrementally from concrete variants while preserving the ownership boundaries established in Phase 1.
+
+### 2A — Circle
+
+Circle is the proof-of-concept geometry used to learn the Body/geometry relationship before generalizing a Shape abstraction.
+
+#### 2A.1 — Circle domain model
+
+**Status:** implemented.
+
+Current result:
+
+- `Circle(radius)` is immutable reusable geometry expressed in simulation/world units;
+- radius must be positive and finite;
+- `Body` accepts optional intrinsic Circle geometry through `BodyOptions.shape`;
+- `new Body()` remains a valid shapeless particle-like definition;
+- the same Circle definition may be reused by multiple Body definitions;
+- Circle owns no world position, velocity, orientation, or other runtime state;
+- no generic `Shape` interface/base class is introduced yet.
+
+Zero radius is not used to encode a particle. Absence of domain geometry remains semantically distinct from a point-like or zero-area Shape that might become useful for a future concrete domain reason.
+
+#### 2A.2 — Geometry observation
+
 **Status:** next.
 
-**Primary goal:** introduce the Shape concept only after Phase 1 establishes stable ownership and lifecycle boundaries.
+Establish how immutable Body definition information accompanies detached World observations so Visualization can distinguish:
 
-### Shape definition
+```text
+shapeless Body
+Circle Body
+```
 
-A Shape should be an immutable reusable geometry definition expressed in simulation/world units rather than display pixels.
+without reaching into authoritative World internals.
 
-Possible simple variants, introduced one at a time as useful:
+#### 2A.3 — Circle rendering
 
-- circle;
-- box/rectangle;
-- regular convex polygon.
+After the observation boundary is clear, render Circle radius as actual domain geometry scaled through the viewport.
 
-Do not implement a family of Shapes merely because the roadmap lists them.
+Shapeless Bodies should retain a fixed presentation marker. This keeps domain geometry distinct from the visual marker used to make a geometry-free entity visible.
 
-### Shapeless bodies remain valid
+#### 2A.4 — Circle-aware picking
 
-Geometry stays optional.
+Once Circle rendering exists, revisit Canvas picking so finite Circle geometry can participate through its rendered/domain extent while shapeless Bodies can continue using presentation-marker picking.
 
-A Body with no geometry can continue acting as a particle for capabilities that require only identity and motion state.
+### 2B — Box / Rectangle
 
-### Body/Shape integration
+Box/Rectangle is the planned second concrete geometry variant.
 
-The architecture should not assume that a Body can permanently have only one Shape.
+It should be introduced only after Circle has clarified the basic geometry model. Box creates concrete pressure for orientation-aware geometry and is therefore the natural point to revisit:
 
-The intended relationship is eventually:
+- a generalized `Shape` contract;
+- Body/world orientation;
+- angular velocity;
+- shape-local orientation when later needed.
+
+A Circle can also rotate physically even though circular symmetry makes orientation irrelevant to its outline. Deferring rotational runtime state during Circle work must not be interpreted as a claim that circular Bodies cannot rotate.
+
+### Longer-term geometry cardinality
+
+The architecture should not assume permanently that a Body has exactly one Shape.
+
+The intended relationship remains eventually:
 
 ```text
 Body → 0..N geometry attachments
 ```
 
-However, Phase 2 should deliberately exercise **zero-or-one attached shape** while the model is learned.
-
-Questions to resolve from concrete use include:
-
-- shape-local position relative to the Body;
-- shape-local orientation;
-- Body world orientation;
-- angular velocity;
-- geometry-derived bounds/centroid;
-- rendering and picking based on domain geometry.
-
-Compound bodies remain deferred.
+Phase 2 deliberately exercises zero-or-one geometry while the model is learned. Compound bodies remain deferred.
 
 ## Phase 3 — Geometry becomes physics
 

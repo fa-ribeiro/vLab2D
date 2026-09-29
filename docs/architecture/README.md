@@ -68,6 +68,7 @@ The current source tree exposes the architecture directly:
 src/
 ├── mod.ts
 ├── engine/
+│   ├── geometry/
 │   ├── kinematics/
 │   ├── math/
 │   ├── world/
@@ -804,6 +805,9 @@ It is useful to keep these categories separate.
 ```text
 ✓ package-facing composition facade through src/mod.ts
 ✓ public engine-layer boundary through src/engine/mod.ts
+✓ immutable Circle geometry in simulation/world units
+✓ optional Circle geometry on reusable Body definitions
+✓ shapeless particle-like Bodies remain valid
 ✓ mathematical Vector2 values
 ✓ readonly BodyState runtime-data contract
 ✓ replaceable kinematic integrators

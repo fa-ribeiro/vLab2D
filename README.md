@@ -10,9 +10,9 @@ Eventually, vLab2D aims to make simulations not only runnable, but **observable*
 
 ## Project status
 
-**Current checkpoint:** Phase 1 structural refactoring is complete. The implemented flow is `Body → World → Simulation → Runtime`, Visualization remains an observer, and `src/mod.ts` now provides the package-facing composition facade. The Canvas entry point is intentionally small: example-specific DOM interaction lives in an example-local host rather than being promoted into Runtime or the engine.
+**Current checkpoint:** Phase 2 has started with immutable Circle geometry. A reusable `Body` may now optionally reference one `Circle`, while `new Body()` remains a valid shapeless particle-like definition. Position and velocity remain World-owned runtime concerns.
 
-**Next step:** begin Phase 2 with the smallest useful geometry/Shape slice while preserving shapeless Bodies and the ownership boundaries established in Phase 1.
+**Next step:** expose immutable Body geometry through detached World observations so Visualization can distinguish shapeless Bodies from Bodies carrying Circle geometry without reaching into World internals.
 
 See the [project documentation](docs/project/README.md) for the authoritative current status, project context, decisions, workflow, and continuity information.
 

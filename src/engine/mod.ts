@@ -8,6 +8,9 @@
  */
 
 export { Body } from "./body/body.ts";
+export type { BodyOptions } from "./body/body-options.ts";
+
+export { Circle } from "./geometry/circle.ts";
 
 export type { KinematicIntegrator } from "./kinematics/kinematic-integrator.ts";
 

@@ -1,3 +1,6 @@
+import type { Circle } from "../geometry/circle.ts";
+import type { BodyOptions } from "./body-options.ts";
+
 /**
  * Defines the intrinsic properties of a reusable simulated body.
  *
@@ -5,10 +8,24 @@
  * runtime state. Those values are established when the body is added to a
  * world and are subsequently owned by that world.
  *
- * `Body` currently has no intrinsic properties. Future properties should be
- * added only when concrete simulation features require them.
+ * Geometry is optional. A shapeless Body remains valid for capabilities that
+ * require identity and motion state but no spatial extent.
  */
 export class Body {
-  /** Creates a body definition with the currently supported intrinsic defaults. */
-  public constructor() {}
+  /**
+   * Optional intrinsic geometry attached to this reusable definition.
+   *
+   * Phase 2 currently supports Circle geometry only. The reference is retained
+   * directly because Circle is immutable and reusable.
+   */
+  public readonly shape: Circle | undefined;
+
+  /**
+   * Creates a reusable body definition.
+   *
+   * @param options Optional intrinsic Body configuration.
+   */
+  public constructor(options: BodyOptions = {}) {
+    this.shape = options.shape;
+  }
 }

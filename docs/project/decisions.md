@@ -979,3 +979,48 @@ Phase 1E also deliberately avoids organizational churn that has no behavioral or
 - no generic application, host, renderer, interaction, or dependency-injection framework is introduced.
 
 Phase 1 is considered structurally complete after this consolidation.
+
+## D-071 — Circle is the first optional Body geometry; shapeless Bodies remain valid
+
+**Status:** Accepted and implemented
+
+Phase 2 begins with `Circle` as the first concrete intrinsic geometry definition.
+
+A Circle owns one positive finite radius expressed in simulation/world units. It is immutable and reusable. It does not own world position, velocity, orientation, angular velocity, material, mass, or presentation styling.
+
+`Body` gains optional intrinsic geometry:
+
+```ts
+new Body();
+new Body({ shape: new Circle(0.5) });
+```
+
+A Body without geometry remains a valid domain definition. For current capabilities it can act as a particle-like entity with identity and motion but no defined spatial extent.
+
+The absence of geometry is not represented by an implicit `PointShape` or a zero-radius Circle. A mathematical point would still require a presentation marker to be visible, and using a special Shape only to avoid an optional property would blur the distinction between domain geometry and presentation geometry.
+
+This keeps the current semantics explicit:
+
+```text
+shapeless Body
+    no domain spatial extent
+    may be shown using a fixed presentation marker
+
+Body + Circle
+    finite domain geometry
+    radius measured in world units
+```
+
+Phase 2A intentionally types `BodyOptions.shape` as `Circle` rather than introducing a generic Shape interface, abstract base class, or discriminated hierarchy before a second geometry variant exists.
+
+Box/Rectangle is expected to provide the second concrete variant and the evidence needed to generalize the Shape abstraction.
+
+The current zero-or-one relationship is a learning checkpoint, not a permanent cardinality decision. The longer-term direction remains:
+
+```text
+Body → 0..N geometry attachments
+```
+
+Rotational runtime state is also deferred. Circular symmetry means Circle orientation is not needed to describe its outline, but this does not imply that a circular Body cannot rotate physically. Box/Rectangle, rolling diagnostics, or another concrete requirement can introduce the pressure needed to model orientation and angular velocity.
+
+This checkpoint does not change World snapshots, rendering, picking, collision behavior, mass/material properties, or runtime stepping.
