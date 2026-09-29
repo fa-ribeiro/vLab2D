@@ -497,3 +497,27 @@ Deno.test("CanvasKinematicRenderer keeps Circle picking on the fixed marker radi
   // fixed to the 6-display-unit presentation marker until Phase 2A.4.
   assertEquals(renderer.findBodyAtDisplayPoint(snapshots, 115, 50), undefined);
 });
+
+Deno.test("CanvasKinematicRenderer sizes interaction rings around Circle geometry", () => {
+  const context = new RecordingCanvasContext();
+  const renderer = new CanvasKinematicRenderer(context, 200, 100, 10, 6);
+
+  const snapshots: readonly BodySnapshot[] = [
+    createBodySnapshot(
+      7,
+      new Vector2(0, 0),
+      new Vector2(0, 0),
+      new Body({ shape: new Circle(2) }),
+    ),
+  ];
+
+  renderer.render(snapshots, 7, 7);
+
+  const arcCalls = context.calls.filter(([name]) => name === "arc");
+
+  assertEquals(arcCalls, [
+    ["arc", 100, 50, 20, 0, Math.PI * 2],
+    ["arc", 100, 50, 24, 0, Math.PI * 2],
+    ["arc", 100, 50, 28, 0, Math.PI * 2],
+  ]);
+});

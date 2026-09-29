@@ -159,16 +159,17 @@ export class CanvasKinematicRenderer {
   }
 
   /**
-   * Finds the rendered body underneath a Canvas display-space point.
+   * Finds the nearest body hit by the renderer's fixed display-space
+   * picking radius.
    *
-   * A body is considered hit when the point lies within the body's rendered
-   * circular marker.
+   * Picking intentionally remains independent of Body geometry. Shapeless
+   * bodies and bodies with geometry currently use the same picking radius.
    *
    * @param snapshots Detached body observations to test.
    * @param displayX Horizontal point coordinate in Canvas drawing-buffer units.
    * @param displayY Vertical point coordinate in Canvas drawing-buffer units.
    * @returns The identifier of the nearest hit body, or `undefined` when no
-   * body marker contains the point.
+   * body falls within the picking radius.
    */
   public findBodyAtDisplayPoint(
     snapshots: readonly BodySnapshot[],
@@ -223,9 +224,10 @@ export class CanvasKinematicRenderer {
     const x = this.#transform.worldToDisplayX(snapshot.state.position.x);
     const y = this.#transform.worldToDisplayY(snapshot.state.position.y);
 
-    const radius = snapshot.definition.shape === undefined
-      ? this.#bodyRadius
-      : snapshot.definition.shape.radius * this.#transform.pixelsPerUnit;
+    const radius =
+      snapshot.definition.shape === undefined
+        ? this.#bodyRadius
+        : snapshot.definition.shape.radius * this.#transform.pixelsPerUnit;
 
     this.#context.beginPath();
     this.#context.arc(x, y, radius, 0, Math.PI * 2);

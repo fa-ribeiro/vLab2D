@@ -10,6 +10,5 @@
   "deno.codeLens.referencesAllFunctions": false,
   "deno.codeLens.implementations": false,
   "deno.codeLens.test": true,
-  "deno.organizeImports.enabled": true,
-  "deno.unstable": ["--unstable"]
+  "deno.organizeImports.enabled": true
 }
