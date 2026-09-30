@@ -1,4 +1,11 @@
-import type { BodyId, BodySnapshot, CanvasKinematicRenderer, World } from "../../src/mod.ts";
+import type {
+  BodyId,
+  BodyPicker,
+  BodySnapshot,
+  CanvasKinematicRenderer,
+  ViewportTransform,
+  World,
+} from "../../src/mod.ts";
 
 const MIN_VIEWPORT_SCALE = 10;
 const MAX_VIEWPORT_SCALE = 200;
@@ -10,12 +17,15 @@ const CLICK_MOVEMENT_TOLERANCE = 4;
  * Owns browser interaction and presentation state for the Canvas example.
  *
  * This host is intentionally example-local. It coordinates DOM events,
- * inspection outputs, picking, hover, selection, and rendering without turning
- * those policies into reusable Runtime or engine abstractions.
+ * inspection outputs, picking, hover, selection, viewport interaction, and
+ * rendering without turning those policies into reusable Runtime or engine
+ * abstractions.
  */
 export class CanvasExampleHost {
   readonly #canvas: HTMLCanvasElement;
   readonly #world: World;
+  readonly #viewport: ViewportTransform;
+  readonly #picker: BodyPicker;
   readonly #renderer: CanvasKinematicRenderer;
 
   readonly #coordinateOutput: HTMLOutputElement;
@@ -43,10 +53,14 @@ export class CanvasExampleHost {
   public constructor(
     canvas: HTMLCanvasElement,
     world: World,
+    viewport: ViewportTransform,
+    picker: BodyPicker,
     renderer: CanvasKinematicRenderer,
   ) {
     this.#canvas = canvas;
     this.#world = world;
+    this.#viewport = viewport;
+    this.#picker = picker;
     this.#renderer = renderer;
 
     const document = canvas.ownerDocument;
@@ -97,37 +111,30 @@ export class CanvasExampleHost {
 
   // Wires browser input events to the example's interaction handlers.
   #attachInteractionHandlers(): void {
-    // Begins a possible click or viewport drag with the primary pointer.
     this.#canvas.addEventListener("pointerdown", (event) => {
       this.#handlePointerDown(event);
     });
 
-    // Completes click selection when the interaction stayed within tolerance.
     this.#canvas.addEventListener("pointerup", (event) => {
       this.#handlePointerUp(event);
     });
 
-    // Ends drag tracking if the browser cancels the active pointer.
     this.#canvas.addEventListener("pointercancel", (event) => {
       this.#endPointerDrag(event.pointerId);
     });
 
-    // Ends drag tracking if pointer capture is released outside the normal flow.
     this.#canvas.addEventListener("lostpointercapture", (event) => {
       this.#endPointerDrag(event.pointerId);
     });
 
-    // Pans during drag and refreshes pointer inspection.
     this.#canvas.addEventListener("pointermove", (event) => {
       this.#handlePointerMove(event);
     });
 
-    // Clears transient pointer inspection when the pointer leaves the Canvas.
     this.#canvas.addEventListener("pointerleave", () => {
       this.#clearPointerInspection();
     });
 
-    // Applies host zoom policy around the current pointer position.
     this.#canvas.addEventListener(
       "wheel",
       (event) => {
@@ -165,7 +172,7 @@ export class CanvasExampleHost {
       const display = this.#clientToDisplayCoordinates(event.clientX, event.clientY);
 
       this.#setSelectedBody(
-        this.#renderer.findBodyAtDisplayPoint(this.#renderedSnapshots, display.x, display.y),
+        this.#picker.findBodyAtDisplayPoint(this.#renderedSnapshots, display.x, display.y),
       );
     }
   }
@@ -193,7 +200,7 @@ export class CanvasExampleHost {
       const deltaDisplayX = (deltaClientX * this.#canvas.width) / bounds.width;
       const deltaDisplayY = (deltaClientY * this.#canvas.height) / bounds.height;
 
-      this.#renderer.panViewportBy(deltaDisplayX, deltaDisplayY);
+      this.#viewport.panByDisplayDelta(deltaDisplayX, deltaDisplayY);
     }
 
     this.#updatePointerInspection(event.clientX, event.clientY);
@@ -207,14 +214,14 @@ export class CanvasExampleHost {
 
     const wheelDelta = this.#normalizeWheelDelta(event);
     const zoomFactor = Math.exp(-wheelDelta * ZOOM_SENSITIVITY);
-    const requestedScale = this.#renderer.viewportScale * zoomFactor;
+    const requestedScale = this.#viewport.pixelsPerUnit * zoomFactor;
 
     const nextScale = Math.min(
       MAX_VIEWPORT_SCALE,
       Math.max(MIN_VIEWPORT_SCALE, requestedScale),
     );
 
-    this.#renderer.setViewportScaleAroundDisplayPoint(nextScale, display.x, display.y);
+    this.#viewport.setPixelsPerUnitAroundDisplayPoint(nextScale, display.x, display.y);
 
     this.#updatePointerInspection(event.clientX, event.clientY);
   }
@@ -268,12 +275,12 @@ export class CanvasExampleHost {
 
     const display = this.#clientToDisplayCoordinates(clientX, clientY);
 
-    const worldX = this.#renderer.displayToWorldX(display.x);
-    const worldY = this.#renderer.displayToWorldY(display.y);
+    const worldX = this.#viewport.displayToWorldX(display.x);
+    const worldY = this.#viewport.displayToWorldY(display.y);
 
     this.#coordinateOutput.value = `World: (${worldX.toFixed(2)}, ${worldY.toFixed(2)})`;
 
-    this.#hoveredBodyId = this.#renderer.findBodyAtDisplayPoint(
+    this.#hoveredBodyId = this.#picker.findBodyAtDisplayPoint(
       this.#renderedSnapshots,
       display.x,
       display.y,

@@ -1,5 +1,6 @@
 import {
   Body,
+  BodyPicker,
   BrowserSimulationRuntime,
   CanvasKinematicRenderer,
   Circle,
@@ -7,12 +8,15 @@ import {
   SemiImplicitEulerIntegrator,
   Simulation,
   Vector2,
+  ViewportTransform,
   World,
 } from "../../src/mod.ts";
 import { CanvasExampleHost } from "./canvas-example-host.ts";
 
 const FIXED_TIMESTEP = 1 / 60;
 const MAX_FRAME_DELTA = 0.25;
+
+const SHAPELESS_BODY_RADIUS = 6;
 
 // Resolve the browser drawing surface and its Canvas 2D context.
 const canvas = document.querySelector<HTMLCanvasElement>("#simulation");
@@ -52,12 +56,15 @@ world.addBody(rectangle, {
 
 const simulation = new Simulation([world]);
 
-const renderer = new CanvasKinematicRenderer(context, canvas.width, canvas.height, 40, 6);
+// Canvas rendering and picking observe the same mutable viewport state.
+const viewport = new ViewportTransform(canvas.width, canvas.height, 40);
+viewport.setCenter(3, 2);
+viewport.setPixelsPerUnit(25);
 
-renderer.setViewportCenter(3, 2);
-renderer.setViewportScale(25);
+const renderer = new CanvasKinematicRenderer(context, viewport, SHAPELESS_BODY_RADIUS);
+const picker = new BodyPicker(viewport, SHAPELESS_BODY_RADIUS);
 
-const host = new CanvasExampleHost(canvas, world, renderer);
+const host = new CanvasExampleHost(canvas, world, viewport, picker, renderer);
 
 const runtime = new BrowserSimulationRuntime(simulation, {
   fixedTimestep: FIXED_TIMESTEP,

@@ -62,193 +62,27 @@ interface CanvasDrawingContext {
 export class CanvasKinematicRenderer {
   readonly #context: CanvasDrawingContext;
   readonly #transform: ViewportTransform;
-  readonly #bodyRadius: number;
+  readonly #shapelessBodyRadius: number;
 
   /**
    * Creates a Canvas kinematic renderer.
    *
    * @param context The Canvas-like drawing context used for rendering.
-   * @param width The viewport width in Canvas drawing-buffer units.
-   * @param height The viewport height in Canvas drawing-buffer units.
-   * @param pixelsPerUnit The number of Canvas display units representing one
-   * world unit.
-   * @param bodyRadius The fixed display-space radius used for shapeless body
-   * markers.
-   * @throws {RangeError} If the viewport dimensions, scale, or body radius are
-   * not positive and finite.
+   * @param transform The shared world-to-display viewport transform.
+   * @param shapelessBodyRadius The fixed display-space radius used for
+   * shapeless body markers.
+   * @throws {RangeError} If the shapeless body radius is not positive and finite.
    */
   public constructor(
     context: CanvasDrawingContext,
-    width: number,
-    height: number,
-    pixelsPerUnit: number,
-    bodyRadius = 4,
+    transform: ViewportTransform,
+    shapelessBodyRadius = 4,
   ) {
-    const transform = new ViewportTransform(width, height, pixelsPerUnit);
-
-    assertPositiveFinite(bodyRadius, "Body radius");
+    assertPositiveFinite(shapelessBodyRadius, "Shapeless body radius");
 
     this.#context = context;
     this.#transform = transform;
-    this.#bodyRadius = bodyRadius;
-  }
-
-  /**
-   * Changes the world position shown at the center of the viewport.
-   *
-   * @param worldX The world X coordinate to place at the viewport center.
-   * @param worldY The world Y coordinate to place at the viewport center.
-   * @throws {RangeError} If either coordinate is not finite.
-   */
-  public setViewportCenter(worldX: number, worldY: number): void {
-    this.#transform.setCenter(worldX, worldY);
-  }
-
-  /**
-   * Changes the viewport display scale.
-   *
-   * Increasing the scale zooms in while preserving the current
-   * world-space viewport center.
-   *
-   * @param pixelsPerUnit The positive finite number of Canvas display units
-   * representing one world unit.
-   * @throws {RangeError} If the scale is not positive and finite.
-   */
-  public setViewportScale(pixelsPerUnit: number): void {
-    this.#transform.setPixelsPerUnit(pixelsPerUnit);
-  }
-
-  /**
-   * The current number of Canvas display units representing one world unit.
-   */
-  public get viewportScale(): number {
-    return this.#transform.pixelsPerUnit;
-  }
-
-  /**
-   * Changes the viewport scale while preserving the world point underneath
-   * a Canvas display-space anchor.
-   *
-   * @param pixelsPerUnit The new positive finite display scale.
-   * @param displayX The horizontal anchor in Canvas drawing-buffer units.
-   * @param displayY The vertical anchor in Canvas drawing-buffer units.
-   * @throws {RangeError} If the scale or anchor coordinates are invalid.
-   */
-  public setViewportScaleAroundDisplayPoint(
-    pixelsPerUnit: number,
-    displayX: number,
-    displayY: number,
-  ): void {
-    this.#transform.setPixelsPerUnitAroundDisplayPoint(pixelsPerUnit, displayX, displayY);
-  }
-
-  /**
-   * Pans the viewport by a displacement expressed in display units.
-   *
-   * Positive X moves the displayed world to the right.
-   * Positive Y moves the displayed world downward.
-   *
-   * @param deltaX Horizontal display-space movement.
-   * @param deltaY Vertical display-space movement.
-   * @throws {RangeError} If either delta is not finite.
-   */
-  public panViewportBy(deltaX: number, deltaY: number): void {
-    if (!Number.isFinite(deltaX) || !Number.isFinite(deltaY)) {
-      throw new RangeError("Viewport pan delta must be finite.");
-    }
-
-    this.#transform.setCenter(
-      this.#transform.centerWorldX - deltaX / this.#transform.pixelsPerUnit,
-      this.#transform.centerWorldY + deltaY / this.#transform.pixelsPerUnit,
-    );
-  }
-
-  /**
-   * Maps a horizontal Canvas display coordinate into world space.
-   *
-   * @param displayX The X coordinate in Canvas drawing-buffer units.
-   * @returns The corresponding world X coordinate.
-   */
-  public displayToWorldX(displayX: number): number {
-    return this.#transform.displayToWorldX(displayX);
-  }
-
-  /**
-   * Maps a vertical Canvas display coordinate into world space.
-   *
-   * @param displayY The Y coordinate in Canvas drawing-buffer units.
-   * @returns The corresponding world Y coordinate.
-   */
-  public displayToWorldY(displayY: number): number {
-    return this.#transform.displayToWorldY(displayY);
-  }
-
-  /**
-   * Finds the nearest body whose display-space picking extent contains a point.
-   *
-   * Shapeless bodies use the renderer's fixed circular presentation marker.
-   * Circle and Rectangle bodies use their world-space geometry transformed by
-   * the current viewport scale. Rectangle picking transforms the display-space
-   * point into the body-local coordinate frame before testing local bounds.
-   *
-   * When multiple bodies contain the point, the body with the nearest display-
-   * space center is returned.
-   *
-   * @param snapshots Detached body observations to test.
-   * @param displayX Horizontal point coordinate in Canvas drawing-buffer units.
-   * @param displayY Vertical point coordinate in Canvas drawing-buffer units.
-   * @returns The identifier of the nearest hit body, or `undefined` when no
-   * body contains the point.
-   */
-  public findBodyAtDisplayPoint(
-    snapshots: readonly BodySnapshot[],
-    displayX: number,
-    displayY: number,
-  ): BodyId | undefined {
-    let nearestBodyId: BodyId | undefined;
-    let nearestDistanceSquared = Number.POSITIVE_INFINITY;
-
-    for (const snapshot of snapshots) {
-      const bodyX = this.#transform.worldToDisplayX(snapshot.state.position.x);
-      const bodyY = this.#transform.worldToDisplayY(snapshot.state.position.y);
-
-      const deltaX = displayX - bodyX;
-      const deltaY = displayY - bodyY;
-      const distanceSquared = deltaX * deltaX + deltaY * deltaY;
-
-      const shape = snapshot.definition.shape;
-
-      let hit: boolean;
-
-      if (shape instanceof Rectangle) {
-        const halfWidth = (shape.width * this.#transform.pixelsPerUnit) / 2;
-        const halfHeight = (shape.height * this.#transform.pixelsPerUnit) / 2;
-
-        // Rendering rotates Rectangle-local coordinates by -orientation because
-        // Canvas Y points down. Picking applies the inverse display rotation so
-        // the point can be tested against the simple local Rectangle bounds.
-        const cos = Math.cos(snapshot.state.orientation);
-        const sin = Math.sin(snapshot.state.orientation);
-
-        const localX = deltaX * cos - deltaY * sin;
-        const localY = deltaX * sin + deltaY * cos;
-
-        hit = Math.abs(localX) <= halfWidth && Math.abs(localY) <= halfHeight;
-      } else {
-        const radius = shape === undefined
-          ? this.#bodyRadius
-          : shape.radius * this.#transform.pixelsPerUnit;
-
-        hit = distanceSquared <= radius * radius;
-      }
-
-      if (hit && distanceSquared < nearestDistanceSquared) {
-        nearestBodyId = snapshot.id;
-        nearestDistanceSquared = distanceSquared;
-      }
-    }
-
-    return nearestBodyId;
+    this.#shapelessBodyRadius = shapelessBodyRadius;
   }
 
   /**
@@ -320,7 +154,7 @@ export class CanvasKinematicRenderer {
     }
 
     const radius = shape === undefined
-      ? this.#bodyRadius
+      ? this.#shapelessBodyRadius
       : shape.radius * this.#transform.pixelsPerUnit;
 
     if (shape === undefined) {
@@ -365,7 +199,6 @@ export class CanvasKinematicRenderer {
     const y = this.#transform.worldToDisplayY(0);
 
     this.#strokeLine(x - ORIGIN_MARKER_HALF_SIZE, y, x + ORIGIN_MARKER_HALF_SIZE, y);
-
     this.#strokeLine(x, y - ORIGIN_MARKER_HALF_SIZE, x, y + ORIGIN_MARKER_HALF_SIZE);
   }
 
@@ -377,7 +210,6 @@ export class CanvasKinematicRenderer {
     this.#context.globalAlpha = AXIS_OPACITY;
 
     this.#strokeLine(0, originY, this.#transform.width, originY);
-
     this.#strokeLine(originX, 0, originX, this.#transform.height);
 
     this.#context.restore();
@@ -399,7 +231,6 @@ export class CanvasKinematicRenderer {
       }
 
       const x = this.#transform.worldToDisplayX(worldX);
-
       this.#strokeLine(x, 0, x, this.#transform.height);
     }
 
@@ -409,7 +240,6 @@ export class CanvasKinematicRenderer {
       }
 
       const y = this.#transform.worldToDisplayY(worldY);
-
       this.#strokeLine(0, y, this.#transform.width, y);
     }
 

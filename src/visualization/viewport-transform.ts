@@ -33,44 +33,32 @@ export class ViewportTransform {
     this.#pixelsPerUnit = pixelsPerUnit;
   }
 
-  /**
-   * The minimum visible world X coordinate.
-   */
+  /** The minimum visible world X coordinate. */
   public get minWorldX(): number {
     return this.#centerWorldX - this.width / (2 * this.pixelsPerUnit);
   }
 
-  /**
-   * The maximum visible world X coordinate.
-   */
+  /** The maximum visible world X coordinate. */
   public get maxWorldX(): number {
     return this.#centerWorldX + this.width / (2 * this.pixelsPerUnit);
   }
 
-  /**
-   * The minimum visible world Y coordinate.
-   */
+  /** The minimum visible world Y coordinate. */
   public get minWorldY(): number {
     return this.#centerWorldY - this.height / (2 * this.pixelsPerUnit);
   }
 
-  /**
-   * The maximum visible world Y coordinate.
-   */
+  /** The maximum visible world Y coordinate. */
   public get maxWorldY(): number {
     return this.#centerWorldY + this.height / (2 * this.pixelsPerUnit);
   }
 
-  /**
-   * The world X coordinate currently mapped to the horizontal viewport center.
-   */
+  /** The world X coordinate currently mapped to the horizontal viewport center. */
   public get centerWorldX(): number {
     return this.#centerWorldX;
   }
 
-  /**
-   * The world Y coordinate currently mapped to the vertical viewport center.
-   */
+  /** The world Y coordinate currently mapped to the vertical viewport center. */
   public get centerWorldY(): number {
     return this.#centerWorldY;
   }
@@ -92,6 +80,26 @@ export class ViewportTransform {
 
     this.#centerWorldX = worldX;
     this.#centerWorldY = worldY;
+  }
+
+  /**
+   * Pans the viewport by a displacement expressed in display units.
+   *
+   * Positive X moves the displayed world to the right. Positive Y moves the
+   * displayed world downward.
+   *
+   * @param deltaX Horizontal display-space movement.
+   * @param deltaY Vertical display-space movement.
+   * @throws {RangeError} If either delta is not finite.
+   */
+  public panByDisplayDelta(deltaX: number, deltaY: number): void {
+    assertFinite(deltaX, "Display pan X");
+    assertFinite(deltaY, "Display pan Y");
+
+    this.setCenter(
+      this.#centerWorldX - deltaX / this.#pixelsPerUnit,
+      this.#centerWorldY + deltaY / this.#pixelsPerUnit,
+    );
   }
 
   /**
@@ -122,7 +130,6 @@ export class ViewportTransform {
     const anchorWorldY = this.displayToWorldY(displayY);
 
     const centerWorldX = anchorWorldX - (displayX - this.width / 2) / pixelsPerUnit;
-
     const centerWorldY = anchorWorldY + (displayY - this.height / 2) / pixelsPerUnit;
 
     assertFinite(centerWorldX, "Center world X");
@@ -133,9 +140,7 @@ export class ViewportTransform {
     this.#centerWorldY = centerWorldY;
   }
 
-  /**
-   * Maps a world X coordinate into display space.
-   */
+  /** Maps a world X coordinate into display space. */
   public worldToDisplayX(worldX: number): number {
     return this.width / 2 + (worldX - this.#centerWorldX) * this.pixelsPerUnit;
   }
@@ -150,9 +155,7 @@ export class ViewportTransform {
     return this.height / 2 - (worldY - this.#centerWorldY) * this.pixelsPerUnit;
   }
 
-  /**
-   * Maps a display X coordinate into world space.
-   */
+  /** Maps a display X coordinate into world space. */
   public displayToWorldX(displayX: number): number {
     return this.#centerWorldX + (displayX - this.width / 2) / this.pixelsPerUnit;
   }

@@ -4,21 +4,18 @@ import { ViewportTransform } from "./viewport-transform.ts";
 
 Deno.test("ViewportTransform maps the world origin to the viewport center", () => {
   const transform = new ViewportTransform(200, 100, 10);
-
   assertEquals(transform.worldToDisplayX(0), 100);
   assertEquals(transform.worldToDisplayY(0), 50);
 });
 
 Deno.test("ViewportTransform scales world X coordinates into display coordinates", () => {
   const transform = new ViewportTransform(200, 100, 10);
-
   assertEquals(transform.worldToDisplayX(2), 120);
   assertEquals(transform.worldToDisplayX(-2), 80);
 });
 
 Deno.test("ViewportTransform inverts world Y for display coordinates", () => {
   const transform = new ViewportTransform(200, 100, 10);
-
   assertEquals(transform.worldToDisplayY(3), 20);
   assertEquals(transform.worldToDisplayY(-3), 80);
 });
@@ -49,7 +46,6 @@ Deno.test("ViewportTransform rejects an invalid display scale", () => {
 
 Deno.test("ViewportTransform exposes the visible world extent", () => {
   const transform = new ViewportTransform(100, 60, 20);
-
   assertEquals(transform.minWorldX, -2.5);
   assertEquals(transform.maxWorldX, 2.5);
   assertEquals(transform.minWorldY, -1.5);
@@ -58,23 +54,19 @@ Deno.test("ViewportTransform exposes the visible world extent", () => {
 
 Deno.test("ViewportTransform initially centers the world origin", () => {
   const transform = new ViewportTransform(200, 100, 10);
-
   assertEquals(transform.centerWorldX, 0);
   assertEquals(transform.centerWorldY, 0);
 });
 
 Deno.test("ViewportTransform can change its world-space center", () => {
   const transform = new ViewportTransform(200, 100, 10);
-
   transform.setCenter(3, -2);
-
   assertEquals(transform.centerWorldX, 3);
   assertEquals(transform.centerWorldY, -2);
 });
 
 Deno.test("ViewportTransform rejects an invalid world-space center atomically", () => {
   const transform = new ViewportTransform(200, 100, 10);
-
   transform.setCenter(3, -2);
 
   assertThrows(
@@ -89,19 +81,16 @@ Deno.test("ViewportTransform rejects an invalid world-space center atomically", 
 
 Deno.test("ViewportTransform maps its world-space center to the viewport center", () => {
   const transform = new ViewportTransform(200, 100, 10);
-
   transform.setCenter(3, -2);
 
   assertEquals(transform.worldToDisplayX(3), 100);
   assertEquals(transform.worldToDisplayY(-2), 50);
-
   assertEquals(transform.worldToDisplayX(5), 120);
   assertEquals(transform.worldToDisplayY(1), 20);
 });
 
 Deno.test("ViewportTransform visible world extent follows its world-space center", () => {
   const transform = new ViewportTransform(100, 60, 20);
-
   transform.setCenter(10, -4);
 
   assertEquals(transform.minWorldX, 7.5);
@@ -110,23 +99,44 @@ Deno.test("ViewportTransform visible world extent follows its world-space center
   assertEquals(transform.maxWorldY, -2.5);
 });
 
-Deno.test("ViewportTransform maps display coordinates into world coordinates", () => {
+Deno.test("ViewportTransform pans by display-space displacement", () => {
   const transform = new ViewportTransform(200, 100, 10);
 
+  transform.panByDisplayDelta(20, 10);
+
+  assertEquals(transform.centerWorldX, -2);
+  assertEquals(transform.centerWorldY, 1);
+  assertEquals(transform.worldToDisplayX(-2), 100);
+  assertEquals(transform.worldToDisplayY(1), 50);
+});
+
+Deno.test("ViewportTransform rejects invalid display pan atomically", () => {
+  const transform = new ViewportTransform(200, 100, 10);
+  transform.setCenter(3, -2);
+
+  assertThrows(
+    () => transform.panByDisplayDelta(20, Number.NaN),
+    RangeError,
+    "Display pan Y must be finite.",
+  );
+
+  assertEquals(transform.centerWorldX, 3);
+  assertEquals(transform.centerWorldY, -2);
+});
+
+Deno.test("ViewportTransform maps display coordinates into world coordinates", () => {
+  const transform = new ViewportTransform(200, 100, 10);
   transform.setCenter(3, -2);
 
   assertEquals(transform.displayToWorldX(100), 3);
   assertEquals(transform.displayToWorldY(50), -2);
-
   assertEquals(transform.displayToWorldX(120), 5);
   assertEquals(transform.displayToWorldY(20), 1);
 });
 
 Deno.test("ViewportTransform can change its display scale", () => {
   const transform = new ViewportTransform(200, 100, 10);
-
   transform.setPixelsPerUnit(20);
-
   assertEquals(transform.pixelsPerUnit, 20);
 });
 
@@ -144,16 +154,13 @@ Deno.test("ViewportTransform rejects an invalid display scale without changing i
 
 Deno.test("ViewportTransform scale changes zoom around the world-space center", () => {
   const transform = new ViewportTransform(200, 100, 10);
-
   transform.setCenter(3, -2);
   transform.setPixelsPerUnit(20);
 
   assertEquals(transform.worldToDisplayX(3), 100);
   assertEquals(transform.worldToDisplayY(-2), 50);
-
   assertEquals(transform.worldToDisplayX(5), 140);
   assertEquals(transform.worldToDisplayY(1), -10);
-
   assertEquals(transform.minWorldX, -2);
   assertEquals(transform.maxWorldX, 8);
   assertEquals(transform.minWorldY, -4.5);
@@ -162,12 +169,10 @@ Deno.test("ViewportTransform scale changes zoom around the world-space center", 
 
 Deno.test("ViewportTransform changes scale around a display-space anchor", () => {
   const transform = new ViewportTransform(200, 100, 10);
-
   transform.setCenter(3, -2);
 
   const displayX = 140;
   const displayY = 30;
-
   const worldXBefore = transform.displayToWorldX(displayX);
   const worldYBefore = transform.displayToWorldY(displayY);
 
@@ -177,15 +182,12 @@ Deno.test("ViewportTransform changes scale around a display-space anchor", () =>
   transform.setPixelsPerUnitAroundDisplayPoint(20, displayX, displayY);
 
   assertEquals(transform.pixelsPerUnit, 20);
-
   assertEquals(transform.displayToWorldX(displayX), worldXBefore);
-
   assertEquals(transform.displayToWorldY(displayY), worldYBefore);
 });
 
 Deno.test("ViewportTransform rejects invalid anchored scale changes atomically", () => {
   const transform = new ViewportTransform(200, 100, 10);
-
   transform.setCenter(3, -2);
 
   assertThrows(
