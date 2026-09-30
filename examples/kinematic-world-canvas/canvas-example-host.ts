@@ -2,7 +2,9 @@ import type {
   BodyId,
   BodyPicker,
   BodySnapshot,
+  CanvasInspectionRenderer,
   CanvasKinematicRenderer,
+  InspectionOptions,
   ViewportTransform,
   World,
 } from "../../src/mod.ts";
@@ -17,9 +19,9 @@ const CLICK_MOVEMENT_TOLERANCE = 4;
  * Owns browser interaction and presentation state for the Canvas example.
  *
  * This host is intentionally example-local. It coordinates DOM events,
- * inspection outputs, picking, hover, selection, viewport interaction, and
- * rendering without turning those policies into reusable Runtime or engine
- * abstractions.
+ * inspection outputs, picking, hover, selection, viewport interaction,
+ * normal rendering, and optional diagnostic overlays without turning those
+ * policies into reusable Runtime or engine abstractions.
  */
 export class CanvasExampleHost {
   readonly #canvas: HTMLCanvasElement;
@@ -27,6 +29,8 @@ export class CanvasExampleHost {
   readonly #viewport: ViewportTransform;
   readonly #picker: BodyPicker;
   readonly #renderer: CanvasKinematicRenderer;
+  readonly #inspectionRenderer: CanvasInspectionRenderer;
+  readonly #inspectionOptions: InspectionOptions;
 
   readonly #coordinateOutput: HTMLOutputElement;
   readonly #bodyOutput: HTMLOutputElement;
@@ -56,12 +60,16 @@ export class CanvasExampleHost {
     viewport: ViewportTransform,
     picker: BodyPicker,
     renderer: CanvasKinematicRenderer,
+    inspectionRenderer: CanvasInspectionRenderer,
+    inspectionOptions: InspectionOptions,
   ) {
     this.#canvas = canvas;
     this.#world = world;
     this.#viewport = viewport;
     this.#picker = picker;
     this.#renderer = renderer;
+    this.#inspectionRenderer = inspectionRenderer;
+    this.#inspectionOptions = inspectionOptions;
 
     const document = canvas.ownerDocument;
 
@@ -107,6 +115,7 @@ export class CanvasExampleHost {
     this.#refreshSelectedBodyInspection();
 
     this.#renderer.render(this.#renderedSnapshots, this.#hoveredBodyId, this.#selectedBodyId);
+    this.#inspectionRenderer.render(this.#renderedSnapshots, this.#inspectionOptions);
   }
 
   // Wires browser input events to the example's interaction handlers.

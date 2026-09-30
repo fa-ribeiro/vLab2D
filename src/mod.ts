@@ -17,6 +17,8 @@ export { BrowserSimulationRuntime } from "./runtime/browser/simulation-runtime.t
 export type { BrowserSimulationRuntimeOptions } from "./runtime/browser/simulation-runtime.ts";
 
 export { BodyPicker } from "./visualization/body-picker.ts";
+export { CanvasInspectionRenderer } from "./visualization/canvas-inspection-renderer.ts";
 export { CanvasKinematicRenderer } from "./visualization/canvas-kinematic-renderer.ts";
+export type { InspectionOptions } from "./visualization/inspection-options.ts";
 export { SvgKinematicRenderer } from "./visualization/svg-kinematic-renderer.ts";
 export { ViewportTransform } from "./visualization/viewport-transform.ts";

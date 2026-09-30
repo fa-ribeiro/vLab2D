@@ -2,8 +2,10 @@ import {
   Body,
   BodyPicker,
   BrowserSimulationRuntime,
+  CanvasInspectionRenderer,
   CanvasKinematicRenderer,
   Circle,
+  type InspectionOptions,
   Rectangle,
   SemiImplicitEulerIntegrator,
   Simulation,
@@ -18,6 +20,12 @@ const MAX_FRAME_DELTA = 0.25;
 
 const SHAPELESS_BODY_RADIUS = 6;
 const PICK_TOLERANCE = 4;
+
+const INSPECTION_OPTIONS: InspectionOptions = {
+  showGeometryContour: true,
+  showBodyOrigin: true,
+  showOrientation: true,
+};
 
 // Resolve the browser drawing surface and its Canvas 2D context.
 const canvas = document.querySelector<HTMLCanvasElement>("#simulation");
@@ -52,15 +60,24 @@ world.addBody(rectangle, { position: new Vector2(-5, 4), orientation: Math.PI / 
 
 const simulation = new Simulation([world]);
 
-// Canvas rendering and picking observe the same mutable viewport state.
+// Canvas rendering, picking, and inspection observe the same mutable viewport state.
 const viewport = new ViewportTransform(canvas.width, canvas.height, 40);
 viewport.setCenter(3, 2);
 viewport.setPixelsPerUnit(25);
 
 const renderer = new CanvasKinematicRenderer(context, viewport, SHAPELESS_BODY_RADIUS);
+const inspectionRenderer = new CanvasInspectionRenderer(context, viewport);
 const picker = new BodyPicker(viewport, SHAPELESS_BODY_RADIUS, PICK_TOLERANCE);
 
-const host = new CanvasExampleHost(canvas, world, viewport, picker, renderer);
+const host = new CanvasExampleHost(
+  canvas,
+  world,
+  viewport,
+  picker,
+  renderer,
+  inspectionRenderer,
+  INSPECTION_OPTIONS,
+);
 
 const runtime = new BrowserSimulationRuntime(simulation, {
   fixedTimestep: FIXED_TIMESTEP,
