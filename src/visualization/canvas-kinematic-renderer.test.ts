@@ -633,6 +633,6 @@ Deno.test("CanvasKinematicRenderer rejects unsupported Rectangle picking", () =>
   assertThrows(
     () => renderer.findBodyAtDisplayPoint(snapshots, 100, 50),
     TypeError,
-    "CanvasKinematicRenderer does not support Rectangle geometry yet.",
+    "CanvasKinematicRenderer does not support Rectangle picking yet.",
   );
 });
