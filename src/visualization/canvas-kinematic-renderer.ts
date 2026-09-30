@@ -176,7 +176,7 @@ export class CanvasKinematicRenderer {
   }
 
   /**
-   * Finds the nearest body hit by its display-space picking radius.
+   * Finds the nearest body hit by its display-space picking geometry.
    *
    * Shapeless bodies use the renderer's fixed presentation radius.
    * Circle bodies use their world-space radius transformed by the current
@@ -187,8 +187,8 @@ export class CanvasKinematicRenderer {
    * @param displayY Vertical point coordinate in Canvas drawing-buffer units.
    * @returns The identifier of the nearest hit body, or `undefined` when no
    * body contains the point.
-   * @throws {TypeError} If a supplied body uses Rectangle geometry, which this
-   * renderer does not support yet.
+   * @throws {TypeError} If Rectangle geometry is encountered because Rectangle
+   * picking is not supported yet.
    */
   public findBodyAtDisplayPoint(
     snapshots: readonly BodySnapshot[],
@@ -221,8 +221,6 @@ export class CanvasKinematicRenderer {
    * Clears the viewport and renders the supplied body snapshots.
    *
    * @param snapshots The detached body observations to render.
-   * @throws {TypeError} If a supplied body uses Rectangle geometry, which this
-   * renderer does not support yet.
    */
   public render(
     snapshots: readonly BodySnapshot[],
@@ -389,7 +387,7 @@ export class CanvasKinematicRenderer {
       return shape.radius * this.#transform.pixelsPerUnit;
     }
 
-    throw new TypeError("CanvasKinematicRenderer does not support Rectangle geometry yet.");
+    throw new TypeError("CanvasKinematicRenderer does not support Rectangle picking yet.");
   }
 }
 

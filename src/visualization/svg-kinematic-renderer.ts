@@ -77,8 +77,6 @@ export class SvgKinematicRenderer {
    *
    * @param snapshots The detached body observations to render.
    * @returns A complete SVG document as text.
-   * @throws {TypeError} If a supplied body uses Rectangle geometry, which this
-   * renderer does not support yet.
    */
   public render(snapshots: readonly BodySnapshot[]): string {
     const bodies = snapshots.map((snapshot) => this.#renderBody(snapshot)).join("\n");
