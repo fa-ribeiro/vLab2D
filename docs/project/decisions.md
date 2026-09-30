@@ -1167,7 +1167,7 @@ Renderer-native transforms are currently sufficient for normal geometry renderin
 
 ## D-076 — Canvas picking is a separate Visualization collaborator sharing one explicitly composed viewport transform
 
-**Status:** Accepted and implemented
+**Status:** Accepted and implemented; picking distance/ranking policy evolved by D-077
 
 Canvas drawing, visual hit testing, and browser interaction now have distinct concrete responsibilities while sharing one source of mutable viewport state.
 
@@ -1213,3 +1213,47 @@ The earlier renderer-owned design was appropriate while rendering was the only c
 SVG does not mirror this construction merely for symmetry. `SvgKinematicRenderer` still creates and owns its `ViewportTransform` internally because no separate SVG collaborator currently needs to share that state.
 
 This refinement does not introduce a generic renderer interface, picker interface, camera abstraction, transformation strategy, collision system, or interaction framework.
+
+## D-077 — Picking uses display-space tolerance and geometry-distance ranking
+
+**Status:** Accepted and implemented
+
+`BodyPicker` treats pointer acquisition tolerance as a Visualization interaction policy rather than as Body or Shape geometry.
+
+`pickTolerance` is a non-negative finite value expressed in display units. The Canvas example currently supplies it as a named composition-level constant so the policy is explicit and can later be promoted to a user option without changing domain geometry or the picking algorithm.
+
+Tolerance is applied by measuring the shortest display-space distance from the pointer to each body's current pick geometry:
+
+```text
+shapeless Body
+    fixed circular presentation marker
+
+Circle
+    world radius scaled through the current ViewportTransform
+
+Rectangle
+    oriented world width/height scaled through the current ViewportTransform
+```
+
+A body is a candidate when:
+
+```text
+distance to pick geometry <= pickTolerance
+```
+
+Points inside a body's pick geometry have zero geometry distance. Tolerance therefore extends interaction reach around the existing visible/pick geometry; it does not enlarge the body's domain dimensions and does not define collision geometry.
+
+For Rectangle bodies, the pointer is first transformed into the body's local display coordinate frame. The amount by which the local point lies outside each half-extent is then combined using Euclidean distance. This gives a true rounded tolerance around Rectangle corners rather than the excessive diagonal reach that would result from merely increasing width and height by the tolerance.
+
+When multiple bodies qualify, candidates are ranked by:
+
+```text
+1. smallest distance to pick geometry
+2. if tied, smallest distance to displayed body center
+```
+
+The second rule preserves the useful part of the earlier nearest-center policy as a tie-breaker. It is particularly relevant when the pointer lies inside overlapping bodies because every containing geometry then has distance zero. Snapshot order is not a picking-priority contract.
+
+This decision supersedes the containment/nearest-center ranking details originally recorded in D-076 while preserving D-076's responsibility split and shared-viewport ownership.
+
+This decision does not introduce collision semantics, z-order picking, cycling through overlapping targets, a generic picking framework, or a user-options UI.

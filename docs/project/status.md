@@ -222,23 +222,27 @@ It receives:
 ```text
 shared ViewportTransform
 fixed shapeless-body presentation radius
+display-space pick tolerance
 ```
 
 and answers:
 
 ```text
-Which observed Body, if any, contains this display-space point?
+Which observed Body is close enough to this display-space point
+to be the user's intended target?
 ```
 
-Picking behavior currently matches visible geometry:
+Picking behavior currently measures display-space distance to visible/pick geometry:
 
 - shapeless Body → fixed circular presentation marker;
 - Circle → world-scaled circular geometry;
 - Rectangle → world-scaled Rectangle geometry with current orientation.
 
-For a rotated Rectangle, the picker transforms the pointer displacement into body-local coordinates and then tests ordinary centered Rectangle bounds.
+The Canvas example supplies a small display-space `pickTolerance`, allowing thin or small geometry to remain easy to acquire without changing its domain dimensions.
 
-When more than one body contains the point, the nearest displayed body center wins rather than snapshot array order.
+For a rotated Rectangle, the picker transforms the pointer displacement into body-local coordinates and computes Euclidean distance to the simple centered Rectangle bounds. This yields a true rounded tolerance around corners.
+
+When several bodies lie within tolerance, the nearest geometry wins. If geometry distances tie—most commonly because the pointer lies inside overlapping bodies—the nearest displayed center breaks the tie. Snapshot order is not a picking-priority contract.
 
 Picking remains a visual interaction query. It is **not** collision detection and does not establish collision shapes, broad-phase structures, or physical contact semantics.
 
@@ -324,21 +328,21 @@ Normal rendering, future appearance, and future diagnostic overlays remain disti
 
 ## Next step
 
-The geometry/orientation/picking sequence has reached its planned review checkpoint.
+The geometry/orientation/picking sequence is now complete through display-space pick tolerance and candidate ranking.
 
-The next implementation discussion is a small **display-space picking tolerance** at the `BodyPicker` boundary. The goal is to make thin or small geometry easier to acquire with the pointer without changing the body's domain dimensions or collision semantics.
-
-Before implementing it, review the reconciled documentation and confirm the responsibility boundary remains:
+Return to the planned **visual inspection layer** from the cleaner responsibility boundary:
 
 ```text
-Body / shape
-    true domain geometry
+CanvasKinematicRenderer
+    normal body rendering + interaction feedback
 
 BodyPicker
-    visual interaction hit policy
+    visual hit policy
 
-CanvasExampleHost
-    browser gesture and selection policy
+future inspection layer
+    optional diagnostics only
 ```
 
-After that pass, reassess whether repeated coordinate-frame work has finally earned any shared transform helper such as `Vector2.rotate()` or `Transform2D`; do not introduce either merely because they are plausible future abstractions.
+A small orientation/local-axis indicator is a strong first inspection capability because it makes runtime orientation visible even for rotationally symmetric Circle geometry without changing normal body appearance.
+
+Use that real diagnostic consumer to reassess whether repeated local/world coordinate-frame work has finally earned `Vector2.rotate()`, `Transform2D`, or another shared transform helper. Do not introduce one before the new pressure is visible in actual code.

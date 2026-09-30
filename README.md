@@ -10,9 +10,9 @@ Eventually, vLab2D aims to make simulations not only runnable, but **observable*
 
 ## Project status
 
-**Current checkpoint:** Phase 2 now supports shapeless, Circle, and Rectangle Body definitions. World-owned runtime state includes finite-radian orientation; Canvas and SVG render the resulting geometry in the body's local frame, and Canvas hover, selection, and picking follow the same observed geometry. The Canvas path now composes one `ViewportTransform` explicitly and shares it between rendering, picking, and host interaction.
+**Current checkpoint:** Phase 2 now supports shapeless, Circle, and Rectangle Body definitions. World-owned runtime state includes finite-radian orientation; Canvas and SVG render the resulting geometry in the body's local frame, and Canvas hover, selection, and picking follow the same observed geometry. Canvas picking now adds a small display-space interaction tolerance without changing domain geometry and ranks candidates by distance to visible/pick geometry before using center distance as a tie-breaker.
 
-**Next step:** review the reconciled Phase 2 architecture, then discuss a small display-space picking tolerance at the `BodyPicker` boundary without changing domain geometry.
+**Next step:** return to the visual inspection layer from the cleaner rendering/picking boundary, beginning with a small diagnostic capability such as an orientation/local-axis indicator.
 
 See the [project documentation](docs/project/README.md) for the authoritative current status, project context, decisions, workflow, and continuity information.
 

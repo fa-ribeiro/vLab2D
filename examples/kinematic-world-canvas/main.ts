@@ -17,6 +17,7 @@ const FIXED_TIMESTEP = 1 / 60;
 const MAX_FRAME_DELTA = 0.25;
 
 const SHAPELESS_BODY_RADIUS = 6;
+const PICK_TOLERANCE = 4;
 
 // Resolve the browser drawing surface and its Canvas 2D context.
 const canvas = document.querySelector<HTMLCanvasElement>("#simulation");
@@ -42,17 +43,12 @@ world.addBody(particle, { position: new Vector2(4, 2), velocity: new Vector2(-1,
 
 const circle = new Body({ shape: new Circle(1) });
 
-world.addBody(circle, {
-  position: new Vector2(2, 3),
-  orientation: Math.PI / 4,
-});
+world.addBody(circle, { position: new Vector2(2, 3), orientation: Math.PI / 4 });
 
 const rectangle = new Body({ shape: new Rectangle(2, 1) });
 
-world.addBody(rectangle, {
-  position: new Vector2(5, 4),
-  orientation: Math.PI / 6,
-});
+world.addBody(rectangle, { position: new Vector2(5, 4), orientation: Math.PI / 6 });
+world.addBody(rectangle, { position: new Vector2(-5, 4), orientation: Math.PI / 3 });
 
 const simulation = new Simulation([world]);
 
@@ -62,7 +58,7 @@ viewport.setCenter(3, 2);
 viewport.setPixelsPerUnit(25);
 
 const renderer = new CanvasKinematicRenderer(context, viewport, SHAPELESS_BODY_RADIUS);
-const picker = new BodyPicker(viewport, SHAPELESS_BODY_RADIUS);
+const picker = new BodyPicker(viewport, SHAPELESS_BODY_RADIUS, PICK_TOLERANCE);
 
 const host = new CanvasExampleHost(canvas, world, viewport, picker, renderer);
 

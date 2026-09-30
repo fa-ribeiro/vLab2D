@@ -82,18 +82,18 @@ examples/
 
 The responsibilities are:
 
-| Area | Responsibility |
-| --- | --- |
-| `src/mod.ts` | package-facing composition facade |
-| `src/engine/` | authoritative simulation/domain state and physical definitions |
-| `src/engine/mod.ts` | public engine-layer boundary |
-| `src/engine/math/` | small mathematical values and validation helpers used by the engine |
-| `src/engine/kinematics/` | current linear numerical integration behavior |
-| `src/engine/world/` | body runtime ownership and World behavior |
-| `src/simulation/` | deterministic multi-World orchestration |
-| `src/runtime/browser/` | browser wall-clock execution and fixed-step scheduling |
-| `src/visualization/` | viewport geometry, rendering, and visual hit testing |
-| `examples/` | concrete composition plus example-specific browser/application policy |
+| Area                     | Responsibility                                                        |
+| ------------------------ | --------------------------------------------------------------------- |
+| `src/mod.ts`             | package-facing composition facade                                     |
+| `src/engine/`            | authoritative simulation/domain state and physical definitions        |
+| `src/engine/mod.ts`      | public engine-layer boundary                                          |
+| `src/engine/math/`       | small mathematical values and validation helpers used by the engine   |
+| `src/engine/kinematics/` | current linear numerical integration behavior                         |
+| `src/engine/world/`      | body runtime ownership and World behavior                             |
+| `src/simulation/`        | deterministic multi-World orchestration                               |
+| `src/runtime/browser/`   | browser wall-clock execution and fixed-step scheduling                |
+| `src/visualization/`     | viewport geometry, rendering, and visual hit testing                  |
+| `examples/`              | concrete composition plus example-specific browser/application policy |
 
 These directories are not intended as permanent framework layers simply because they exist. They reflect responsibilities demonstrated by the current implementation.
 
@@ -753,36 +753,47 @@ For Rectangle bodies, hover and selection outlines are drawn in the same body-lo
 
 ---
 
-## 17. BodyPicker and local-coordinate hit testing
+## 17. BodyPicker, local-coordinate hit testing, and pick tolerance
 
 `BodyPicker` answers a visualization-interaction question:
 
-> Which observed body, if any, contains this display-space point?
+> Which observed body is close enough to this display-space point to be the user's intended target?
 
 It deliberately does not answer a physics/collision question.
 
-Current picking semantics are:
+Current picking geometry is:
 
-| Body kind | Picking extent |
-| --- | --- |
-| shapeless | fixed circular display marker |
-| Circle | world radius scaled by current viewport |
+| Body kind | Picking geometry                                            |
+| --------- | ----------------------------------------------------------- |
+| shapeless | fixed circular display marker                               |
+| Circle    | world radius scaled by current viewport                     |
 | Rectangle | world width/height scaled by viewport + current orientation |
+
+The picker adds a non-negative `pickTolerance` measured in display units. This is interaction policy rather than domain geometry: a thin Rectangle or small Circle can remain easy to acquire when zoomed out without changing its physical/world dimensions.
+
+The common candidate rule is:
+
+```text
+distance(pointer, pick geometry) <= pickTolerance
+```
+
+A point already inside the pick geometry has distance zero.
 
 ### Rotated Rectangle
 
-The easiest containment test exists in the Rectangle's own local coordinates.
+The easiest distance calculation exists in the Rectangle's own local coordinates.
 
-Rendering transforms local geometry outward into display space. Picking performs the inverse conceptual operation: it moves the pointer back into local coordinates.
+Rendering transforms local geometry outward into display space. Picking performs the inverse conceptual operation: it moves the pointer back into local coordinates, then measures distance to the simple centered Rectangle.
 
 ```mermaid
 flowchart LR
     POINT["Display pointer"]
     DELTA["Subtract body display center"]
     LOCAL["Inverse display rotation"]
-    TEST["Centered local Rectangle test"]
+    DIST["Distance to centered local Rectangle"]
+    TOL["Compare with pickTolerance"]
 
-    POINT --> DELTA --> LOCAL --> TEST
+    POINT --> DELTA --> LOCAL --> DIST --> TOL
 ```
 
 Current display-space inverse rotation:
@@ -795,16 +806,31 @@ const localX = deltaX * cos - deltaY * sin;
 const localY = deltaX * sin + deltaY * cos;
 ```
 
-Then:
+The shortest local distance to the Rectangle is obtained from the amount by which the point lies outside each half-extent:
 
-```text
-abs(localX) <= halfWidth
-abs(localY) <= halfHeight
+```ts
+const outsideX = Math.max(Math.abs(localX) - halfWidth, 0);
+const outsideY = Math.max(Math.abs(localY) - halfHeight, 0);
+
+const geometryDistanceSquared = outsideX * outsideX + outsideY * outsideY;
 ```
 
-When multiple bodies contain the point, the nearest displayed center wins. Snapshot order is not used as a hit-priority contract.
+This produces a true Euclidean/rounded tolerance around corners. Simply increasing both Rectangle half-extents by the tolerance would create excessive diagonal reach at the corners.
 
-This local-coordinate approach is an important geometry technique that will likely reappear in later collision or diagnostic work, but that future reuse has not yet earned a generic transform framework.
+### Ranking overlapping candidates
+
+Once candidate acceptance is expressed as distance to geometry, the same quantity gives a stronger ranking policy:
+
+```text
+1. nearest pick geometry wins
+2. equal geometry distance → nearest displayed center wins
+```
+
+The center rule therefore remains useful as a tie-breaker. The common tie case is overlapping geometry: when the pointer is inside several bodies, each has geometry distance zero.
+
+Snapshot order is never used as a hit-priority contract.
+
+This local-coordinate/distance approach is an important geometry technique that will likely reappear in later diagnostic or collision work, but the current repetition still does not earn a generic transform or picking framework.
 
 ---
 
@@ -1001,12 +1027,14 @@ Interaction feedback
 
 Picking
     geometry/orientation-aware BodyPicker
+    display-space pick tolerance
+    nearest-geometry ranking + center tie-breaker
 
 Responsibility refinement
     shared Canvas ViewportTransform
     renderer ≠ picker ≠ host policy
 ```
 
-The next planned implementation discussion is a small display-space picking tolerance owned by `BodyPicker`, not by Body/Rectangle/Circle geometry.
+The next planned implementation discussion returns to the optional **visual inspection layer**, starting from the clean rendering/picking boundary. An orientation/local-axis indicator is a strong first candidate because it can make otherwise invisible pose information visible without changing normal body appearance.
 
-After that capability, reassess the coordinate-frame pressure before introducing `Vector2.rotate()`, `Transform2D`, or another shared transform helper.
+That inspection work should also provide the next real evidence for whether repeated local/world coordinate-frame operations have finally earned `Vector2.rotate()`, `Transform2D`, or another shared transform helper.

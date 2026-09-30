@@ -57,11 +57,11 @@ Body
 
 Those cases deliberately have different presentation semantics.
 
-| Body definition | Domain spatial extent | Normal visualization |
-| --- | --- | --- |
-| shapeless | none | fixed display-space circular marker |
-| Circle | finite radius in world units | radius scaled through the viewport |
-| Rectangle | finite width/height in world units | centered local rectangle scaled through the viewport |
+| Body definition | Domain spatial extent              | Normal visualization                                 |
+| --------------- | ---------------------------------- | ---------------------------------------------------- |
+| shapeless       | none                               | fixed display-space circular marker                  |
+| Circle          | finite radius in world units       | radius scaled through the viewport                   |
+| Rectangle       | finite width/height in world units | centered local rectangle scaled through the viewport |
 
 A shapeless marker is presentation-only. Its radius does not become physical geometry merely because it is visible or pickable.
 
@@ -248,11 +248,13 @@ The renderer remains stateless about which body is hovered or selected.
 
 ## Body picking
 
-`BodyPicker` owns display-space hit testing. It receives the same `ViewportTransform` instance used by the Canvas renderer:
+`BodyPicker` owns display-space hit testing. It receives the same `ViewportTransform` instance used by the Canvas renderer together with presentation/picking policy values:
 
 ```ts
-new BodyPicker(viewport, shapelessBodyRadius);
+new BodyPicker(viewport, shapelessBodyRadius, pickTolerance);
 ```
+
+`pickTolerance` is measured in display units. It deliberately belongs to visual interaction rather than Body/shape geometry, so zoom can change the visible size of world geometry without also changing how precisely the user must place the pointer.
 
 Its public query is:
 
@@ -264,23 +266,25 @@ findBodyAtDisplayPoint(
 ): BodyId | undefined
 ```
 
-The picker uses the geometry visible in the observed frame:
+The picker measures the pointer's distance to the geometry visible in the observed frame:
 
 ```text
 shapeless Body
-    fixed circular presentation marker
+    distance to fixed circular presentation marker
 
 Circle
-    world radius × current viewport scale
+    distance to world radius × current viewport scale
 
 Rectangle
-    world width/height × current viewport scale
-    current BodyState.orientation
+    distance to world width/height × current viewport scale
+    after accounting for current BodyState.orientation
 ```
+
+A body becomes a candidate when its geometry distance is no greater than `pickTolerance`. Points inside a body's pick geometry have distance zero.
 
 ### Oriented Rectangle picking
 
-Rendering makes Rectangle geometry simple by drawing in body-local coordinates. Picking applies the inverse idea: transform the pointer displacement back into the Rectangle's local coordinate frame, then test ordinary centered bounds.
+Rendering makes Rectangle geometry simple by drawing in body-local coordinates. Picking applies the inverse idea: transform the pointer displacement back into the Rectangle's local coordinate frame, then measure distance to ordinary centered Rectangle bounds.
 
 Conceptually:
 
@@ -291,11 +295,10 @@ body-relative display vector
     ↓ inverse body rotation
 Rectangle-local vector
     ↓
-|localX| <= halfWidth
-|localY| <= halfHeight
+distance to centered local Rectangle
 ```
 
-The current implementation uses:
+The inverse rotation remains:
 
 ```ts
 const cos = Math.cos(orientation);
@@ -305,9 +308,27 @@ const localX = deltaX * cos - deltaY * sin;
 const localY = deltaX * sin + deltaY * cos;
 ```
 
-The signs correspond to undoing the Canvas display rotation (`-orientation`) while display Y points downward.
+The local Rectangle distance is then computed from the amount by which the point lies outside each half-extent:
 
-If several extents contain the pointer, the picker returns the body whose displayed center is nearest to the pointer. It therefore does not depend on `BodySnapshot[]` ordering, which is not part of the World observation contract.
+```ts
+const outsideX = Math.max(Math.abs(localX) - halfWidth, 0);
+const outsideY = Math.max(Math.abs(localY) - halfHeight, 0);
+
+const distanceSquared = outsideX * outsideX + outsideY * outsideY;
+```
+
+Using Euclidean distance here creates a true rounded tolerance around Rectangle corners rather than the larger diagonal reach produced by simply inflating width and height.
+
+### Candidate ranking
+
+When several bodies lie within tolerance, selection is deterministic and geometry-oriented:
+
+```text
+1. smallest distance to visible/pick geometry wins
+2. if geometry distances tie, nearest displayed center wins
+```
+
+The center rule is therefore a tie-breaker rather than the primary metric. This is especially useful when the pointer lies inside overlapping bodies: every containing geometry has distance zero, so center distance resolves the ambiguity without depending on `BodySnapshot[]` ordering.
 
 No collision shape, broad phase, spatial index, or generic picking framework is implied by this interaction query.
 

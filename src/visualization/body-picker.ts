@@ -11,6 +11,7 @@ import { ViewportTransform } from "./viewport-transform.ts";
 export class BodyPicker {
   readonly #transform: ViewportTransform;
   readonly #shapelessBodyRadius: number;
+  readonly #pickTolerance: number;
 
   /**
    * Creates a body picker.
@@ -18,31 +19,37 @@ export class BodyPicker {
    * @param transform The shared world-to-display viewport transform.
    * @param shapelessBodyRadius The fixed display-space radius used by the
    * presentation marker for shapeless bodies.
-   * @throws {RangeError} If the shapeless body radius is not positive and finite.
+   * @param pickTolerance The non-negative display-space distance outside body
+   * geometry that still counts as a pick.
+   * @throws {RangeError} If the shapeless body radius is not positive and finite
+   * or the pick tolerance is negative or not finite.
    */
-  public constructor(transform: ViewportTransform, shapelessBodyRadius = 4) {
+  public constructor(transform: ViewportTransform, shapelessBodyRadius = 4, pickTolerance = 0) {
     assertPositiveFinite(shapelessBodyRadius, "Shapeless body radius");
+    assertNonNegativeFinite(pickTolerance, "Pick tolerance");
 
     this.#transform = transform;
     this.#shapelessBodyRadius = shapelessBodyRadius;
+    this.#pickTolerance = pickTolerance;
   }
 
   /**
-   * Finds the nearest body whose current display-space extent contains a point.
+   * Finds the body nearest to a display-space point within the pick tolerance.
    *
    * Shapeless bodies use their fixed circular presentation marker. Circle and
    * Rectangle bodies use their world-space geometry transformed by the current
    * viewport scale. Rectangle picking transforms the display-space point into
-   * the body-local coordinate frame before testing local bounds.
+   * the body-local coordinate frame before measuring distance to local bounds.
    *
-   * When multiple bodies contain the point, the body with the nearest display-
-   * space center is returned.
+   * Candidate bodies are ranked first by distance from the pointer to their
+   * displayed geometry. When those distances are equal, the nearest display-
+   * space body center wins.
    *
    * @param snapshots Detached body observations to test.
    * @param displayX Horizontal point coordinate in display units.
    * @param displayY Vertical point coordinate in display units.
-   * @returns The identifier of the nearest hit body, or `undefined` when no
-   * body contains the point.
+   * @returns The identifier of the nearest candidate body, or `undefined` when
+   * no body lies within the pick tolerance.
    */
   public findBodyAtDisplayPoint(
     snapshots: readonly BodySnapshot[],
@@ -50,7 +57,10 @@ export class BodyPicker {
     displayY: number,
   ): BodyId | undefined {
     let nearestBodyId: BodyId | undefined;
-    let nearestDistanceSquared = Number.POSITIVE_INFINITY;
+    let nearestGeometryDistanceSquared = Number.POSITIVE_INFINITY;
+    let nearestCenterDistanceSquared = Number.POSITIVE_INFINITY;
+
+    const toleranceSquared = this.#pickTolerance * this.#pickTolerance;
 
     for (const snapshot of snapshots) {
       const bodyX = this.#transform.worldToDisplayX(snapshot.state.position.x);
@@ -58,11 +68,15 @@ export class BodyPicker {
 
       const deltaX = displayX - bodyX;
       const deltaY = displayY - bodyY;
-      const distanceSquared = deltaX * deltaX + deltaY * deltaY;
+      const centerDistanceSquared = deltaX * deltaX + deltaY * deltaY;
 
       const shape = snapshot.definition.shape;
 
-      let hit: boolean;
+      // Picking measures distance to the body's visible/pick geometry rather
+      // than distance to its center. A point inside the geometry therefore has
+      // zero geometry distance and is already an exact hit before tolerance is
+      // considered.
+      let geometryDistanceSquared: number;
 
       if (shape instanceof Rectangle) {
         const halfWidth = (shape.width * this.#transform.pixelsPerUnit) / 2;
@@ -70,29 +84,58 @@ export class BodyPicker {
 
         // Rendering rotates Rectangle-local coordinates by -orientation because
         // display Y points down. Picking applies the inverse display rotation so
-        // the point can be tested against the simple local Rectangle bounds.
+        // distance can be measured against the simple local Rectangle bounds.
         const cos = Math.cos(snapshot.state.orientation);
         const sin = Math.sin(snapshot.state.orientation);
 
         const localX = deltaX * cos - deltaY * sin;
         const localY = deltaX * sin + deltaY * cos;
 
-        hit = Math.abs(localX) <= halfWidth && Math.abs(localY) <= halfHeight;
+        // Each outside component is zero while the point lies inside that
+        // Rectangle axis. Their Euclidean length is therefore the shortest
+        // distance to the local Rectangle boundary. This produces a true rounded
+        // tolerance around corners instead of simply inflating width and height.
+        const outsideX = Math.max(Math.abs(localX) - halfWidth, 0);
+        const outsideY = Math.max(Math.abs(localY) - halfHeight, 0);
+
+        geometryDistanceSquared = outsideX * outsideX + outsideY * outsideY;
       } else {
         const radius = shape === undefined
           ? this.#shapelessBodyRadius
           : shape.radius * this.#transform.pixelsPerUnit;
 
-        hit = distanceSquared <= radius * radius;
+        const distanceFromCenter = Math.sqrt(centerDistanceSquared);
+        const distanceFromGeometry = Math.max(0, distanceFromCenter - radius);
+
+        geometryDistanceSquared = distanceFromGeometry * distanceFromGeometry;
       }
 
-      if (hit && distanceSquared < nearestDistanceSquared) {
+      if (geometryDistanceSquared > toleranceSquared) {
+        continue;
+      }
+
+      // Geometry distance is the primary ranking metric. Center distance only
+      // breaks ties, which commonly occur when the pointer lies inside multiple
+      // overlapping bodies and every containing geometry has distance zero.
+      const geometryIsNearer = geometryDistanceSquared < nearestGeometryDistanceSquared;
+      const geometryDistanceIsEqual =
+        geometryDistanceSquared === nearestGeometryDistanceSquared;
+      const centerIsNearer = centerDistanceSquared < nearestCenterDistanceSquared;
+
+      if (geometryIsNearer || (geometryDistanceIsEqual && centerIsNearer)) {
         nearestBodyId = snapshot.id;
-        nearestDistanceSquared = distanceSquared;
+        nearestGeometryDistanceSquared = geometryDistanceSquared;
+        nearestCenterDistanceSquared = centerDistanceSquared;
       }
     }
 
     return nearestBodyId;
+  }
+}
+
+function assertNonNegativeFinite(value: number, name: string): void {
+  if (!Number.isFinite(value) || value < 0) {
+    throw new RangeError(`${name} must be a non-negative finite number.`);
   }
 }
 
