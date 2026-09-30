@@ -1,18 +1,52 @@
 # Workflow and Working Arrangement
 
-Last updated: 2026-09-27
+Last updated: 2026-09-30
 
 ## Development style
 
 - Work in small, visible, satisfying increments.
 - Prefer a runnable experiment over a large unfinished architecture.
-- Introduce one meaningful concept/problem at a time when possible.
+- Introduce one meaningful capability/problem at a time when possible.
+- Choose increments by **stable capability**, not by the smallest possible number of changed lines.
 - Allow code to become slightly uncomfortable before extracting abstractions.
 - Refactor because a real need has appeared, not because a pattern is fashionable.
 - Prefer focused responsibilities and separation of concerns.
 - Prefer composition over inheritance for varying behavior.
 - Inject replaceable collaborators/policies explicitly when doing so clarifies dependencies or enables meaningful alternatives; avoid ceremonial DI for trivial values/helpers.
 - Keep optional future ideas in a backlog rather than treating them as commitments.
+
+## Capability-pass granularity
+
+A development pass should end in a stable, useful capability worth keeping. The goal is not to keep every intermediate edit or compiler-visible state independently releasable.
+
+A useful distinction is:
+
+- **edit** — an implementation detail inside a pass; it may be incomplete or temporarily fail checks;
+- **pass** — a coherent capability with implementation, lasting tests, relevant documentation, and a green verification boundary;
+- **phase** — a larger architectural or product goal composed of several passes.
+
+Within a pass:
+
+- use compiler/type errors as navigation toward the places that must adapt;
+- run focused tests whenever they help development;
+- allow temporary red states while the coherent capability is still being assembled;
+- do not automatically turn a short-lived intermediate limitation into production behavior;
+- avoid adding guards, exceptions, tests, or JSDoc for a known temporary gap unless that gap is expected to survive for a meaningful period or the guard prevents dangerous/silent behavior;
+- prefer tests that describe the intended lasting contract over tests that institutionalize behavior scheduled for immediate deletion;
+- prefer documentation of stable boundaries over repeated documentation churn for transitory implementation states.
+
+The complete `deno task verify` gate is required at the **pass boundary** and before committing the completed pass. It does not need to be green after every internal edit.
+
+After each completed pass, stop and review what the implementation taught us before choosing the next pass. That checkpoint should explicitly consider:
+
+- what assumptions were validated or disproved;
+- what architectural pressure appeared in the real code;
+- whether an abstraction is now earned by concrete duplication or coupling;
+- what algorithms or data-model choices the next capability requires;
+- which alternatives remain credible and what trade-offs they carry;
+- whether the next pass should preserve the current design or deliberately reshape it.
+
+This reflection checkpoint is part of the work, not overhead. It is where implementation evidence becomes architecture.
 
 ## Learning style
 
@@ -22,10 +56,11 @@ When a new technical problem appears:
 2. Identify the standard approaches that are appropriate for this level of project.
 3. Explain the relevant idea and tradeoffs.
 4. Choose the simplest approach that teaches something useful.
-5. Implement a small version.
+5. Implement a coherent capability pass.
 6. Observe it visually and/or with diagnostics.
 7. Compare alternatives when the comparison itself is interesting.
-8. Refactor only when the implementation gives us evidence that refactoring is useful.
+8. Review the lessons learned before defining the next pass.
+9. Refactor only when the implementation gives us evidence that refactoring is useful.
 
 ## Documentation and code-comment style
 
@@ -59,6 +94,9 @@ Documentation should help a future version of the user answer: “Why did I writ
 - When proposing classes/interfaces, explain the responsibility and dependency boundary they are intended to protect.
 - Do not introduce deep inheritance trees when composition or a simple function/object would express the behavior more clearly.
 - Avoid expanding scope merely because a professional engine might include a feature.
+- Treat compiler failures and temporary red states inside an active pass as development feedback, not automatically as new public contracts that need guards/tests/docs.
+- Prefer finishing a coherent vertical capability over repeatedly formalizing temporary unsupported states that are scheduled to disappear within the same pass.
+- Pause after each completed pass to discuss findings, lessons learned, architectural pressure, and options for the next pass before implementation continues.
 - Track meaningful decisions in `decisions.md`.
 - Track operational progress in `status.md`.
 - Track tooling/version changes in `environment.md`.
@@ -249,6 +287,7 @@ Do not hide important tradeoffs behind "best practice" language.
 - Test contracts and behavior rather than implementation details where practical.
 - Include important edge cases and error paths.
 - Numerical code should use assertions/tolerances appropriate to floating-point behavior rather than brittle exact comparisons when exact equality is not a valid contract.
+- Prefer lasting behavioral tests over tests for known short-lived intermediate restrictions.
 - Prefer a smaller suite we trust over superficial tests added only to increase coverage.
 
 ## Visual-learning standard
@@ -276,19 +315,19 @@ Every symbol that forms part of the exported public engine API must have JSDoc s
 
 The public engine root module is part of the documentation-quality workflow: lint it with `deno doc --lint` and generate searchable HTML with `deno doc --html`. Prefer native Deno documentation tooling over a third-party generator unless a demonstrated project need justifies the dependency.
 
-## Step-based feature lifecycle
+## Capability-pass feature lifecycle
 
-vLab2D is developed in small, understandable, independently reviewable steps.
+vLab2D is developed in coherent, understandable, independently reviewable capability passes.
 
-Each feature starts from an accepted repository baseline and should introduce the smallest useful capability that advances the project or proves the need for a new abstraction.
+Each pass starts from an accepted repository baseline and should end in the smallest **stable and useful capability** worth keeping. Internal edits may temporarily be incomplete or fail checks; they do not need to become public behavior merely to preserve an artificial intermediate checkpoint.
 
 The normal lifecycle is:
 
 1. **Establish the baseline**
    - Start from the latest commit explicitly confirmed and verified as the project baseline.
    - Retrieve affected existing files from that exact commit before proposing or generating edits.
-   - Review `status.md` to understand the current checkpoint and next small goal.
-   - If explicit uncommitted work exists for the active feature, treat it as a known layer on top of the baseline rather than replacing the baseline with an assumed local snapshot.
+   - Review `status.md` to understand the current checkpoint and next capability goal.
+   - If explicit uncommitted work exists for the active pass, treat it as a known layer on top of the baseline rather than replacing the baseline with an assumed local snapshot.
 
 2. **Understand the problem**
    - Clarify the concepts, terminology, algorithms, and responsibilities involved.
@@ -296,54 +335,62 @@ The normal lifecycle is:
    - Discuss advantages, disadvantages, trade-offs, and common mistakes.
    - Prefer established techniques when they exist, adapting them to the scale and learning goals of vLab2D.
 
-3. **Agree on the smallest useful scope**
-   - Define what the feature should do.
-   - Explicitly identify what it should _not_ do yet.
+3. **Agree on the smallest stable capability**
+   - Define what the pass should make genuinely usable by its end.
+   - Explicitly identify what belongs to a later pass.
+   - Choose the boundary so that known short-lived unsupported states inside the pass do not need to become durable contracts.
    - Avoid speculative abstractions and functionality whose need has not been demonstrated.
 
-4. **Implement incrementally**
-   - Build the feature from the ground up.
+4. **Implement the capability**
+   - Build the pass from the ground up.
+   - Use compiler errors and focused tests to reveal downstream assumptions that must adapt.
+   - Allow temporary red states while the coherent capability is still being assembled.
    - Explain important TypeScript, architectural, mathematical, and algorithmic decisions as they appear.
    - Keep modules focused and dependencies explicit.
-   - Document exported public API symbols with JSDoc.
+   - Document exported public API symbols with JSDoc when their stable contract is known.
    - Comment internal code only when the comment adds meaning that the code itself does not communicate clearly.
+   - Do not add temporary unsupported guards/tests/docs unless the limitation will intentionally survive the pass or prevents unsafe/silent behavior.
 
-5. **Test meaningful behavior**
+5. **Test lasting behavior**
    - Add colocated unit tests where appropriate.
-   - Prioritize behavioral contracts, invariants, edge cases, failure behavior, and regression protection over coverage metrics.
+   - Prioritize final behavioral contracts, invariants, edge cases, failure behavior, and regression protection over coverage metrics.
    - Avoid tests that merely mirror implementation details.
+   - Avoid tests whose only purpose is to freeze an intermediate restriction scheduled to disappear before the pass ends.
    - Use test doubles when they help isolate the responsibility under test.
 
-6. **Verify the implementation**
-   - Run focused tests while developing.
-   - Run the complete project quality gate:
+6. **Verify the pass**
+   - Run focused tests while developing as useful.
+   - At the completed pass boundary, run the complete project quality gate:
 
    ```sh
    deno task verify
    ```
 
-7. **Review together**
+7. **Review findings and lessons learned**
    - Review the implementation, API shape, naming, tests, documentation, and architectural fit.
-   - A passing test suite is necessary but does not by itself mean the feature is complete.
-   - Do not move to the next feature until the current implementation is understood and approved.
+   - Identify what the real implementation taught us: duplicated logic, awkward boundaries, new invariants, useful abstractions, or disproved assumptions.
+   - Discuss architecture, algorithms, alternatives, and trade-offs for the next pass before implementing it.
+   - A passing test suite is necessary but does not by itself mean the pass is understood or complete.
 
 8. **Perform the pre-commit documentation review**
-   - Update `status.md` to describe the new current checkpoint and the next small goal.
-   - Update `decisions.md` only when the feature establishes or changes a durable project decision.
+   - Update `status.md` to describe the new current checkpoint and the next capability goal.
+   - Update `decisions.md` only when the pass establishes or changes a durable project decision.
    - Update other project documentation only when its authoritative information has actually changed.
+   - Document the stable end state of the pass; avoid documenting temporary implementation states that no longer exist.
    - Avoid duplicating information between documents.
-   - Prepare every affected Markdown file as a complete replacement derived from the exact baseline file plus the explicitly approved current feature changes.
+   - Prepare every affected Markdown file as a complete replacement derived from the exact baseline file plus the explicitly approved current pass changes.
    - Share each complete `.md` file as an open/download artifact rather than as inline Markdown patches or fenced full-file source.
    - When several Markdown files change together, a ZIP preserving repository-relative paths may also be provided for convenience.
 
 9. **Perform the pre-commit verification**
    - Run `deno task verify` again after documentation changes.
    - Review `git status`, the diff, and the staged diff.
-   - Confirm that implementation, tests, API documentation, and project documentation all describe the same project state.
+   - Confirm that implementation, tests, API documentation, and project documentation all describe the same stable pass result.
 
-10. **Commit the completed step**
-    - Prefer one coherent commit containing the feature, its tests, its API documentation, and the relevant project-documentation updates.
-    - The commit should represent a trustworthy checkpoint that can be understood and resumed independently.
+10. **Commit the completed pass**
+    - Prefer one coherent commit containing the capability, its lasting tests, its API documentation, and the relevant project-documentation updates.
+    - A small commit group is acceptable when there is a practical reason, but avoid manufacturing commits solely to preserve predictable temporary states.
+    - The final commit should represent a trustworthy checkpoint that can be understood and resumed independently.
 
 11. **Establish the new baseline**
     - After the commit is created, the commit identifier is shared explicitly.
@@ -353,15 +400,17 @@ The normal lifecycle is:
 ```mermaid
 flowchart LR
     B[Baseline] --> U[Understand]
-    U --> S[Scope]
-    S --> I[Implement]
-    I --> T[Test]
+    U --> S[Scope stable capability]
+    S --> I[Implement pass]
+    I --> T[Test lasting behavior]
     T --> V[Verify]
-    V --> R[Review]
-    R --> D[Update docs]
+    V --> R[Review findings]
+    R --> N[Discuss next pass]
+    R --> D[Update stable docs]
     D --> P[Pre-commit verify]
-    P --> C[Commit]
+    P --> C[Commit pass]
     C --> NB[New baseline]
+    NB --> N
 ```
 
-The purpose of this lifecycle is not process for its own sake. Each completed step should be small enough to understand completely and strong enough to serve as a reliable foundation for the next one.
+The purpose of this lifecycle is not process for its own sake. Each pass should be small enough to understand completely, large enough to avoid wasting effort formalizing disposable intermediate states, and strong enough to serve as a reliable foundation for the next capability.
