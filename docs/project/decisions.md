@@ -1,6 +1,6 @@
 # Decisions and Architectural Intentions
 
-Last updated: 2026-09-28
+Last updated: 2026-09-30
 
 This file records decisions that should survive chat boundaries. Some entries are architectural intentions rather than implementation commitments; those are labeled accordingly.
 
@@ -461,7 +461,7 @@ Phase 1D implements this established timing policy in `BrowserSimulationRuntime`
 
 ## D-049 — World-to-display mapping is owned by a shared viewport transform
 
-**Status:** Accepted
+**Status:** Accepted; Canvas composition evolved by D-076
 
 SVG and Canvas independently demonstrated the same viewport configuration and world-to-display coordinate mapping.
 
@@ -524,7 +524,7 @@ This extraction is Canvas-led viewport evolution that also remains naturally use
 
 ## D-052 — Viewport position is represented by a mutable world-space center
 
-**Status:** Accepted
+**Status:** Accepted; Canvas composition evolved by D-076
 
 `ViewportTransform` represents which part of the world is being viewed through a mutable world-space center while retaining immutable viewport dimensions and display scale.
 
@@ -559,7 +559,7 @@ Published version tags are immutable historical markers: do not move or reuse an
 
 ## D-054 — Inverse display-to-world mapping belongs to the viewport transform
 
-**Status:** Accepted
+**Status:** Accepted; Canvas access evolved by D-076
 
 `ViewportTransform` owns inverse display-to-world coordinate mapping in addition to forward world-to-display conversion.
 
@@ -575,7 +575,7 @@ This adds bidirectional coordinate conversion without introducing a point value 
 
 ## D-055 — Viewport scale is mutable geometry while zoom interaction policy belongs to the host
 
-**Status:** Accepted
+**Status:** Accepted; Canvas access evolved by D-076
 
 `ViewportTransform` treats display scale (`pixelsPerUnit`) as mutable viewport state alongside the mutable world-space center, while viewport width and height remain immutable.
 
@@ -591,7 +591,7 @@ The transform therefore owns zoom geometry and viewport invariants, while the ho
 
 ## D-056 — Body picking uses Canvas presentation geometry and rendered snapshots
 
-**Status:** Accepted
+**Status:** Accepted; picking ownership evolved by D-076
 
 The first body-picking capability is a Canvas visualization query rather than an engine/world spatial query.
 
@@ -1066,3 +1066,150 @@ The design avoids:
 The same Body definition may be instantiated multiple times. Snapshots for those runtime instances therefore legitimately share the same `definition` reference while carrying independent `id` and `state` values.
 
 This checkpoint changes the observation contract but does not change rendering or picking behavior. Canvas and SVG continue using their existing fixed display markers until the Circle-rendering slice explicitly adopts domain geometry.
+
+## D-073 — Rectangle is the second concrete Body geometry; `BodyShape` remains a concrete union
+
+**Status:** Accepted and implemented
+
+`Rectangle` is the second concrete immutable Body geometry definition.
+
+A Rectangle owns positive finite `width` and `height` values expressed in simulation/world units. Its intrinsic local coordinate system is centered at the Rectangle's origin:
+
+```text
+x ∈ [-width / 2, +width / 2]
+y ∈ [-height / 2, +height / 2]
+```
+
+The Rectangle definition does not own world position, orientation, velocity, angular velocity, material, mass, or presentation styling.
+
+With two concrete geometry variants, Body geometry is generalized only as far as the implementation currently requires:
+
+```ts
+export type BodyShape = Circle | Rectangle;
+```
+
+A discriminated Shape hierarchy, abstract base class, visitor, kind enumeration, or polymorphic geometry protocol is not introduced merely because a second shape now exists. Direct union typing and concrete type checks remain sufficient for the current rendering and picking consumers.
+
+The current `Body.shape` relationship still represents zero-or-one geometry as a Phase 2 learning checkpoint. It does not replace the longer-term cardinality direction in D-064 that a Body may eventually require zero-or-more geometry attachments.
+
+Rectangle geometry does not introduce collision behavior, mass/material properties, compound shapes, or rotational dynamics by itself.
+
+## D-074 — Orientation is World-owned runtime state expressed in finite radians
+
+**Status:** Accepted and implemented
+
+Body orientation belongs to each world-local runtime instance rather than to the reusable `Body`, `Circle`, or `Rectangle` definition.
+
+`BodyInitialConditions` accepts optional orientation and `BodyState` stores current orientation:
+
+```text
+BodyInitialConditions
+    position?
+    velocity?
+    orientation?
+
+BodyState
+    position
+    velocity
+    orientation
+```
+
+Orientation defaults to `0` radians.
+
+The engine keeps the established mathematical world-coordinate convention:
+
+```text
++X → right
++Y → up
+positive orientation → counter-clockwise
+```
+
+Any finite radian value is valid. Orientation is intentionally not normalized to a canonical interval because no current consumer requires canonical angles.
+
+Circle and shapeless bodies may carry orientation even when their present visual outline does not reveal it. Runtime state describes the pose of the instantiated body; geometry determines whether that pose is visually apparent.
+
+The current kinematic integrators advance linear position and velocity only. They preserve orientation unchanged so an integrator responsible for translational motion does not erase unrelated runtime state.
+
+This decision does not introduce angular velocity, torque, moment of inertia, angular acceleration, rotational integration, or collision response.
+
+## D-075 — Normal rendering and interaction feedback use body-local geometry and World-owned pose
+
+**Status:** Accepted and implemented
+
+Canvas and SVG render intrinsic body geometry by combining immutable shape definition data with the current World-owned runtime pose from `BodySnapshot.state`.
+
+Rectangle geometry is drawn around the body's local origin, then placed and rotated through renderer-native transforms. This keeps intrinsic Rectangle dimensions independent from world position and orientation.
+
+Positive orientation remains counter-clockwise in mathematical world space. Canvas and SVG display Y points downward, so both renderers negate the world angle when expressing the equivalent display-space rotation.
+
+Circle geometry follows the same runtime orientation contract even though a plain Circle outline is rotationally symmetric and therefore looks unchanged when rotated.
+
+Shapeless Bodies remain different: their fixed visible marker is presentation-only fallback geometry rather than domain spatial extent.
+
+Hover and selection identity remain browser-host/application state. `CanvasKinematicRenderer` receives those identities as per-frame presentation input and draws interaction feedback around the same observed body geometry. Rectangle hover and selection outlines therefore share the Rectangle's local transformed coordinate frame and follow its orientation.
+
+The project distinguishes:
+
+```text
+physical/domain representation
+    Body / shape / BodyState
+
+normal appearance
+    current basic geometry rendering
+    future material / texture / sprite concerns
+
+interaction / diagnostic presentation
+    hover / selection today
+    future optional axes / vectors / contacts / bounds
+```
+
+Renderer-native transforms are currently sufficient for normal geometry rendering. `Transform2D` and `Vector2.rotate()` are not introduced solely to wrap capabilities already provided naturally by Canvas/SVG; they should be reconsidered if project-owned coordinate-frame operations repeat across future consumers.
+
+## D-076 — Canvas picking is a separate Visualization collaborator sharing one explicitly composed viewport transform
+
+**Status:** Accepted and implemented
+
+Canvas drawing, visual hit testing, and browser interaction now have distinct concrete responsibilities while sharing one source of mutable viewport state.
+
+The Canvas composition root creates one `ViewportTransform` and supplies it to:
+
+```text
+CanvasKinematicRenderer
+BodyPicker
+CanvasExampleHost
+```
+
+Their responsibilities are:
+
+```text
+CanvasKinematicRenderer
+    draw observed bodies and spatial references
+
+BodyPicker
+    resolve display-space pointer positions against observed body extents
+
+CanvasExampleHost
+    own DOM/input policy, pan/zoom policy, hover/selection identity,
+    inspection output, and per-frame orchestration
+
+ViewportTransform
+    own viewport geometry and world/display conversion
+```
+
+`BodyPicker` uses the same transform as Canvas rendering so picking observes exactly the current pan/zoom state. Its hit geometry currently distinguishes:
+
+- shapeless Bodies — fixed circular presentation marker;
+- Circles — world-scaled circular geometry;
+- Rectangles — world-scaled width/height plus current BodyState orientation.
+
+Rotated Rectangle picking transforms the pointer displacement into the body's local coordinate frame and then tests ordinary centered Rectangle bounds. When several bodies contain the pointer, the nearest displayed center wins rather than relying on snapshot order.
+
+This decision supersedes the **Canvas-specific ownership/facade clauses** in D-049, D-052, D-054, and D-055 that described `CanvasKinematicRenderer` as internally owning its transform and forwarding viewport operations. The viewport geometry responsibilities established by those decisions remain valid; only Canvas composition/ownership has evolved.
+
+This decision also supersedes the **renderer-owned picking location** described in D-056 and the renderer-method references carried forward into D-057/D-058. The underlying decisions remain valid: picking is a Visualization interaction query against rendered/observed geometry, hover/selection identity belongs to the host, and click-versus-drag policy remains browser-host responsibility.
+
+The earlier renderer-owned design was appropriate while rendering was the only concrete Canvas viewport consumer. `BodyPicker` created a second real consumer of the same mutable state, establishing the pressure needed for explicit shared composition.
+
+SVG does not mirror this construction merely for symmetry. `SvgKinematicRenderer` still creates and owns its `ViewportTransform` internally because no separate SVG collaborator currently needs to share that state.
+
+This refinement does not introduce a generic renderer interface, picker interface, camera abstraction, transformation strategy, collision system, or interaction framework.

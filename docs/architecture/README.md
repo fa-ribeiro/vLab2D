@@ -1,68 +1,57 @@
 # Architecture
 
-This section explains how vLab2D is structured, how its current components collaborate, and which boundaries the project deliberately protects.
+This section explains the **implemented architecture** of vLab2D: the responsibilities that exist in source today, how those responsibilities collaborate, and which boundaries the project deliberately protects.
 
-vLab2D is an exploratory learning project rather than a production physics engine, so its architecture is intentionally allowed to grow with the implementation.
+vLab2D is an exploratory learning project, so the architecture is expected to evolve as new capabilities create concrete pressure. The documentation therefore distinguishes between:
 
-The architecture documentation therefore distinguishes between:
+- **implemented architecture** — relationships visible in the current code;
+- **established principles** — rules that guide new work;
+- **future directions** — plausible abstractions that have not yet earned implementation.
 
-- **implemented architecture** — structures and boundaries visible in the current code;
-- **architectural principles** — deliberate rules that guide new work;
-- **future directions** — plausible extensions that have not yet earned an implementation.
-
-The goal is not to predict the final system. It is to make the current system understandable.
+The goal is not to predict a final framework. It is to make the current system understandable.
 
 ---
 
 ## 1. Architecture at a glance
 
-At the current checkpoint, vLab2D has four concrete architectural layers:
+vLab2D currently has four conceptual layers:
 
-1. an independent simulation engine;
-2. deterministic Simulation orchestration above one or more Worlds;
-3. visualization outside the engine and Simulation layers;
-4. browser Runtime scheduling that drives Simulation while remaining independent from rendering.
+1. **Engine / Domain** — reusable physical definitions, world-owned authoritative state, mathematical values, and numerical integration policy;
+2. **Simulation / Orchestration** — deterministic coordination of one or more Worlds;
+3. **Runtime** — host execution and wall-clock scheduling;
+4. **Visualization** — rendering and visual interaction against detached observations.
 
 ```mermaid
 flowchart LR
-    HOST["Host / Example"]
+    HOST["Example / host"]
     RUNTIME["BrowserSimulationRuntime"]
     SIM["Simulation"]
-
     WORLD["World"]
-    SNAP["Detached snapshots"]
-
-    TRANSFORM["ViewportTransform"]
-    SVG["SvgKinematicRenderer"]
-    CANVAS["CanvasKinematicRenderer"]
+    SNAP["BodySnapshot[]"]
+    VIS["Visualization"]
 
     HOST --> RUNTIME
     RUNTIME --> SIM
     SIM --> WORLD
 
-    HOST --> WORLD
     WORLD --> SNAP
-
-    TRANSFORM --> SVG
-    TRANSFORM --> CANVAS
-
-    SNAP --> SVG
-    SNAP --> CANVAS
+    SNAP --> VIS
+    HOST --> VIS
 ```
 
-The most important dependency rule is:
+The most important dependency rule remains:
 
 ```text
-simulation engine does not depend on visualization
+engine/domain does not depend on visualization or browser runtime
 ```
 
-Visualization may observe information exposed by the engine, but rendering concerns do not enter the simulation core.
+Visualization may observe engine output, but rendering and interaction concerns do not enter the engine.
 
 ---
 
 ## 2. Repository-level boundaries
 
-The current source tree exposes the architecture directly:
+The current source tree communicates the implemented responsibilities directly:
 
 ```text
 src/
@@ -73,57 +62,55 @@ src/
 │   ├── math/
 │   ├── world/
 │   └── mod.ts
-│
 ├── simulation/
 │   └── simulation.ts
-│
 ├── runtime/
 │   └── browser/
 │       └── simulation-runtime.ts
-│
 └── visualization/
+    ├── body-picker.ts
     ├── canvas-kinematic-renderer.ts
     ├── svg-kinematic-renderer.ts
-    └── viewport-transform.ts
+    ├── viewport-transform.ts
+    └── README.md
 
 examples/
-├── kinematic-world-canvas/
-│   ├── canvas-example-host.ts
-│   └── main.ts
-└── kinematic-world-svg.ts
+└── kinematic-world-canvas/
+    ├── canvas-example-host.ts
+    └── main.ts
 ```
 
-These areas have different responsibilities.
+The responsibilities are:
 
-| Area                     | Responsibility                                                                |
-| ------------------------ | ----------------------------------------------------------------------------- |
-| `src/mod.ts`             | Provide the package-facing composition facade                                 |
-| `src/engine/`            | Own and advance simulation state                                              |
-| `src/engine/mod.ts`      | Define the public consumer-facing engine boundary                             |
-| `src/engine/math/`       | Small mathematical values and operations used by the engine                   |
-| `src/engine/kinematics/` | Numerical integration behavior for current kinematic body state               |
-| `src/engine/world/`      | Own collections of simulated bodies and their authoritative state             |
-| `src/simulation/`        | Coordinate deterministic stepping and per-World execution status              |
-| `src/runtime/browser/`   | Drive Simulation from browser wall-clock scheduling and fixed-timestep timing |
-| `src/visualization/`     | Convert observed simulation information into visual representations           |
-| `examples/`              | Compose components into runnable scenarios                                    |
+| Area | Responsibility |
+| --- | --- |
+| `src/mod.ts` | package-facing composition facade |
+| `src/engine/` | authoritative simulation/domain state and physical definitions |
+| `src/engine/mod.ts` | public engine-layer boundary |
+| `src/engine/math/` | small mathematical values and validation helpers used by the engine |
+| `src/engine/kinematics/` | current linear numerical integration behavior |
+| `src/engine/world/` | body runtime ownership and World behavior |
+| `src/simulation/` | deterministic multi-World orchestration |
+| `src/runtime/browser/` | browser wall-clock execution and fixed-step scheduling |
+| `src/visualization/` | viewport geometry, rendering, and visual hit testing |
+| `examples/` | concrete composition plus example-specific browser/application policy |
 
-The folders are not intended as permanent framework layers. They exist because concrete implementation responsibilities have appeared. Phase 1 deliberately stops here rather than renaming accurate folders merely to match an earlier speculative tree.
+These directories are not intended as permanent framework layers simply because they exist. They reflect responsibilities demonstrated by the current implementation.
 
 ---
 
 ## 3. Dependency direction
 
-vLab2D deliberately keeps dependencies pointing toward simulation concepts rather than allowing presentation concerns to leak inward.
+Dependencies point toward simulation/domain concepts rather than allowing presentation concerns to leak inward.
 
 ```mermaid
 flowchart TD
-    EXAMPLE["Example / future application"]
+    EXAMPLE["Example / host"]
     PACKAGE["Package facade<br/>src/mod.ts"]
-    RUNTIME["Browser Runtime"]
+    RUNTIME["Runtime"]
     SIM["Simulation"]
     VIS["Visualization"]
-    API["Engine layer API<br/>src/engine/mod.ts"]
+    API["Engine API<br/>src/engine/mod.ts"]
     WORLD["World"]
     KIN["Kinematics"]
     MATH["Math"]
@@ -145,186 +132,258 @@ flowchart TD
 
     WORLD --> KIN
     WORLD --> MATH
-
     KIN --> MATH
 ```
 
-There is deliberately no dependency in the opposite direction:
+There is deliberately no reverse dependency from engine/domain code to Canvas, SVG, DOM APIs, browser scheduling, hover state, selection state, or picking policy.
 
-```mermaid
-flowchart LR
-    ENGINE["Engine"] -. "does not know about" .-> RENDERER["Renderer"]
-    ENGINE -. "does not know about" .-> UI["UI"]
-    ENGINE -. "does not know about" .-> EXAMPLE["Example / host"]
-```
+A simulation can run without a renderer.
 
-This gives the engine a useful property:
-
-> A simulation can run without any renderer at all.
-
-Likewise, a renderer does not advance physics. It consumes observations produced by the engine.
+A renderer can consume detached observations without advancing physics.
 
 ---
 
-## 4. The engine boundary
+## 4. Domain lifecycle: definition, initial conditions, runtime state
 
-External consumers are expected to enter the simulation engine through:
-
-```text
-src/engine/mod.ts
-```
-
-`mod.ts` exports the engine's supported public concepts while internal modules remain implementation details.
-
-```mermaid
-flowchart LR
-    EXT["External consumer"]
-    API["src/engine/mod.ts<br/>public boundary"]
-
-    subgraph INTERNAL["Engine implementation"]
-        BODY["Body"]
-        WORLD["World"]
-        INT["Kinematic integrators"]
-        STATE["BodyState / BodySnapshot"]
-        VEC["Vector2"]
-    end
-
-    EXT --> API
-
-    API --> BODY
-    API --> WORLD
-    API --> INT
-    API --> STATE
-    API --> VEC
-```
-
-TypeScript does not physically prevent a consumer from importing an internal file directly.
-
-The boundary is therefore both:
-
-- a source-code convention;
-- a documented API contract.
-
-Project code outside the engine should prefer `mod.ts`.
-
-Both visualization renderers follow this rule by consuming public snapshot types from the engine boundary rather than depending on world storage internals.
-
----
-
-## 5. State ownership
-
-One of the strongest current architectural rules is:
-
-> The simulation engine owns authoritative mutable simulation state.
-
-For the multi-body runtime, that authority belongs to `World`.
+One of the strongest current architecture rules is that reusable intrinsic data is different from runtime state.
 
 ```mermaid
 flowchart TD
-    BODY["Reusable immutable Body definition"]
+    DEF["Body definition<br/>immutable"]
     INIT["BodyInitialConditions"]
     WORLD["World"]
-    STORE[("private BodyId → WorldBody storage")]
-    STATE["World-owned BodyState"]
+    STATE["BodyState<br/>authoritative runtime state"]
+    SNAP["BodySnapshot<br/>detached observation"]
 
-    COMMANDS["Validated commands<br/>addBody<br/>setGravity<br/>step"]
-    QUERIES["Observation<br/>getBodyState<br/>getBodySnapshots"]
-    SNAPSHOT["BodySnapshot"]
-    DEF["shared immutable definition"]
-    OBSSTATE["detached BodyState"]
-
-    BODY --> COMMANDS
-    INIT --> COMMANDS
-    COMMANDS --> WORLD
-    WORLD --> STORE
-    STORE --> BODY
-    STORE --> STATE
-
-    STATE --> WORLD
-    WORLD --> QUERIES
-    QUERIES --> SNAPSHOT
-    BODY --> DEF --> SNAPSHOT
-    STATE --> OBSSTATE --> SNAPSHOT
+    DEF --> WORLD
+    INIT --> WORLD
+    WORLD --> STATE
+    STATE --> SNAP
+    DEF --> SNAP
 ```
 
-`BodyState` is runtime data, not an intrinsic property of `Body`. Consumers do not construct authoritative state or receive the world's internal mutable storage.
-
-`BodySnapshot` intentionally treats its two kinds of data differently: the immutable reusable `Body` definition is shared by reference, while World-owned runtime state is copied into a detached `BodyState` observation. A renderer can therefore discover intrinsic geometry without receiving writable World state.
-
----
-
-## 6. Observation and control are separate
-
-The engine API currently contains two conceptually different kinds of interaction.
-
-### Observation
-
-Observation asks:
-
-> What is the simulation state?
-
-Examples:
+The lifecycle is:
 
 ```text
-world.gravity
-world.getBodyState(...)
-world.getBodySnapshots()
-```
-
-### Control
-
-Control asks:
-
-> Please change or advance the simulation.
-
-Examples:
-
-```text
-world.addBody(...)
-world.setGravity(...)
-world.step(...)
-```
-
-The distinction is expressed through ordinary methods rather than separate command/query framework objects.
-
-That is intentional. The project has not demonstrated a need for a command bus, repository abstraction, event system, or similar infrastructure.
-
----
-
-## 7. World-owned bodies
-
-`Body` is a reusable definition while the World owns each instantiated body's runtime identity and state.
-
-```text
-Body definition
-    +
-BodyInitialConditions
-    ↓
+immutable reusable definition
+        +
+initial conditions
+        ↓
 World.addBody(...)
-    ↓
-BodyId → BodyState
+        ↓
+independent world-local runtime instance
 ```
 
-`BodyId` is an opaque, world-local identifier.
+The same `Body` definition can be added multiple times to one World or reused across Worlds. Every addition creates independent runtime state and a world-local `BodyId`.
 
-`BodyState` currently contains position and velocity. It is a readonly structural data contract rather than a constructible state-owning class.
+### Body definition
 
-This keeps the distinction explicit:
+`Body` represents reusable intrinsic definition data.
+
+The current definition can be shapeless or carry one concrete geometry value:
+
+```ts
+new Body();
+new Body({ shape: new Circle(0.5) });
+new Body({ shape: new Rectangle(2, 1) });
+```
+
+The current type is a concrete union rather than a class hierarchy:
 
 ```text
-Body                  intrinsic reusable definition
-BodyInitialConditions insertion configuration
-BodyState              World-owned runtime data
-BodySnapshot           identity + shared immutable definition + detached runtime observation
+BodyShape = Circle | Rectangle
 ```
+
+No generic `Shape` interface or abstract base class is required yet.
+
+### Geometry
+
+`Circle` owns one positive finite radius expressed in world units.
+
+`Rectangle` owns positive finite width and height expressed in world units. Its intrinsic local geometry is centered around `(0, 0)`:
+
+```text
+x ∈ [-width / 2, +width / 2]
+y ∈ [-height / 2, +height / 2]
+```
+
+Neither geometry object owns world position or orientation.
+
+A shapeless Body remains valid and has no domain spatial extent. Visualization may still give it a fixed presentation marker so it can be seen and interacted with.
+
+### Initial conditions
+
+`BodyInitialConditions` describes how one Body definition enters a World:
+
+```text
+position
+velocity
+orientation
+```
+
+Current defaults are:
+
+```text
+position     (0, 0)
+velocity     (0, 0)
+orientation  0 radians
+```
+
+Initial conditions do not become intrinsic Body properties.
+
+### Runtime state
+
+`BodyState` is readonly structural data owned authoritatively by the World:
+
+```text
+position
+velocity
+orientation
+```
+
+It is not a constructible behavior-owning domain object.
+
+Position and velocity are vectors. Orientation is a finite scalar in radians.
 
 ---
 
-## 8. State and integration behavior are separate
+## 5. Orientation convention
 
-`World` owns body runtime state and environmental gravity, but it does not contain a hard-coded numerical integration algorithm.
+The engine uses mathematical world coordinates:
 
-Instead it receives a `KinematicIntegrator`.
+```text
++X → right
++Y → up
+```
+
+Positive orientation is counter-clockwise and measured in radians.
+
+```text
+0          local +X points world +X
+π / 2      local +X points world +Y
+π          local +X points world -X
+```
+
+Any finite radian value is valid. Orientation is not normalized to a canonical interval yet.
+
+This is intentional: normalization should be introduced only when a real consumer requires canonical angles, shortest angular deltas, or bounded long-running rotational state.
+
+Orientation belongs to runtime state rather than Body or shape definition because it describes the pose of one instantiated body in one World.
+
+This remains true even for a Circle whose plain outline is rotationally symmetric.
+
+### Current integration behavior
+
+The current kinematic integrators advance linear position/velocity only.
+
+They preserve orientation unchanged:
+
+```text
+position     integrated
+velocity     integrated
+orientation  preserved
+```
+
+This is an important state-evolution property: an algorithm responsible for one part of state must not silently erase unrelated state.
+
+Angular velocity, torque, moment of inertia, and rotational integration do not exist yet.
+
+---
+
+## 6. World owns authoritative body state
+
+`World` is the state-owning engine container.
+
+Internally it associates each world-local `BodyId` with:
+
+```text
+reusable immutable Body definition
++
+authoritative BodyState
+```
+
+Externally, callers do not receive writable World storage.
+
+The World exposes validated command-like methods for mutation and detached values for observation.
+
+### Atomic World stepping
+
+A World step is transactional at World scope.
+
+```mermaid
+sequenceDiagram
+    participant Caller
+    participant World
+    participant Integrator
+    participant Candidates as Candidate states
+    participant State as Authoritative state
+
+    Caller->>World: step(dt)
+    World->>World: validate dt
+
+    loop every body
+        World->>Integrator: integrate(state, gravity, dt)
+        Integrator-->>World: candidate state
+        World->>World: validate candidate
+        World->>Candidates: store candidate
+    end
+
+    World->>State: commit all candidates
+    World-->>Caller: complete
+```
+
+The invariant is:
+
+> Either every body advances successfully, or no authoritative body state is replaced.
+
+This prevents a failed numerical step from leaving a World partially advanced.
+
+---
+
+## 7. Observation model
+
+World observation deliberately separates immutable reusable definition data from mutable authoritative state.
+
+`BodySnapshot` is:
+
+```text
+BodySnapshot
+├── id
+├── definition
+└── state
+```
+
+### Shared definition
+
+`definition` is the exact immutable `Body` reference used when the runtime instance was created.
+
+It is shared because immutable definition data is safe to reuse and copying it into every snapshot would add duplication without protecting World state.
+
+### Detached state
+
+`state` is detached from World storage.
+
+External code can inspect a snapshot without receiving the World's writable state object.
+
+The snapshot is therefore an observation, not a state-owning entity.
+
+```text
+shared by reference
+    immutable Body definition
+
+copied for observation
+    World-owned mutable runtime state
+```
+
+Visualization uses this contract to discover Circle/Rectangle geometry without adding shape-specific World queries or maintaining a parallel BodyId-to-definition registry.
+
+---
+
+## 8. Numerical integration as injected behavior
+
+`World` owns **when** body states are advanced and provides the environment acceleration currently represented by gravity.
+
+`KinematicIntegrator` owns **how** a state is numerically advanced.
 
 ```mermaid
 classDiagram
@@ -343,128 +402,25 @@ classDiagram
         +integrate(state, acceleration, dt)
     }
 
-    class ExplicitEulerIntegrator {
-        +integrate(state, acceleration, dt)
-    }
-
-    class SemiImplicitEulerIntegrator {
-        +integrate(state, acceleration, dt)
-    }
+    class ExplicitEulerIntegrator
+    class SemiImplicitEulerIntegrator
 
     World --> KinematicIntegrator : delegates stepping
     ExplicitEulerIntegrator ..|> KinematicIntegrator
     SemiImplicitEulerIntegrator ..|> KinematicIntegrator
 ```
 
-This is a small application of the Strategy pattern:
+The contract is deliberately narrow. It is not a generic numerical-method framework.
 
-- `World` decides **when** bodies are advanced and supplies its current gravity as the acceleration input;
-- an integrator decides **how** one kinematic state is numerically advanced.
-
-The interface remains deliberately specific to kinematics rather than becoming a generalized numerical-integration framework.
-
-The names are intentionally different at the World and integrator boundaries:
-
-```text
-World.gravity
-    environment property
-
-KinematicIntegrator.integrate(..., acceleration, ...)
-    mathematical quantity consumed by the integration algorithm
-```
-
-At the current stage, the acceleration supplied during stepping is exactly the World's gravity vector.
+At the current stage, the acceleration passed to the integrator is exactly the World's gravity vector.
 
 ---
 
-## 9. Stepping a world
+## 9. Simulation coordinates Worlds
 
-A world step is deliberately transactional.
+`Simulation` is the deterministic orchestration layer above World.
 
-The world first calculates and validates every candidate state before committing any authoritative replacement.
-
-```mermaid
-sequenceDiagram
-    participant Caller
-    participant World as World
-    participant Integrator as KinematicIntegrator
-    participant Candidates as Candidate states
-    participant State as Authoritative state
-
-    Caller->>World: step(dt)
-    World->>World: validate dt
-
-    loop every body
-        World->>Integrator: integrate(state, gravity, dt)
-        Integrator-->>World: candidate state
-        World->>World: validate candidate
-        World->>Candidates: store candidate
-    end
-
-    World->>State: commit all candidates
-    World-->>Caller: step complete
-```
-
-The invariant is:
-
-> Either every body advances successfully, or no authoritative body state is replaced.
-
----
-
-## 10. Body runtime-state model
-
-The current runtime motion state is intentionally small.
-
-```mermaid
-classDiagram
-    class Vector2 {
-        +number x
-        +number y
-        +add()
-        +subtract()
-        +scale()
-    }
-
-    class BodyState {
-        <<interface>>
-        +Vector2 position
-        +Vector2 velocity
-    }
-
-    BodyState *-- Vector2 : position
-    BodyState *-- Vector2 : velocity
-```
-
-A `BodyState` contains only:
-
-```text
-position
-velocity
-```
-
-It deliberately does not contain intrinsic Body properties, mass, force, geometry, orientation, angular velocity, or collision state.
-
-Unlike the earlier `KinematicState` class, `BodyState` has no constructor or behavior. It is the structural data contract for World-owned runtime motion state.
-
----
-
-## 11. Simulation orchestration
-
-The real `Simulation` layer now lives outside the engine:
-
-```text
-src/simulation/simulation.ts
-```
-
-Its responsibility is deliberately small:
-
-```text
-fixed World membership
-        +
-per-World execution status
-        +
-deterministic step(dt)
-```
+It contains a fixed set of `1..N` unique World references and owns per-World execution status.
 
 ```mermaid
 flowchart TD
@@ -472,681 +428,474 @@ flowchart TD
     W1["World A<br/>active"]
     W2["World B<br/>failed"]
     W3["World C<br/>active"]
-    ERR["captured thrown value"]
 
     SIM --> W1
     SIM --> W2
     SIM --> W3
-    W2 --> ERR
 ```
 
-A Simulation contains `1..N` unique World references. Membership is fixed after construction and the supplied collection is copied so external array mutation cannot change the Simulation.
+For each valid `Simulation.step(dt)`:
 
-`simulation.step(dt)` validates the timestep before any World is touched. For a valid timestep it visits active Worlds in constructor order and supplies the same `dt` to each.
+1. the timestep is validated before any World is touched;
+2. active Worlds are visited in deterministic constructor order;
+3. each active World receives the same `dt` once;
+4. a thrown World becomes terminally failed;
+5. later active Worlds are still stepped;
+6. failed Worlds are skipped on future steps.
 
-If a World throws while stepping, Simulation records that World as terminally failed and continues with later active Worlds. Failed Worlds are skipped on future steps.
+Simulation owns orchestration state, not physical body state.
 
-This makes failure part of the experiment rather than a Simulation-wide abort:
+It does not own:
 
-```text
-World A  active  → continues
-World B  failed  → retains last valid World-owned state
-World C  active  → continues
-```
-
-World stepping itself remains atomic, so Simulation failure status does not mean invalid physical state was committed.
-
-`getWorlds()` exposes a detached membership collection containing the actual coordinated World references. `getWorldStatus(world)` exposes a detached `active` / `failed(error)` status, or `undefined` for a non-member.
-
-Simulation does **not** own:
-
-- body runtime state;
-- gravity or integrators;
-- body snapshots;
-- simulation time;
-- browser scheduling;
-- start/pause/run lifecycle;
+- World gravity;
+- integrators;
+- BodyState;
 - rendering;
-- retry/reset behavior;
-- cross-World transactional rollback.
-
-The earlier `KinematicSimulation` remains retired. It owned one body's state; the current `Simulation` instead coordinates independent Worlds.
+- browser time;
+- viewport state.
 
 ---
 
-## 12. Visualization boundary
+## 10. Browser Runtime owns wall-clock scheduling
 
-Visualization lives outside the engine:
+`BrowserSimulationRuntime` separates variable browser frame timing from deterministic simulation stepping.
+
+```mermaid
+flowchart LR
+    RAF["requestAnimationFrame"]
+    DELTA["wall-clock delta"]
+    CLAMP["clamp"]
+    ACC["accumulator"]
+    STEP["0..N Simulation.step(fixedDt)"]
+    FRAME["host onFrame()"]
+
+    RAF --> DELTA --> CLAMP --> ACC --> STEP --> FRAME --> RAF
+```
+
+The Runtime owns:
+
+```text
+requestAnimationFrame
+wall-clock frame deltas
+maximum frame-delta clamp
+fixed-timestep accumulator
+repeated Simulation.step(...)
+host frame callback cadence
+```
+
+It does not own:
+
+```text
+Canvas / SVG
+World snapshots
+Body picking
+hover / selection
+DOM input
+renderer state
+```
+
+The host callback decides what should be presented after the latest completed simulation steps.
+
+---
+
+## 11. Visualization boundary
+
+Visualization lives under:
 
 ```text
 src/visualization/
 ```
 
-The current concrete renderers are:
+The current concrete components are:
 
 ```text
-SvgKinematicRenderer
+ViewportTransform
 CanvasKinematicRenderer
+SvgKinematicRenderer
+BodyPicker
 ```
 
-Both consume detached engine observations, but their output mechanisms differ.
+They consume engine observations but do not advance physics or mutate World state.
+
+Canvas is the primary interactive target. SVG remains a useful secondary static renderer where maintaining support remains natural and inexpensive.
+
+There is no generic renderer hierarchy because the two output technologies still have meaningfully different interaction needs.
+
+---
+
+## 12. ViewportTransform
+
+`ViewportTransform` owns viewport geometry rather than drawing technology.
+
+Its state is:
+
+```text
+width             immutable
+height            immutable
+centerWorldX      mutable
+centerWorldY      mutable
+pixelsPerUnit     mutable
+```
+
+It derives continuous visible-world bounds and provides forward/inverse scalar coordinate conversion.
+
+Forward mapping:
+
+```text
+displayX = width / 2
+         + (worldX - centerWorldX) × pixelsPerUnit
+
+displayY = height / 2
+         - (worldY - centerWorldY) × pixelsPerUnit
+```
+
+Inverse mapping:
+
+```text
+worldX = centerWorldX
+       + (displayX - width / 2) / pixelsPerUnit
+
+worldY = centerWorldY
+       - (displayY - height / 2) / pixelsPerUnit
+```
+
+The Y sign changes because mathematical world Y points up while Canvas/SVG display Y points down.
+
+The transform also owns the geometry needed for:
+
+- panning by display-space deltas;
+- programmatic scale changes;
+- scale changes around a display-space anchor while preserving the world point under that anchor.
+
+It does **not** own browser wheel policy, zoom limits, input events, rendering primitives, or body hit testing.
+
+---
+
+## 13. Canvas: one shared viewport, focused collaborators
+
+The live Canvas path now composes one explicit `ViewportTransform` instance in `main.ts`.
 
 ```mermaid
 flowchart LR
-    WORLD["World"]
-    SNAP["readonly BodySnapshot[]"]
+    MAIN["main.ts<br/>composition root"]
+    V["ViewportTransform"]
+    R["CanvasKinematicRenderer"]
+    P["BodyPicker"]
+    H["CanvasExampleHost"]
 
-    SVG["SvgKinematicRenderer"]
-    CANVAS["CanvasKinematicRenderer"]
+    MAIN --> V
+    MAIN --> R
+    MAIN --> P
+    MAIN --> H
 
-    DOC["SVG document"]
-    CTX["Canvas 2D context"]
-
-    WORLD -->|"getBodySnapshots()"| SNAP
-
-    SNAP --> SVG --> DOC
-    SNAP --> CANVAS --> CTX
+    V --> R
+    V --> P
+    V --> H
+    P --> H
+    R --> H
 ```
 
-Neither renderer advances simulation time, calculates physics, modifies world state, or inspects private world storage.
+The same mutable viewport state is observed by all Canvas collaborators that need it.
 
-Their rendering responsibilities are currently:
+### CanvasKinematicRenderer
+
+Owns drawing:
 
 ```text
-SvgKinematicRenderer
-    SVG document generation
-    integer grid
-    world axes
-    origin marker
-    body markers
+grid
+axes
+origin marker
+body geometry
+hover feedback
+selection feedback
+```
+
+It receives the transform but does not own browser interaction or hit testing.
+
+### BodyPicker
+
+Owns visual hit testing against detached observations.
+
+It receives the same transform as the renderer so the geometry used for picking cannot drift from the current pan/zoom state.
+
+### CanvasExampleHost
+
+Owns concrete browser/application policy:
+
+```text
+Pointer / Wheel events
+CSS → Canvas coordinate conversion
+pointer capture
+click-versus-drag policy
+zoom sensitivity + limits
+hover identity
+selection identity
+DOM inspection formatting
+frame presentation orchestration
+```
+
+It directly mutates/queries `ViewportTransform`, delegates hit testing to `BodyPicker`, and delegates drawing to `CanvasKinematicRenderer`.
+
+This keeps the renderer from becoming a façade for every operation that happens to involve a viewport.
+
+---
+
+## 14. Why Canvas viewport ownership changed
+
+Earlier, both renderers constructed and owned their `ViewportTransform` internally. That was a reasonable design when the renderer was the only concrete consumer of viewport state.
+
+Later, Canvas body picking became sufficiently substantial to deserve its own responsibility. `BodyPicker` then became a second real consumer of exactly the same mutable viewport state used by rendering.
+
+Keeping transform ownership inside the renderer would have forced one of three weaker designs:
+
+```text
+1. duplicate transform state
+   → drawing and picking can drift
+
+2. make BodyPicker call through renderer façade methods
+   → picking remains unnecessarily coupled to drawing
+
+3. expose/inject the shared transform
+   → both collaborators observe one source of viewport truth
+```
+
+The implementation chose the third option for Canvas.
+
+This is a useful example of the project rule:
+
+> An earlier architecture decision can be correct for its original pressure and still be superseded when new concrete consumers appear.
+
+The change does **not** mean every dependency should always be injected.
+
+SVG still owns its transform internally because no second SVG collaborator currently needs to share that state.
+
+---
+
+## 15. Rendering body geometry
+
+Normal rendering derives visual geometry from the immutable Body definition plus World-owned runtime pose.
+
+```text
+BodySnapshot.definition
+    shape
+
+BodySnapshot.state
+    position
+    orientation
+
+ViewportTransform
+    world ↔ display placement and scale
+```
+
+### Shapeless Body
+
+A shapeless Body has no domain spatial extent.
+
+Canvas/SVG may render a fixed display-space marker so it remains visible.
+
+```text
+zoom in/out
+    domain geometry: none
+    marker radius: visually fixed
+```
+
+### Circle
+
+Circle radius is expressed in world units:
+
+```text
+display radius = world radius × pixelsPerUnit
+```
+
+Orientation remains part of runtime pose but a plain Circle outline is rotationally symmetric.
+
+### Rectangle
+
+Rectangle width/height are expressed in world units and centered around the local origin.
+
+Canvas conceptually renders:
+
+```ts
+context.save();
+context.translate(displayX, displayY);
+context.rotate(-orientation);
+context.fillRect(-width / 2, -height / 2, width, height);
+context.restore();
+```
+
+SVG uses the equivalent transform attribute.
+
+The geometry remains simple because the renderer transforms the coordinate frame rather than manually rotating each corner.
+
+---
+
+## 16. Hover and selection ownership
+
+Hover and selection are interaction/application state, not physical World state.
+
+```text
+CanvasExampleHost
+    owns hovered BodyId
+    owns selected BodyId
 
 CanvasKinematicRenderer
-    Canvas frame clearing
-    integer grid
-    world axes
-    origin marker
-    body drawing
-    display-space body-marker hit testing
-    per-frame hover presentation
-    per-frame selection presentation
+    receives IDs for one frame
+    decides how to draw feedback
 ```
 
-Both renderers use `ViewportTransform` for coordinate placement while retaining rendering-technology-specific drawing behavior. Both expose programmatic viewport centering and scale changes. Canvas additionally accepts display-space pan deltas, exposes inverse display-to-world scalar queries, supports anchor-preserving scale changes, and can hit-test its rendered body markers, while browser pointer/wheel-event orchestration remains outside the renderer in host/example code.
+Hover is transient and recomputed against the latest observations, including when the pointer does not move, because bodies may move under a stationary pointer.
 
-Canvas and canvas-like interactive rendering are the primary visualization target. SVG remains a secondary static companion where maintaining support is natural and reasonably inexpensive. Shared abstractions should represent genuinely common concepts; SVG compatibility must not force Canvas into a weaker or less useful design.
+Selection persists by identity until a click changes it.
 
-The two renderers intentionally retain different output models. Their existence does not currently justify a generic renderer interface.
+The host stores a `BodyId`, not a persistent selected snapshot. Each frame it resolves the identity against fresh detached observations for current read-only inspection data.
+
+For Rectangle bodies, hover and selection outlines are drawn in the same body-local transformed frame as the normal Rectangle, so the feedback follows orientation correctly.
 
 ---
 
-## 13. World coordinates versus display coordinates
+## 17. BodyPicker and local-coordinate hit testing
 
-The engine uses mathematical world coordinates:
+`BodyPicker` answers a visualization-interaction question:
 
-```text
-+x → right
-+y → up
-```
+> Which observed body, if any, contains this display-space point?
 
-The current display technologies use coordinates where positive Y points downward.
+It deliberately does not answer a physics/collision question.
 
-Bidirectional conversion between world and display coordinates is owned by the shared `ViewportTransform`.
+Current picking semantics are:
 
-```mermaid
-flowchart TD
-    WORLD["World coordinates<br/>+X right<br/>+Y up"]
-    TRANSFORM["ViewportTransform<br/>width<br/>height<br/>pixelsPerUnit"]
+| Body kind | Picking extent |
+| --- | --- |
+| shapeless | fixed circular display marker |
+| Circle | world radius scaled by current viewport |
+| Rectangle | world width/height scaled by viewport + current orientation |
 
-    SVG["SvgKinematicRenderer"]
-    CANVAS["CanvasKinematicRenderer"]
+### Rotated Rectangle
 
-    WORLD <--> TRANSFORM
-    TRANSFORM --> SVG
-    TRANSFORM <--> CANVAS
-```
+The easiest containment test exists in the Rectangle's own local coordinates.
 
-The forward mapping is:
-
-```text
-displayX = width / 2 + (worldX - centerWorldX) × pixelsPerUnit
-
-displayY = height / 2 - (worldY - centerWorldY) × pixelsPerUnit
-```
-
-The inverse mapping is:
-
-```text
-worldX = centerWorldX + (displayX - width / 2) / pixelsPerUnit
-
-worldY = centerWorldY - (displayY - height / 2) / pixelsPerUnit
-```
-
-The configured world-space center therefore appears at the center of the viewport; `(0, 0)` remains the default center.
-
-`ViewportTransform` owns viewport dimensions, scale, mutable world-space center, validation, scalar forward/inverse coordinate conversion, and the continuous world-space extent visible through the viewport.
-
-The visible extent is exposed through scalar values equivalent to:
-
-```text
-minWorldX
-maxWorldX
-minWorldY
-maxWorldY
-```
-
-It deliberately does not know about integer-grid selection, SVG, Canvas, `World`, snapshots, `Vector2`, or rendering primitives.
-
-Both renderers construct and retain their transform internally. Renderer methods expose semantic viewport operations without leaking the transform object itself.
-
-The transform was extracted only after SVG and Canvas independently demonstrated the same coordinate-mapping responsibility. The mutable center extends that existing viewport responsibility rather than introducing a separate camera object.
-
----
-
-## 14. Host/application responsibility
-
-Example `main.ts` files act as composition roots.
-
-The Canvas composition root decides:
-
-- which Worlds to create;
-- which integrator and gravity each World uses;
-- which bodies to create;
-- which Worlds belong to the Simulation;
-- which browser Runtime configuration to use;
-- which example-local host presents current state;
-- which renderer to create;
-- where output is displayed or written.
-
-The Canvas-specific DOM and interaction mechanics live in `CanvasExampleHost`, which remains under `examples/kinematic-world-canvas/`. It owns pointer/wheel handling, hover and selection identity, inspection outputs, and per-frame rendering because those policies currently have one concrete consumer.
-
-Runtime decides when deterministic Simulation steps occur from browser wall-clock input. The engine does not decide which renderer exists. Simulation does not know about wall-clock execution. Runtime does not know how a frame is rendered. The renderer does not decide which World, Simulation, Runtime, or integrator exists.
-
----
-
-## 15. Current browser runtime flow
-
-`BrowserSimulationRuntime` separates Simulation cadence from browser frame cadence.
-
-```mermaid
-sequenceDiagram
-    participant Browser
-    participant Main as Canvas main.ts
-    participant Runtime as BrowserSimulationRuntime
-    participant Simulation
-    participant World
-    participant Host as CanvasExampleHost
-    participant Renderer as CanvasKinematicRenderer
-
-    Main->>Runtime: run()
-    Runtime->>Host: renderFrame() initial presentation
-    Runtime->>Browser: requestAnimationFrame(callback)
-
-    Browser->>Runtime: callback(timestamp)
-    Runtime->>Runtime: establish first timestamp
-    Runtime->>Browser: request next frame
-
-    Browser->>Runtime: callback(timestamp)
-    Runtime->>Runtime: calculate + clamp frame delta
-    Runtime->>Runtime: add delta to accumulator
-
-    loop while accumulator >= fixed timestep
-        Runtime->>Simulation: step(fixed timestep)
-        Simulation->>World: step(fixed timestep)
-        Runtime->>Runtime: subtract fixed timestep
-    end
-
-    Runtime->>Host: renderFrame()
-    Host->>World: getBodySnapshots()
-    World-->>Host: detached snapshots
-    Host->>Host: refresh pointer / selection inspection
-    Host->>Renderer: render(snapshots, hovered BodyId, selected BodyId)
-    Runtime->>Browser: request next frame
-```
-
-Variable browser frame delta is scheduling input only; fixed `Simulation.step(dt)` values remain the deterministic numerical progression.
-
-Runtime remains unaware of Canvas, snapshots, and interaction state. The renderer remains unaware of `requestAnimationFrame` and Simulation stepping. Simulation remains unaware of browser time and render cadence.
-
-The host also owns pointer and wheel interaction. It tracks the active pointer, uses browser pointer capture for dragging, and converts browser client coordinates from CSS space into Canvas drawing-buffer coordinates. Display-space deltas are passed to `CanvasKinematicRenderer.panViewportBy(...)`; absolute display coordinates are passed through the renderer's inverse mapping queries to produce the live world-coordinate readout and through its body-marker hit test to produce the live body readout.
-
-For wheel/trackpad zoom, the host normalizes wheel deltas, applies zoom sensitivity and minimum/maximum scale policy, prevents page scrolling while the Canvas owns the wheel interaction, and supplies an absolute requested scale together with the pointer's Canvas display-space anchor. `CanvasKinematicRenderer` delegates the anchor-preserving geometry to `ViewportTransform`.
-
-For picking, hover, and selection, the host owns interaction state while the engine continues to own authoritative body state. It retains the current pointer position, transient hovered `BodyId`, and persistent selected `BodyId`, then supplies the hover and selection identities to `render(...)` as per-frame presentation input.
-
-Hover is recomputed during the animation loop because simulation bodies move independently of pointer events. A stationary pointer can therefore gain or lose a hovered body as the rendered snapshots change.
-
-Selection changes only when a primary-pointer interaction completes without exceeding the host-defined movement tolerance. Once movement exceeds that tolerance, the interaction is treated as viewport dragging and does not alter selection. Clicking a body selects its `BodyId`; clicking empty Canvas clears selection. The renderer remains independent from DOM pointer/wheel-event APIs and persists neither hover nor selection identity.
-
-The selected-body inspector uses the same latest detached observation set. The host resolves `selectedBodyId` against those snapshots on each frame and formats the matching body's position and velocity into DOM outputs. It stores identity persistently, not the matching snapshot.
+Rendering transforms local geometry outward into display space. Picking performs the inverse conceptual operation: it moves the pointer back into local coordinates.
 
 ```mermaid
 flowchart LR
-    INPUT["Pointer / wheel events"]
-    HOST["Canvas example / host"]
-    POLICY["CSS conversion + interaction policy"]
-    RENDERER["CanvasKinematicRenderer"]
-    TRANSFORM["ViewportTransform"]
-    OUTPUT["World-coordinate output"]
+    POINT["Display pointer"]
+    DELTA["Subtract body display center"]
+    LOCAL["Inverse display rotation"]
+    TEST["Centered local Rectangle test"]
 
-    INPUT --> HOST --> POLICY --> RENDERER --> TRANSFORM
-    TRANSFORM --> RENDERER --> HOST --> OUTPUT
+    POINT --> DELTA --> LOCAL --> TEST
 ```
+
+Current display-space inverse rotation:
+
+```ts
+const cos = Math.cos(orientation);
+const sin = Math.sin(orientation);
+
+const localX = deltaX * cos - deltaY * sin;
+const localY = deltaX * sin + deltaY * cos;
+```
+
+Then:
+
+```text
+abs(localX) <= halfWidth
+abs(localY) <= halfHeight
+```
+
+When multiple bodies contain the point, the nearest displayed center wins. Snapshot order is not used as a hit-priority contract.
+
+This local-coordinate approach is an important geometry technique that will likely reappear in later collision or diagnostic work, but that future reuse has not yet earned a generic transform framework.
 
 ---
 
-## 16. Architectural principles demonstrated today
+## 18. SVG composition remains simpler
 
-Several project principles are now demonstrated by the implementation.
+`SvgKinematicRenderer` still constructs its own `ViewportTransform` internally.
 
-### Simulation and visualization are independent
+It exposes programmatic viewport center and scale changes because those have concrete static-rendering uses.
 
-The engine contains no rendering dependency.
+It does not expose Canvas-specific pointer interaction APIs, and there is no SVG `BodyPicker` merely for API symmetry.
 
-### Runtime and Simulation are independent
+```text
+Canvas
+    main.ts owns shared transform
+    renderer + picker + host collaborate around it
 
-`BrowserSimulationRuntime` converts browser wall-clock cadence into fixed deterministic Simulation steps.
+SVG
+    renderer owns transform internally
+```
 
-Simulation does not know about `requestAnimationFrame`, frame timestamps, accumulators, or rendering callbacks.
-
-### State ownership is explicit
-
-`World` owns authoritative body state.
-
-### Observation does not expose world storage
-
-Consumers receive detached observations.
-
-### Behavior can be injected
-
-The numerical integration algorithm is supplied through `KinematicIntegrator`.
-
-### Composition is preferred over inheritance
-
-Integrators implement a small behavior contract rather than participating in a deep class hierarchy.
-
-### Public boundaries are deliberate
-
-Complete package consumers should normally import from `src/mod.ts`.
-
-`src/engine/mod.ts` remains the narrower engine-layer boundary for internal layers and consumers that intentionally depend only on engine/domain concepts.
-
-### Abstractions are introduced from concrete needs
-
-`ViewportTransform` was introduced only after SVG and Canvas independently demonstrated the same viewport geometry and coordinate-conversion responsibility. Its visible-world bounds were added only after both grid implementations independently derived the same continuous viewport extent. Inverse mapping was added only after pointer-coordinate inspection created a concrete display-to-world consumer.
-
-### Canvas drives visualization evolution
-
-Canvas and canvas-like interactive rendering are the primary visualization target. SVG is maintained as a useful secondary renderer when compatibility remains reasonable, but SVG parity does not constrain useful Canvas capabilities.
-
-There is still no generalized renderer hierarchy, camera framework, event bus, entity-component system, or dependency-injection container.
-
-Those abstractions have not been justified by the implementation.
+Shared concepts should be common because responsibilities genuinely match, not because two implementations must look identical.
 
 ---
 
-## 17. What architecture this is — and is not
+## 19. Normal rendering, appearance, and diagnostics are distinct
 
-Some current ideas resemble well-known architectural patterns, but vLab2D is not attempting to implement a formal architecture methodology.
+The current architecture keeps three visual ideas separate:
 
-For example:
+```text
+1. Physical/domain representation
+   Body / Shape / BodyState
 
-- injected integrators resemble the **Strategy pattern**;
-- `mod.ts` acts as a **module facade/public boundary**;
-- world-owned state and detached observations reinforce **encapsulation**;
-- external composition follows **dependency inversion** where replaceable behavior is involved.
+2. Normal appearance
+   future material / fill / texture / sprite decisions
 
-However, vLab2D is not currently claiming to be Clean Architecture, Hexagonal Architecture, an Entity Component System, Domain-Driven Design, an event-driven architecture, or a plugin framework.
+3. Diagnostic / inspection visualization
+   future axes / velocity arrows / bounds / contacts / labels
+```
 
-Those labels would imply structures and constraints the project has not needed.
+Hover and selection rings are interaction feedback and currently belong to normal Canvas interaction presentation.
+
+A future orientation-axis diagnostic would reveal otherwise invisible Circle orientation without changing Circle geometry or normal rendering.
+
+A future sprite/material system would describe how a body normally looks, not how physics behaves.
+
+No appearance or diagnostic framework exists yet.
 
 ---
 
-## 18. Implemented, intended, and future architecture
+## 20. Abstractions deliberately deferred
 
-It is useful to keep these categories separate.
-
-### Implemented
+The project intentionally has **not** introduced the following merely because they are plausible:
 
 ```text
-✓ package-facing composition facade through src/mod.ts
-✓ public engine-layer boundary through src/engine/mod.ts
-✓ immutable Circle geometry in simulation/world units
-✓ optional Circle geometry on reusable Body definitions
-✓ shapeless particle-like Bodies remain valid
-✓ mathematical Vector2 values
-✓ readonly BodyState runtime-data contract
-✓ replaceable kinematic integrators
-✓ reusable Body definitions + multi-body World
-✓ world-local BodyId
-✓ world-owned authoritative body state
-✓ BodySnapshot observations with shared immutable definitions + detached BodyState
-✓ atomic world stepping
-✓ deterministic Simulation orchestration across 1..N Worlds
-✓ fixed unique Simulation World membership
-✓ per-World active / failed execution status
-✓ World-failure isolation while later Worlds continue
-✓ failed Worlds skipped on subsequent Simulation steps
-✓ detached Simulation membership / status observations
-✓ independent SVG visualization
-✓ independent Canvas 2D visualization
-✓ shared ViewportTransform
-✓ shared world-to-display coordinate mapping
-✓ shared display-to-world coordinate mapping
-✓ shared continuous visible world bounds
-✓ mutable world-space viewport center
-✓ mutable viewport display scale
-✓ programmatic viewport centering in Canvas and SVG
-✓ programmatic viewport scale in Canvas and SVG
-✓ Canvas display-space panning operation
-✓ pointer-drag panning in the Canvas browser host
-✓ Canvas pointer world-coordinate inspection
-✓ pointer-anchored wheel / trackpad zoom
-✓ Canvas display-space body-marker picking
-✓ live body-under-pointer inspection
-✓ transient host-owned hover identity
-✓ per-frame Canvas hover highlighting
-✓ persistent host-owned selected-body identity
-✓ click-versus-drag interaction distinction
-✓ per-frame Canvas selection highlighting
-✓ read-only selected-body position / velocity inspection
-✓ selected identity resolved against fresh detached observations
-✓ equivalent SVG and Canvas spatial references
-✓ Canvas integer grid
-✓ Canvas world axes
-✓ Canvas world-origin marker
-✓ external host/example composition
-✓ example-local CanvasExampleHost for DOM interaction and rendering policy
-✓ intentionally small Canvas main.ts composition root
-✓ BrowserSimulationRuntime
-✓ Runtime-owned requestAnimationFrame scheduling
-✓ Runtime-owned frame-delta clamping
-✓ Runtime-owned fixed-timestep accumulator loop
-✓ host-defined Runtime frame callback
-✓ simulation/render cadence separation
+Shape interface / abstract base hierarchy
+Transform2D
+Vector2.rotate() solely for Canvas/SVG native transforms
+Renderer interface / base class
+Picker interface / generic picking framework
+Camera abstraction separate from ViewportTransform
+Scene graph
+Collision system
+Force framework beyond current World gravity
+Material / texture / sprite framework
+Diagnostic overlay framework
+General browser interaction framework
+Dependency-injection container
 ```
 
-### Established architectural principles
+### Why no Transform2D yet?
+
+Normal Canvas and SVG rendering already provide native translate/rotate capabilities. Creating a project-owned `Transform2D` only to feed values into those native transforms would be ceremonial.
+
+Pressure becomes stronger when project-owned code repeatedly needs operations such as:
 
 ```text
-→ simulation remains independent from presentation
-→ authoritative state remains engine-owned
-→ external mutation uses validated APIs
-→ observation should not leak writable engine state
-→ genuinely variable behavior may use injected strategies
-→ composition is preferred over unnecessary inheritance
-→ abstractions should be earned by concrete use cases
+body-local point → world point
+world point → body-local point
+local direction → world direction
+world direction → local direction
 ```
 
-### Future directions, not current architecture
+Rectangle picking is the first such coordinate-frame calculation, but one concrete use is not yet enough to determine the best reusable abstraction.
 
-Possible future capabilities include:
-
-```text
-? pinch zoom
-? selected-body velocity-vector diagnostic
-? editable body controls
-? UI controls
-? collision detection and response
-? forces
-? richer body models
-? logging / inspection
-? diagnostic overlays
-```
-
-These are directions, not promises about concrete class or folder structure.
+The next passes should observe whether that math repeats before extracting it.
 
 ---
 
-## 19. Shared viewport transformation
+## 21. Architecture evolution rule
 
-SVG and Canvas previously implemented the same world-to-display transformation independently.
-
-That duplication produced the evidence needed to extract `ViewportTransform`.
-
-```mermaid
-flowchart TD
-    WORLD["World coordinates"]
-    TRANSFORM["ViewportTransform"]
-
-    SVG["SvgKinematicRenderer"]
-    CANVAS["CanvasKinematicRenderer"]
-
-    WORLD <--> TRANSFORM
-    TRANSFORM --> SVG
-    TRANSFORM <--> CANVAS
-```
-
-The shared transform owns:
-
-- immutable viewport width and height;
-- mutable pixels per world unit;
-- a mutable world-space position mapped to the viewport center;
-- inversion between mathematical positive Y and display positive Y;
-- conversion from world coordinates into display coordinates;
-- inverse conversion from display coordinates into world coordinates.
-
-The renderers retain responsibility for rendering-specific behavior.
-
-Viewport dimensions remain immutable, while the world-space center and display scale are mutable so the visible region can move and change magnification without reconstructing the renderer. The transform is created internally by each renderer.
-
-It is not currently an injected strategy because the project has not demonstrated a need to substitute transformation behavior independently from renderer construction.
-
-The abstraction also remains independent from engine-domain values such as `Vector2`; its coordinate operations accept and return numbers. The inverse API stays scalar as well, avoiding a new point type or per-query allocation before a concrete need justifies one.
-
-### Continuous visible world bounds
-
-SVG and Canvas later independently derived the same continuous world-space extent in order to determine which integer grid coordinates were visible. That duplication established a second viewport responsibility.
-
-`ViewportTransform` now exposes the minimum and maximum visible world coordinates on each axis:
-
-```text
-minWorldX
-maxWorldX
-minWorldY
-maxWorldY
-```
-
-These bounds are derived from viewport dimensions, the mutable scale, and the current world-space center without allocating a separate bounds object.
-
-The responsibility boundary is:
-
-```mermaid
-flowchart TD
-    TRANSFORM["ViewportTransform"]
-    BOUNDS["Continuous visible world bounds"]
-
-    CANVAS["Canvas grid policy"]
-    SVG["SVG grid policy"]
-
-    TRANSFORM --> BOUNDS
-    BOUNDS --> CANVAS
-    BOUNDS --> SVG
-
-    CANVAS --> CINT["ceil / floor / skip zero / draw"]
-    SVG --> SINT["ceil / floor / skip zero / emit SVG"]
-```
-
-Continuous extent belongs to viewport geometry. Discrete grid selection remains renderer behavior: each renderer decides which integer coordinates to draw, reserves zero for the world axes, applies presentation styling, and uses its own drawing technology.
-
-This keeps `ViewportTransform` useful beyond grid rendering while avoiding a grid-aware viewport abstraction. Panning changes the world-space center, and zoom changes the scale, so visible bounds follow both pieces of mutable viewport state rather than remaining symmetric around the world origin.
-
-`CanvasKinematicRenderer.panViewportBy(...)` translates display-space drag displacement into a center change. The browser host owns Pointer Events and CSS-pixel conversion, preserving the renderer's independence from DOM input mechanics.
-
-### Inverse display-to-world mapping
-
-Pointer-coordinate inspection created the first concrete need to map a display position back into mathematical world space. The inverse equations belong to `ViewportTransform` because they are the reverse of the same viewport geometry already used for rendering.
-
-`ViewportTransform` exposes scalar `displayToWorldX(...)` and `displayToWorldY(...)` operations. They account for the current world-space center, display scale, and inverted display Y axis. `CanvasKinematicRenderer` delegates these queries so its browser host can use the mapping without receiving the transform object itself. SVG does not expose a renderer-level inverse query because it currently has no consumer for one.
-
-Browser client coordinates are not Canvas drawing-buffer coordinates. The host therefore converts Pointer Event coordinates using the Canvas bounding rectangle and drawing-buffer dimensions before invoking the renderer's inverse mapping. The host also owns presentation of the result, including decimal formatting and the DOM `<output>` element.
-
-```mermaid
-flowchart LR
-    CLIENT["Pointer client coordinates"]
-    HOST["Browser host conversion"]
-    DISPLAY["Canvas drawing-buffer coordinates"]
-    RENDERER["CanvasKinematicRenderer"]
-    TRANSFORM["ViewportTransform inverse mapping"]
-    WORLD["World coordinates"]
-
-    CLIENT --> HOST --> DISPLAY --> RENDERER --> TRANSFORM --> WORLD
-```
-
-### Mutable scale and anchor-preserving zoom
-
-Programmatic zoom introduced the first need for display scale to change after renderer construction. `ViewportTransform` therefore treats `pixelsPerUnit` as mutable viewport state rather than immutable constructor-only configuration.
-
-`setPixelsPerUnit(...)` changes magnification while preserving the current world-space center. Because forward mapping, inverse mapping, and visible-world bounds all read the same current scale, they remain coherent after the change.
-
-Interactive zoom created a stronger geometric requirement: the world point underneath the pointer should remain underneath the pointer while scale changes. `setPixelsPerUnitAroundDisplayPoint(...)` implements that invariant by:
-
-1. resolving the world coordinate currently underneath the display-space anchor;
-2. calculating the center required to keep that world coordinate at the same display location under the new scale;
-3. validating the requested scale, anchor, and candidate center;
-4. committing the new scale and center only after all candidate values are valid.
-
-```mermaid
-flowchart LR
-    ANCHOR["Display-space anchor"]
-    WORLD["World point under anchor"]
-    SCALE["Requested scale"]
-    CENTER["Candidate viewport center"]
-    COMMIT["Atomic scale + center commit"]
-
-    ANCHOR --> WORLD --> CENTER
-    SCALE --> CENTER --> COMMIT
-```
-
-Both renderers expose programmatic scale changes because mutable scale is shared viewport geometry. Canvas additionally exposes its current scale and an anchor-aware scale operation because the browser host has a concrete interactive consumer for those capabilities.
-
-The browser host owns wheel/trackpad interpretation: browser-coordinate conversion, delta-mode normalization, exponential zoom sensitivity, minimum/maximum scale limits, and cancellation of page scrolling during Canvas zoom. These are interaction policies rather than `ViewportTransform` invariants.
-
-### Canvas body picking
-
-The current body-picking capability is still intentionally tied to Canvas presentation geometry.
-
-`World` snapshots now expose each immutable Body definition, including optional Circle geometry. `CanvasKinematicRenderer` has not adopted that domain geometry yet, however: it still draws every body using its existing fixed display-space marker. Picking therefore continues to test the marker radius until the dedicated Circle-rendering and Circle-aware-picking slices change those presentation semantics explicitly.
-
-`findBodyAtDisplayPoint(...)` accepts detached snapshots and a display-space point. For each snapshot it maps the body's world position through the current viewport transform, compares squared display-space distance against the squared marker radius, and returns the nearest hit `BodyId`.
-
-```mermaid
-flowchart LR
-    SNAP["Latest rendered snapshots"]
-    POINT["Canvas display point"]
-    RENDERER["CanvasKinematicRenderer"]
-    TRANSFORM["ViewportTransform"]
-    HIT["Nearest BodyId or none"]
-
-    SNAP --> RENDERER
-    POINT --> RENDERER
-    RENDERER --> TRANSFORM
-    TRANSFORM --> RENDERER
-    RENDERER --> HIT
-```
-
-Squared distance avoids an unnecessary square root while expressing the same circular containment test. Choosing the nearest hit avoids depending on snapshot order when rendered markers overlap.
-
-The browser host deliberately reuses the same detached snapshots that produced the visible frame when performing the hit test. Picking is therefore an observation of rendered presentation state, not a second read from authoritative world storage during the input event.
-
-This does not establish physical body geometry, collision shape, persistent selection state, or a generic picking framework.
-
-### Transient hover highlighting
-
-Hover builds directly on the Canvas picking query while preserving state ownership boundaries.
-
-The browser host owns the transient hovered `BodyId` because hover is interaction/presentation state rather than simulation state. `CanvasKinematicRenderer` remains stateless about hover identity: `render(...)` receives an optional highlighted body identifier for the current frame and draws a simple halo around that body's existing marker.
-
-```mermaid
-flowchart LR
-    POINTER["Retained pointer position"]
-    SNAP["Latest rendered snapshots"]
-    HOST["Browser host"]
-    PICK["Canvas hit test"]
-    HOVER["Hovered BodyId"]
-    RENDER["render(snapshots, hovered BodyId)"]
-    HALO["Body + hover halo"]
-
-    POINTER --> HOST
-    SNAP --> HOST
-    HOST --> PICK --> HOVER --> RENDER --> HALO
-    SNAP --> RENDER
-```
-
-The host recomputes hover after obtaining each frame's latest detached snapshots. This is necessary because bodies move even when the pointer does not. The hover readout and halo can therefore appear or disappear under a stationary pointer without waiting for another DOM pointer event.
-
-The same snapshot set drives hit testing and rendering, so the highlighted identity corresponds to the observations visible in that frame.
-
-### Persistent click selection
-
-Selection is deliberately separate from hover.
-
-The browser host owns an optional selected `BodyId`. Unlike hover, selection is not recomputed from the pointer every frame. It changes only through an intentional click and therefore persists while the pointer moves away, leaves the Canvas, the viewport pans or zooms, and the selected body continues moving.
-
-A primary-pointer interaction begins as a possible click and also drives viewport panning. The host measures total movement from the pointer-down position in browser client coordinates. If movement exceeds a small tolerance, the interaction becomes a drag and selection remains unchanged. If the pointer is released without exceeding the tolerance, the release point is hit-tested against the current rendered observations: a hit replaces the selected identity, while an empty-space click clears it.
-
-```mermaid
-flowchart TD
-    DOWN["Primary pointer down"]
-    MOVE["Pointer movement"]
-    TOL["Movement exceeds click tolerance?"]
-    DRAG["Pan viewport"]
-    UP["Pointer up"]
-    PICK["Hit-test release point"]
-    SELECT["Store BodyId"]
-    CLEAR["Clear selection"]
-
-    DOWN --> MOVE --> TOL
-    TOL -->|yes| DRAG
-    TOL -->|no| UP --> PICK
-    PICK -->|body| SELECT
-    PICK -->|empty| CLEAR
-```
-
-Selection stores identity rather than a snapshot. Each new frame can therefore render the currently selected body from fresh detached observations without turning an old observation into persistent domain state.
-
-`CanvasKinematicRenderer` receives both hovered and selected identifiers as per-frame presentation input and draws distinct rings for each. A body can be both hovered and selected, while the renderer itself owns neither state.
-
-### Read-only selected-body inspection
-
-Persistent identity now drives a live read-only inspector without changing the engine boundary.
-
-The browser host stores only `selectedBodyId`. After obtaining each frame's detached snapshots, it searches those observations for the matching identity and formats the matching snapshot's current position and velocity into ordinary DOM outputs.
-
-```mermaid
-flowchart LR
-    ID["selected BodyId"]
-    SNAP["Latest detached snapshots"]
-    HOST["Browser host"]
-    MATCH["Matching snapshot"]
-    POS["Position output"]
-    VEL["Velocity output"]
-
-    ID --> HOST
-    SNAP --> HOST
-    HOST --> MATCH
-    MATCH --> POS
-    MATCH --> VEL
-```
-
-The selected snapshot itself is not retained across frames. This preserves the distinction between persistent application identity and ephemeral engine observation:
-
-```text
-persistent: selected BodyId
-ephemeral:  snapshot resolved for the current frame
-authority:  World
-```
-
-If the selected identity cannot be resolved in the current observation set, the inspector shows unavailable values without silently changing selection. Body-removal behavior can therefore be decided separately if removal becomes a real capability.
-
-Formatting precision and DOM structure remain host presentation concerns. No engine API, renderer inspector state, writable control, or generic inspector abstraction is required for this first inspector.
-
-No editable body state, drag-to-move behavior, style/theme abstraction, `WorldBounds` value type, renderer hierarchy, camera model, transformation matrix framework, point abstraction, generic inspector framework, diagnostic-overlay framework, or gesture framework has been introduced.
-
----
-
-## 20. Architecture evolution rule
-
-vLab2D follows a simple architectural rule:
+vLab2D follows this rule:
 
 > Concrete requirements create pressure; repeated pressure earns abstractions.
 
@@ -1154,31 +903,110 @@ vLab2D follows a simple architectural rule:
 flowchart LR
     NEED["Concrete need"]
     FIRST["First implementation"]
-    SECOND["Second real use case"]
-    DUP["Meaningful duplication / friction"]
-    ABS["Extract abstraction"]
+    SECOND["Second real consumer"]
+    PRESSURE["Meaningful duplication / coupling pressure"]
+    ABSTRACT["Extract or reshape abstraction"]
 
-    NEED --> FIRST
-    FIRST --> SECOND
-    SECOND --> DUP
-    DUP --> ABS
+    NEED --> FIRST --> SECOND --> PRESSURE --> ABSTRACT
 ```
 
-This keeps the code understandable while still allowing the architecture to mature.
+Examples already visible in the project:
 
-The architecture documentation should evolve in the same way.
+- Canvas and SVG independently demonstrated the same viewport geometry before `ViewportTransform` was extracted;
+- `ViewportTransform` was initially renderer-owned because no other consumer needed it;
+- `BodyPicker` later became a second Canvas viewport consumer, so the Canvas path evolved to explicit shared composition;
+- Circle alone did not justify a generic Shape abstraction;
+- Rectangle became the second concrete geometry, yet a simple concrete union still expresses the current behavior without requiring inheritance;
+- native Canvas/SVG transforms currently handle normal body orientation, so `Transform2D` remains deferred.
 
-When this overview becomes too large, focused documents can be extracted from it, for example:
+Architecture is therefore allowed to change when evidence changes. The aim is disciplined evolution, not early prediction.
+
+---
+
+## 22. Current flow through the browser example
+
+The current Canvas example composes the system as follows:
+
+```mermaid
+sequenceDiagram
+    participant Main as main.ts
+    participant Runtime as BrowserSimulationRuntime
+    participant Simulation
+    participant World
+    participant Host as CanvasExampleHost
+    participant Picker as BodyPicker
+    participant Renderer as CanvasKinematicRenderer
+
+    Main->>World: create + add Bodies
+    Main->>Simulation: create([World])
+    Main->>Main: create shared ViewportTransform
+    Main->>Renderer: create(context, viewport, radius)
+    Main->>Picker: create(viewport, radius)
+    Main->>Host: create(canvas, World, viewport, Picker, Renderer)
+    Main->>Runtime: create(Simulation, onFrame)
+    Main->>Runtime: run()
+
+    loop browser frame
+        Runtime->>Simulation: 0..N step(fixedDt)
+        Simulation->>World: step(fixedDt)
+        Runtime->>Host: renderFrame()
+        Host->>World: getBodySnapshots()
+        World-->>Host: detached snapshots
+        Host->>Picker: refresh hover hit
+        Picker-->>Host: BodyId or none
+        Host->>Renderer: render(snapshots, hover, selection)
+    end
+```
+
+The composition root decides which concrete collaborators exist. Each collaborator keeps a focused responsibility.
+
+---
+
+## 23. What is not yet architecture
+
+The following are future possibilities rather than implemented structure:
+
+- collision detection and collision response;
+- force accumulation;
+- rotational dynamics;
+- compound geometry;
+- body materials/mass/inertia;
+- editable body controls;
+- multiple synchronized visual views;
+- comparison overlays;
+- configurable diagnostic layers;
+- richer logger/console observers;
+- pinch/multi-pointer gesture handling.
+
+When these become real passes, they should be designed from their concrete requirements rather than retrofitted into speculative frameworks described here in advance.
+
+---
+
+## 24. Current review checkpoint
+
+The current Phase 2 sequence has established:
 
 ```text
-docs/architecture/
-├── README.md
-├── engine.md
-├── visualization.md
-├── runtime.md
-└── coordinate-systems.md
+Body geometry
+    Circle + Rectangle
+
+World-owned pose
+    position + velocity + orientation
+
+Normal rendering
+    orientation-aware Canvas + SVG
+
+Interaction feedback
+    geometry/orientation-aware hover + selection
+
+Picking
+    geometry/orientation-aware BodyPicker
+
+Responsibility refinement
+    shared Canvas ViewportTransform
+    renderer ≠ picker ≠ host policy
 ```
 
-Those files should be created only when the amount of real architecture makes the split useful.
+The next planned implementation discussion is a small display-space picking tolerance owned by `BodyPicker`, not by Body/Rectangle/Circle geometry.
 
-For now, this README is the architecture entry point and overview.
+After that capability, reassess the coordinate-frame pressure before introducing `Vector2.rotate()`, `Transform2D`, or another shared transform helper.

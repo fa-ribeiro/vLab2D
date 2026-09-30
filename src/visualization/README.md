@@ -1,257 +1,442 @@
 # Visualization
 
-`src/visualization/` contains ways to represent simulation information visually.
+`src/visualization/` contains presentation and visual-interaction components for observed simulation state.
 
-Visualization is intentionally outside the engine boundary. Renderers and diagnostic views observe information exposed by the engine's public API rather than reaching into engine internals or mutating authoritative simulation state.
+Visualization is intentionally outside the engine boundary. It consumes detached `BodySnapshot` observations and immutable definition data exposed by the engine; it does not advance simulation time, calculate physics, or mutate authoritative World state.
 
-## Current implementations
+## Current components
 
-The project currently has two concrete visualization implementations:
+The visualization layer currently contains four concrete concepts:
 
-- `CanvasKinematicRenderer` for browser Canvas 2D rendering;
-- `SvgKinematicRenderer` for static SVG output.
+- `ViewportTransform` — rendering-technology-independent viewport geometry and bidirectional world/display coordinate conversion;
+- `CanvasKinematicRenderer` — live Canvas 2D drawing;
+- `SvgKinematicRenderer` — static SVG document generation;
+- `BodyPicker` — Canvas-oriented display-space hit testing against observed body geometry.
 
-`BodySnapshot` observations carry a shared immutable Body definition together with detached runtime state. Both renderers consume that public observation contract rather than reaching into World internals.
+They are intentionally concrete. There is no generic renderer hierarchy, picker interface, camera framework, scene graph, or transformation-matrix abstraction yet.
 
-`ViewportTransform` provides bidirectional world/display coordinate mapping, continuous visible-world geometry, mutable world-space centering, mutable display scale, and anchor-preserving zoom geometry shared by the visualization layer.
+## Observation model
 
-Neither renderer advances simulation time or performs physics calculations.
-
-## Visualization priority
-
-Canvas and canvas-like interactive rendering are the primary visualization target. New interactive capabilities should be shaped around what makes sense for that path.
-
-SVG remains a useful secondary companion because it provides reproducible static snapshots, inspectable output, debugging captures, exports, and documentation images. Keep SVG working where the required adaptation remains natural and reasonably inexpensive.
-
-Do not constrain Canvas to the lowest common denominator merely to preserve SVG parity. If a Canvas feature does not map naturally to SVG, prefer the Canvas design; SVG may adapt, provide a reduced/static equivalent, or omit the feature.
-
-Likewise, a visualization abstraction should be shared only when the underlying concept is genuinely common. `ViewportTransform` is shared because viewport geometry is common to both renderers, not because the renderers are required to expose identical rendering semantics.
-
-## SVG renderer
-
-`SvgKinematicRenderer` produces a complete SVG document.
-
-It currently renders:
-
-1. a low-opacity coordinate grid at visible integer world coordinates;
-2. a horizontal world X axis;
-3. a vertical world Y axis;
-4. a world-origin marker;
-5. body markers or Circle geometry above the spatial reference elements.
-
-Body presentation distinguishes domain geometry from presentation-only fallback geometry:
+Visualization receives `BodySnapshot` values:
 
 ```text
-shapeless Body
-    rendered radius = fixed renderer bodyRadius
-
-Circle Body
-    rendered radius = Circle.radius × pixelsPerUnit
+BodySnapshot
+├── id
+├── definition
+└── state
 ```
 
-A shapeless Body has no domain spatial extent, so the renderer uses a fixed display-space marker to keep it visible. A Circle Body carries finite domain geometry expressed in world units, so its rendered radius changes with the viewport scale.
-
-The SVG renderer exposes `setViewportCenter(...)` for shared programmatic world-space centering and `setViewportScale(...)` for shared programmatic scale changes. Although `ViewportTransform` also supports inverse display-to-world mapping and anchor-aware scale changes, the SVG renderer does not expose those Canvas-oriented interaction queries because no concrete SVG consumer currently needs them.
-
-The SVG renderer is useful as a:
-
-- static visual workbench;
-- reproducible snapshot;
-- debugging capture;
-- export format;
-- source image for project documentation.
-
-A runnable example is available at:
+The snapshot deliberately carries two different ownership categories:
 
 ```text
-examples/kinematic-world-svg.ts
+definition
+    shared immutable Body definition
+    optional Circle or Rectangle geometry
+
+state
+    detached copy of World-owned runtime state
+    position
+    velocity
+    orientation
 ```
 
-It writes:
+The renderer or picker may inspect the shared immutable definition, but neither receives writable World storage.
+
+This lets Visualization answer questions such as “what geometry should this body display?” without moving geometry ownership into the World or duplicating definition data in every observation.
+
+## Domain geometry versus presentation geometry
+
+The current Body definition may be shapeless or carry one concrete shape:
 
 ```text
-generated/kinematic-world.svg
+Body
+├── no shape
+├── Circle(radius)
+└── Rectangle(width, height)
 ```
 
-## Canvas renderer
+Those cases deliberately have different presentation semantics.
 
-`CanvasKinematicRenderer` provides the live rendering implementation.
+| Body definition | Domain spatial extent | Normal visualization |
+| --- | --- | --- |
+| shapeless | none | fixed display-space circular marker |
+| Circle | finite radius in world units | radius scaled through the viewport |
+| Rectangle | finite width/height in world units | centered local rectangle scaled through the viewport |
 
-It receives a Canvas 2D drawing context and renders detached body snapshots directly into that context.
+A shapeless marker is presentation-only. Its radius does not become physical geometry merely because it is visible or pickable.
 
-Each frame is rendered in this order:
-
-1. clear the previous frame;
-2. render the integer-coordinate grid;
-3. render the world X and Y axes;
-4. render the world-origin marker;
-5. render the current bodies.
-
-```mermaid
-flowchart LR
-    W[World]
-    S[Detached snapshots]
-    R[CanvasKinematicRenderer]
-    C[Canvas 2D]
-
-    W -->|getBodySnapshots| S
-    S --> R
-    R --> C
-```
-
-The grid omits zero-coordinate lines because those positions are represented by the world axes.
-
-Spatial references and body positions use the shared `ViewportTransform`. `setViewportCenter(...)` changes which world position occupies the display center, `setViewportScale(...)` changes magnification while preserving that center, and `panViewportBy(...)` accepts finite Canvas display-space deltas and converts them into world-center movement. `displayToWorldX(...)` and `displayToWorldY(...)` expose inverse scalar mapping for interaction without exposing the transform object itself. `viewportScale` exposes the current scale read-only, and `setViewportScaleAroundDisplayPoint(...)` delegates anchor-preserving scale changes for interactive zoom.
-
-The example-local `CanvasExampleHost` owns pointer and wheel interaction. It tracks one active pointer for dragging, uses pointer capture, converts browser CSS coordinates into Canvas drawing-buffer coordinates, and forwards display-space deltas to `panViewportBy(...)`. The same drawing-buffer coordinates can be queried through the inverse mapping to report the world coordinate underneath the pointer or used as the anchor for wheel/trackpad zoom.
-
-Wheel normalization, zoom sensitivity, minimum and maximum scale, and suppression of browser page scrolling during Canvas zoom are host policy. The renderer itself does not depend on Pointer Events, Wheel Events, or other DOM input APIs, and presentation formatting remains host/UI responsibility.
-
-Canvas body rendering follows the same shapeless-versus-Circle distinction as SVG:
-
-```text
-shapeless Body
-    rendered radius = fixed renderer bodyRadius
-
-Circle Body
-    rendered radius = Circle.radius × pixelsPerUnit
-```
-
-The renderer can receive optional hovered and selected `BodyId` values during `render(...)`. It draws distinct rings around the corresponding body's actual rendered extent while storing neither interaction identity itself. The same body can display both states simultaneously. For Circle Bodies the rings therefore scale with Circle geometry; for shapeless Bodies they remain fixed around the presentation marker.
-
-Canvas also supports visual body picking through `findBodyAtDisplayPoint(...)`. The query receives detached snapshots and a Canvas drawing-buffer point, maps each body position through the same viewport transform used for rendering, and applies the same extent policy used for body presentation:
-
-```text
-shapeless Body
-    pick radius = fixed renderer bodyRadius
-
-Circle Body
-    pick radius = Circle.radius × pixelsPerUnit
-```
-
-When body extents overlap, the nearest rendered center wins rather than snapshot order deciding the result.
-
-Body hit testing remains a Visualization query even though Circle domain geometry now participates. The engine owns the intrinsic Circle radius in world units; Visualization owns the mapping of that observed geometry into Canvas display space and the interaction query performed there. Shapeless Bodies additionally require a presentation-only fallback radius. Geometry-aware picking therefore does not imply collision detection or any other physical interaction between simulated bodies.
-
-`CanvasExampleHost` reuses the same observations for hit testing and drawing, owns the transient hovered `BodyId` and persistent selected `BodyId`, recomputes hover as bodies move, and changes selection only through click semantics.
-
-The selected-body inspector is also owned by the example-local host and remains read-only. It resolves the persistent selected identity against the latest detached snapshots each frame and displays the matching body's current position and velocity. No selected snapshot is retained as persistent state.
-
-Clearing the previous frame remains deliberate. Trails should become an explicit visualization capability rather than appearing accidentally because old frames were left on the canvas.
-
-`BrowserSimulationRuntime` controls repeated browser execution. The renderer itself has no knowledge of `requestAnimationFrame`; the Canvas host supplies the Runtime frame callback that obtains fresh snapshots and invokes rendering.
-
-## Animation timing
-
-`BrowserSimulationRuntime` separates browser frame cadence from deterministic Simulation cadence.
-
-`requestAnimationFrame` provides frame timestamps. Runtime converts their differences into elapsed seconds, clamps unusually large deltas, accumulates the accepted time, and consumes it through fixed-size `Simulation.step(...)` calls. Runtime then invokes the host frame callback once.
-
-```mermaid
-flowchart LR
-    F[Browser frame]
-    D[Clamped elapsed time]
-    A[Runtime accumulator]
-    S[0..N fixed Simulation steps]
-    H[Host onFrame callback]
-    R[Canvas render]
-
-    F --> D --> A --> S --> H --> R
-```
-
-The Runtime callback delegates to `CanvasExampleHost.renderFrame()`, which obtains fresh World snapshots and invokes `CanvasKinematicRenderer`. The renderer remains unaware of this timing mechanism and only draws the snapshots it receives.
-
-Variable frame delta is therefore scheduling input rather than the numerical integration timestep.
+Likewise, picking against observed geometry is not collision detection. Picking answers an interaction question about what the user is pointing at; collision detection would answer a physical simulation question and belongs to a different responsibility.
 
 ## Coordinate systems
 
 The engine uses mathematical world coordinates:
 
-- positive X points right;
-- positive Y points up.
-
-SVG and Canvas use display coordinate systems where positive Y points downward.
-
-The shared `ViewportTransform` owns conversion in both directions between those coordinate systems:
-
 ```text
-displayX = viewportWidth / 2 + (worldX - centerWorldX) × pixelsPerUnit
-
-displayY = viewportHeight / 2 - (worldY - centerWorldY) × pixelsPerUnit
-
-worldX = centerWorldX + (displayX - viewportWidth / 2) / pixelsPerUnit
-
-worldY = centerWorldY - (displayY - viewportHeight / 2) / pixelsPerUnit
++X → right
++Y → up
+positive orientation → counter-clockwise
 ```
 
-The configured world-space center maps to the center of the viewport. The world origin occupies that position by default.
+Canvas and SVG display coordinates use positive Y downward.
+
+`ViewportTransform` owns the translation between these coordinate systems. Its current responsibilities include:
+
+- immutable viewport width and height;
+- mutable world-space viewport center;
+- mutable display scale (`pixelsPerUnit`);
+- continuous visible-world bounds;
+- world-to-display X/Y conversion;
+- display-to-world X/Y conversion;
+- display-space panning geometry;
+- anchor-preserving zoom geometry.
+
+The transform contains no Canvas, SVG, DOM, World, snapshot, or `Vector2` behavior.
+
+### Orientation convention
+
+Body orientation is stored in world semantics: finite radians, positive counter-clockwise.
+
+Because display Y points downward, both renderers negate the world angle when expressing the equivalent display-space rotation.
+
+For a Rectangle, normal rendering conceptually does this:
+
+```text
+world BodyState
+    position + orientation
+        ↓
+move drawing frame to body position
+        ↓
+apply display-space rotation = -orientation
+        ↓
+draw Rectangle around local (0, 0)
+```
+
+The centered Rectangle geometry remains simple in body-local coordinates:
+
+```text
+x ∈ [-width / 2, +width / 2]
+y ∈ [-height / 2, +height / 2]
+```
+
+Circle geometry also carries orientation through runtime state, even though a plain circular outline is rotationally symmetric and therefore looks unchanged.
+
+## Canvas composition
+
+The interactive Canvas path deliberately uses one explicitly composed `ViewportTransform` instance.
+
+`examples/kinematic-world-canvas/main.ts` creates the transform and shares it with the collaborators that must observe the same mutable viewport state:
 
 ```mermaid
 flowchart LR
-    WORLD["World coordinates<br/>+X right<br/>+Y up"]
+    H["CanvasExampleHost"]
+    V["ViewportTransform"]
+    P["BodyPicker"]
+    R["CanvasKinematicRenderer"]
 
-    TRANSFORM["ViewportTransform"]
-
-    DISPLAY["Display coordinates<br/>+X right<br/>+Y down"]
-
-    WORLD <--> TRANSFORM <--> DISPLAY
+    H --> V
+    H --> P
+    H --> R
+    V --> P
+    V --> R
 ```
 
-`ViewportTransform` contains no rendering behavior.
-
-It stores immutable viewport dimensions together with mutable world-space center and display scale, exposes scalar forward and inverse coordinate-conversion operations, and describes the continuous world-space extent visible through the viewport:
+The responsibility split is:
 
 ```text
-minWorldX
-maxWorldX
-minWorldY
-maxWorldY
+CanvasExampleHost
+    browser DOM/input policy
+    CSS → Canvas coordinate conversion
+    pan/zoom policy
+    hover identity
+    selection identity
+    inspection output
+
+ViewportTransform
+    viewport geometry
+    world ↔ display mapping
+    pan/zoom geometry
+
+BodyPicker
+    hit testing of detached observations
+
+CanvasKinematicRenderer
+    drawing only
 ```
 
-These bounds move with the world-space center and change with the display scale while remaining viewport geometry rather than grid policy. Each renderer remains responsible for choosing its discrete grid coordinates by applying `ceil` / `floor`, skipping zero where the world axes own that coordinate, and drawing with renderer-specific primitives.
+This is an intentional evolution from the earlier Canvas design where the renderer constructed its transform internally and exposed viewport and picking façade methods.
+
+That earlier design was reasonable while the renderer was the only real viewport consumer. Once `BodyPicker` became a second independent consumer, sharing one explicitly composed transform removed duplicated ownership and prevented drawing and picking from drifting apart.
+
+The architectural lesson is not “injection is always better.” It is:
+
+> A shared collaborator becomes worth composing explicitly when multiple concrete responsibilities must observe the same state.
+
+## Canvas renderer
+
+`CanvasKinematicRenderer` renders detached observations into a Canvas-like 2D drawing context.
+
+It currently draws:
+
+1. a low-opacity integer grid;
+2. world X/Y axes;
+3. the world-origin marker;
+4. shapeless presentation markers;
+5. Circle geometry;
+6. Rectangle geometry;
+7. transient hover feedback;
+8. persistent-selection feedback.
+
+The renderer receives the shared `ViewportTransform` through its constructor:
+
+```ts
+new CanvasKinematicRenderer(context, viewport, shapelessBodyRadius);
+```
+
+It does not expose pan, zoom, inverse-coordinate, or picking methods. Those capabilities belong to the collaborators that own the corresponding responsibilities.
+
+### Rectangle rendering
+
+Rectangle geometry is drawn around the body's local origin and transformed by the body's current pose:
+
+```ts
+context.save();
+context.translate(displayX, displayY);
+context.rotate(-snapshot.state.orientation);
+context.fillRect(-width / 2, -height / 2, width, height);
+context.restore();
+```
+
+This keeps intrinsic geometry independent from world position and orientation.
+
+### Circle rendering
+
+Circle radius is defined in world units and converted through the current viewport scale:
+
+```text
+display radius = Circle.radius × pixelsPerUnit
+```
+
+A shapeless Body instead uses the renderer's fixed display-space fallback radius, so zoom changes domain geometry on screen while leaving the presentation marker visually fixed.
+
+## Hover and selection presentation
+
+Hover and selection are application/interaction state owned by the Canvas host, not engine state and not persistent renderer state.
+
+The host passes optional body identities into each render call:
+
+```text
+render(snapshots, hoveredBodyId, selectedBodyId)
+```
+
+The renderer decides only how those identities are presented for the current frame.
+
+For Rectangle bodies, hover and selection outlines are drawn in the same body-local transformed frame as the Rectangle itself. Geometry and interaction feedback therefore rotate together.
+
+For Circle and shapeless markers, the feedback is circular and therefore visually invariant under orientation.
+
+This distinction matters:
+
+```text
+interaction state ownership
+    CanvasExampleHost
+
+interaction feedback drawing
+    CanvasKinematicRenderer
+```
+
+The renderer remains stateless about which body is hovered or selected.
+
+## Body picking
+
+`BodyPicker` owns display-space hit testing. It receives the same `ViewportTransform` instance used by the Canvas renderer:
+
+```ts
+new BodyPicker(viewport, shapelessBodyRadius);
+```
+
+Its public query is:
+
+```ts
+findBodyAtDisplayPoint(
+  snapshots,
+  displayX,
+  displayY,
+): BodyId | undefined
+```
+
+The picker uses the geometry visible in the observed frame:
+
+```text
+shapeless Body
+    fixed circular presentation marker
+
+Circle
+    world radius × current viewport scale
+
+Rectangle
+    world width/height × current viewport scale
+    current BodyState.orientation
+```
+
+### Oriented Rectangle picking
+
+Rendering makes Rectangle geometry simple by drawing in body-local coordinates. Picking applies the inverse idea: transform the pointer displacement back into the Rectangle's local coordinate frame, then test ordinary centered bounds.
+
+Conceptually:
+
+```text
+display-space pointer
+    ↓ subtract displayed body center
+body-relative display vector
+    ↓ inverse body rotation
+Rectangle-local vector
+    ↓
+|localX| <= halfWidth
+|localY| <= halfHeight
+```
+
+The current implementation uses:
+
+```ts
+const cos = Math.cos(orientation);
+const sin = Math.sin(orientation);
+
+const localX = deltaX * cos - deltaY * sin;
+const localY = deltaX * sin + deltaY * cos;
+```
+
+The signs correspond to undoing the Canvas display rotation (`-orientation`) while display Y points downward.
+
+If several extents contain the pointer, the picker returns the body whose displayed center is nearest to the pointer. It therefore does not depend on `BodySnapshot[]` ordering, which is not part of the World observation contract.
+
+No collision shape, broad phase, spatial index, or generic picking framework is implied by this interaction query.
+
+## Canvas host interaction
+
+`CanvasExampleHost` remains example-local because there is still one concrete consumer for its combined browser policy.
+
+It owns:
+
+- pointer and wheel event handling;
+- pointer capture;
+- browser client-coordinate to Canvas drawing-buffer conversion;
+- click-versus-drag interpretation;
+- wheel-delta normalization;
+- zoom sensitivity and min/max limits;
+- transient hovered `BodyId`;
+- persistent selected `BodyId`;
+- read-only DOM inspection output;
+- per-frame rendering orchestration.
+
+It directly uses `ViewportTransform` for panning, anchored zoom, and world-coordinate inspection, and directly uses `BodyPicker` for hover/click hit testing.
+
+The host retains the latest detached snapshots used for the visible frame. Hover is recomputed from those observations every animation frame because simulation bodies can move underneath a stationary pointer.
+
+Selection stores only identity. The selected snapshot itself is not retained across frames; current position and velocity are resolved again from each fresh observation set.
+
+## SVG renderer
+
+`SvgKinematicRenderer` remains the secondary static visualization path.
+
+Unlike the Canvas path, SVG currently has no independent second consumer that must share its mutable viewport state. It therefore still creates and owns its `ViewportTransform` internally.
+
+It exposes only the programmatic viewport operations that have real SVG consumers:
+
+```text
+setViewportCenter(...)
+setViewportScale(...)
+```
+
+This difference is intentional:
+
+```text
+Canvas
+    one transform shared explicitly by renderer + picker + host
+
+SVG
+    renderer owns one transform internally
+```
+
+The project does not force the two renderers into identical construction or interaction APIs merely for symmetry.
+
+SVG renders the same domain geometry semantics as Canvas:
+
+- fixed marker for shapeless Bodies;
+- world-scaled Circle radius;
+- centered Rectangle width/height;
+- body orientation expressed as a negated display-space rotation.
+
+## Runtime is separate from visualization
+
+`BrowserSimulationRuntime` owns browser scheduling and fixed-timestep accumulation. It does not own Canvas, SVG, picking, hover, selection, snapshots, or DOM interaction state.
+
+The live flow is therefore:
 
 ```mermaid
-flowchart TD
-    TRANSFORM["ViewportTransform"]
-    BOUNDS["continuous visible world bounds"]
-    CANVAS["Canvas grid policy"]
-    SVG["SVG grid policy"]
+flowchart LR
+    RT["BrowserSimulationRuntime"]
+    S["Simulation"]
+    W["World"]
+    H["CanvasExampleHost"]
+    P["BodyPicker"]
+    R["CanvasKinematicRenderer"]
 
-    TRANSFORM --> BOUNDS
-    BOUNDS --> CANVAS
-    BOUNDS --> SVG
+    RT --> S --> W
+    RT -->|onFrame| H
+    W -->|detached snapshots| H
+    H --> P
+    H --> R
 ```
 
-Both `SvgKinematicRenderer` and `CanvasKinematicRenderer` own a transform internally while retaining their existing public constructor shapes.
+Variable browser frame timing drives Runtime scheduling only. Numerical progression remains fixed-timestep Simulation stepping.
 
-The shared viewport responsibilities were introduced only after concrete renderer implementations demonstrated the same geometry requirements.
+## Normal appearance versus diagnostics
 
-## Rendering roles
+The project distinguishes three visual concerns:
 
-The current renderers have intentionally different output models.
+```text
+1. Domain representation
+   Body / shape / BodyState
 
-```mermaid
-flowchart TD
-    S[Body snapshots]
+2. Normal appearance
+   how a body is presented
+   future materials / colors / textures / sprites
 
-    SVG[SvgKinematicRenderer]
-    CANVAS[CanvasKinematicRenderer]
-
-    DOC[SVG document text]
-    CTX[Canvas 2D context]
-
-    S --> SVG --> DOC
-    S --> CANVAS --> CTX
+3. Diagnostic / inspection visualization
+   optional information about simulation state
+   orientation axes / velocity vectors / bounds / contacts / IDs
 ```
 
-This is why the project does not yet define a generic renderer interface.
+Current hover and selection rings are interaction feedback, not physics diagnostics.
 
-The two concrete implementations should continue to teach us which concepts are genuinely shared and which belong to particular rendering technologies.
+A future orientation-axis overlay, for example, would reveal the orientation of a Circle whose plain outline is visually symmetric. That overlay would not change the Circle's domain geometry or its normal rendering semantics.
 
-## Direction
+No material system, sprite system, diagnostic-overlay framework, or style/theme abstraction has been introduced yet.
 
-Programmatic viewport centering and scale changes are supported by both concrete renderers. The Canvas browser example adds pointer-drag panning, live world-coordinate inspection, bounded pointer-anchored wheel/trackpad zoom, display-space body picking, live hover highlighting, persistent click selection, and read-only live selected-body inspection.
+## Abstractions deliberately deferred
 
-Anchor-preserving zoom is geometry owned by `ViewportTransform`; wheel interpretation, scale limits, sensitivity, browser event cancellation, CSS-to-Canvas coordinate conversion, inspection UI, transient hover identity, persistent selection identity, click-versus-drag tolerance, and inspector formatting remain host policy. Body hit testing stays in Canvas Visualization because the query maps observed geometry into display space and combines it with presentation-only fallback geometry for shapeless Bodies. The renderer accepts per-frame hover and selection identities but owns neither state.
+Current implementation evidence does **not** yet justify:
 
-The inspector resolves the selected `BodyId` against fresh snapshots and never treats a retained runtime-state observation as authoritative state. Circle geometry is now carried end-to-end through observation, rendering, and Canvas picking. Box/Rectangle is the planned second concrete geometry variant and the next source of pressure for broader shape/orientation design. The selected-body velocity-vector diagnostic remains a later candidate. Editable state, drag manipulation, cameras, renderer interfaces, generalized inspector systems, diagnostic-overlay frameworks, and generalized rendering abstractions remain deferred until concrete requirements establish their shape.
+- a generic `Renderer` base class or interface;
+- a generic `Shape` inheritance hierarchy;
+- a generic `Picker` hierarchy;
+- `Transform2D` for body pose;
+- `Vector2.rotate()` merely for renderer-native transformations;
+- a camera object separate from `ViewportTransform`;
+- a scene graph;
+- a collision system;
+- an interaction framework;
+- a materials/appearance framework;
+- a diagnostic-overlay framework.
+
+Canvas and SVG already provide native rotation transforms for normal rendering. A project-owned `Transform2D` or vector-rotation primitive should be introduced only when our own code repeatedly needs to transform points/vectors between body-local and world coordinate frames.
+
+## Architecture evolution rule
+
+Visualization follows the same project-wide rule:
+
+> Concrete requirements create pressure; repeated pressure earns abstractions.
+
+`ViewportTransform` itself was extracted only after Canvas and SVG independently demonstrated the same viewport geometry. Later, its Canvas ownership evolved again when `BodyPicker` created a real second consumer of the same mutable viewport state.
+
+That evolution is expected. The goal is not to predict the final framework; it is to keep each current responsibility understandable and correctly placed.
