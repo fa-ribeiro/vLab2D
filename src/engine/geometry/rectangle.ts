@@ -1,3 +1,5 @@
+import { assertFiniteNumber, assertPositiveNumber } from "../math/validation.ts";
+
 /**
  * Defines immutable rectangular geometry in simulation/world units.
  *
@@ -19,13 +21,11 @@ export class Rectangle {
    * @throws {RangeError} If either dimension is not positive and finite.
    */
   public constructor(width: number, height: number) {
-    if (!Number.isFinite(width) || width <= 0) {
-      throw new RangeError("Rectangle width must be a positive finite number.");
-    }
+    assertFiniteNumber(width, "Rectangle width");
+    assertPositiveNumber(width, "Rectangle width");
 
-    if (!Number.isFinite(height) || height <= 0) {
-      throw new RangeError("Rectangle height must be a positive finite number.");
-    }
+    assertFiniteNumber(height, "Rectangle height");
+    assertPositiveNumber(height, "Rectangle height");
 
     this.width = width;
     this.height = height;

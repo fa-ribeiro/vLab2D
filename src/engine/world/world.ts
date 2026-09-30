@@ -21,9 +21,10 @@ interface WorldBody {
  * instances.
  *
  * Reusable {@link Body} definitions enter the world through `addBody(...)`.
- * Initial position and velocity are supplied separately as world-specific
- * initial conditions. The world copies those values into authoritative runtime
- * state that remains private and may be observed through detached snapshots.
+ * Initial position, velocity, and orientation are supplied separately as
+ * world-specific initial conditions. The world copies those values into
+ * authoritative runtime state that remains private and may be observed through
+ * detached snapshots.
  *
  * All body instances currently share the same world gravity and numerical
  * integration strategy.
@@ -77,27 +78,31 @@ export class World {
    * Adds a reusable body definition to the world as an independent runtime
    * instance.
    *
-   * Position and velocity are world-specific initial conditions rather than
-   * intrinsic body properties. Omitted values default to zero. The supplied
-   * vectors are copied before becoming authoritative runtime state.
+   * Position, velocity, and orientation are world-specific initial conditions
+   * rather than intrinsic body properties. Omitted values default to zero. The
+   * supplied vectors are copied before becoming authoritative runtime state.
+   * Orientation is expressed in radians; positive values rotate
+   * counter-clockwise in the mathematical world coordinate system.
    *
    * The same body definition may be added more than once, including to
    * different worlds. Each addition receives its own world-local identifier
    * and independent runtime state.
    *
    * @param body The reusable body definition to instantiate in this world.
-   * @param initialConditions Optional initial position and velocity.
+   * @param initialConditions Optional initial position, velocity, and
+   * orientation.
    * @returns The world-local identifier assigned to the new body instance.
-   * @throws {RangeError} If an initial condition contains a non-finite
-   * component.
+   * @throws {RangeError} If an initial condition contains a non-finite value.
    */
   public addBody(body: Body, initialConditions: BodyInitialConditions = {}): BodyId {
     const position = initialConditions.position ?? new Vector2(0, 0);
     const velocity = initialConditions.velocity ?? new Vector2(0, 0);
+    const orientation = initialConditions.orientation ?? 0;
 
     const initialState: BodyState = {
       position: new Vector2(position.x, position.y),
       velocity: new Vector2(velocity.x, velocity.y),
+      orientation,
     };
 
     assertFiniteBodyState(initialState, "Initial body state");
@@ -159,7 +164,7 @@ export class World {
    *
    * @param dt The timestep duration in seconds.
    * @throws {RangeError} If the timestep is negative or not finite, or if an
-   * integrator result contains a non-finite component.
+   * integrator result contains a non-finite value.
    */
   public step(dt: number): void {
     assertValidTimestep(dt);
@@ -190,5 +195,6 @@ function copyState(state: BodyState): BodyState {
   return {
     position: new Vector2(state.position.x, state.position.y),
     velocity: new Vector2(state.velocity.x, state.velocity.y),
+    orientation: state.orientation,
   };
 }

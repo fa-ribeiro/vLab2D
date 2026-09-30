@@ -35,6 +35,10 @@ interface CanvasDrawingContext {
 
   restore(): void;
 
+  translate(x: number, y: number): void;
+
+  rotate(angle: number): void;
+
   globalAlpha: number;
 }
 
@@ -50,6 +54,10 @@ interface CanvasDrawingContext {
  * - positive world X maps right;
  * - positive world Y maps up;
  * - positive Canvas Y maps down.
+ *
+ * Shape geometry is rendered around each body's local origin. Positive body
+ * orientation is counter-clockwise in world space; the renderer negates that
+ * angle when applying Canvas rotation because Canvas display Y points down.
  */
 export class CanvasKinematicRenderer {
   readonly #context: CanvasDrawingContext;
@@ -180,8 +188,9 @@ export class CanvasKinematicRenderer {
    *
    * Shapeless bodies use the renderer's fixed circular presentation marker.
    * Circle and Rectangle bodies use their world-space geometry transformed by
-   * the current viewport scale. Rectangles are currently unrotated because
-   * body runtime state does not yet include orientation.
+   * the current viewport scale. Rectangle picking currently evaluates the
+   * unrotated width and height extent; orientation-aware picking is a separate
+   * interaction capability.
    *
    * When multiple bodies contain the point, the body with the nearest display-
    * space center is returned.
@@ -265,10 +274,14 @@ export class CanvasKinematicRenderer {
       const width = shape.width * this.#transform.pixelsPerUnit;
       const height = shape.height * this.#transform.pixelsPerUnit;
 
+      this.#context.save();
+      this.#context.translate(x, y);
+      this.#context.rotate(-snapshot.state.orientation);
+      this.#context.fillRect(-width / 2, -height / 2, width, height);
+      this.#context.restore();
+
       const left = x - width / 2;
       const top = y - height / 2;
-
-      this.#context.fillRect(left, top, width, height);
 
       if (hovered) {
         this.#context.save();
@@ -305,9 +318,19 @@ export class CanvasKinematicRenderer {
       ? this.#bodyRadius
       : shape.radius * this.#transform.pixelsPerUnit;
 
-    this.#context.beginPath();
-    this.#context.arc(x, y, radius, 0, Math.PI * 2);
-    this.#context.fill();
+    if (shape === undefined) {
+      this.#context.beginPath();
+      this.#context.arc(x, y, radius, 0, Math.PI * 2);
+      this.#context.fill();
+    } else {
+      this.#context.save();
+      this.#context.translate(x, y);
+      this.#context.rotate(-snapshot.state.orientation);
+      this.#context.beginPath();
+      this.#context.arc(0, 0, radius, 0, Math.PI * 2);
+      this.#context.fill();
+      this.#context.restore();
+    }
 
     if (hovered) {
       this.#context.save();

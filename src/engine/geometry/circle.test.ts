@@ -9,27 +9,15 @@ Deno.test("Circle stores its radius", () => {
 });
 
 Deno.test("Circle rejects a zero radius", () => {
-  assertThrows(
-    () => new Circle(0),
-    RangeError,
-    "Circle radius must be a positive finite number.",
-  );
+  assertThrows(() => new Circle(0), RangeError, "Circle radius must be positive.");
 });
 
 Deno.test("Circle rejects a negative radius", () => {
-  assertThrows(
-    () => new Circle(-1),
-    RangeError,
-    "Circle radius must be a positive finite number.",
-  );
+  assertThrows(() => new Circle(-1), RangeError, "Circle radius must be positive.");
 });
 
 Deno.test("Circle rejects a non-finite radius", () => {
   for (const radius of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
-    assertThrows(
-      () => new Circle(radius),
-      RangeError,
-      "Circle radius must be a positive finite number.",
-    );
+    assertThrows(() => new Circle(radius), RangeError, "Circle radius must be finite.");
   }
 });

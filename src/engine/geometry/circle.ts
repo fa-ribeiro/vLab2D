@@ -1,3 +1,5 @@
+import { assertFiniteNumber, assertPositiveNumber } from "../math/validation.ts";
+
 /**
  * Defines immutable circular geometry in simulation/world units.
  *
@@ -15,9 +17,8 @@ export class Circle {
    * @throws {RangeError} If the radius is not positive and finite.
    */
   public constructor(radius: number) {
-    if (!Number.isFinite(radius) || radius <= 0) {
-      throw new RangeError("Circle radius must be a positive finite number.");
-    }
+    assertFiniteNumber(radius, "Circle radius");
+    assertPositiveNumber(radius, "Circle radius");
 
     this.radius = radius;
   }

@@ -10,31 +10,15 @@ Deno.test("Rectangle stores its dimensions", () => {
 });
 
 Deno.test("Rectangle rejects a zero dimension", () => {
-  assertThrows(
-    () => new Rectangle(0, 2),
-    RangeError,
-    "Rectangle width must be a positive finite number.",
-  );
+  assertThrows(() => new Rectangle(0, 2), RangeError, "Rectangle width must be positive.");
 
-  assertThrows(
-    () => new Rectangle(4, 0),
-    RangeError,
-    "Rectangle height must be a positive finite number.",
-  );
+  assertThrows(() => new Rectangle(4, 0), RangeError, "Rectangle height must be positive.");
 });
 
 Deno.test("Rectangle rejects a negative dimension", () => {
-  assertThrows(
-    () => new Rectangle(-1, 2),
-    RangeError,
-    "Rectangle width must be a positive finite number.",
-  );
+  assertThrows(() => new Rectangle(-1, 2), RangeError, "Rectangle width must be positive.");
 
-  assertThrows(
-    () => new Rectangle(4, -1),
-    RangeError,
-    "Rectangle height must be a positive finite number.",
-  );
+  assertThrows(() => new Rectangle(4, -1), RangeError, "Rectangle height must be positive.");
 });
 
 Deno.test("Rectangle rejects a non-finite dimension", () => {
@@ -42,13 +26,13 @@ Deno.test("Rectangle rejects a non-finite dimension", () => {
     assertThrows(
       () => new Rectangle(dimension, 2),
       RangeError,
-      "Rectangle width must be a positive finite number.",
+      "Rectangle width must be finite.",
     );
 
     assertThrows(
       () => new Rectangle(4, dimension),
       RangeError,
-      "Rectangle height must be a positive finite number.",
+      "Rectangle height must be finite.",
     );
   }
 });

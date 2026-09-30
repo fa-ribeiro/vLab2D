@@ -11,8 +11,8 @@ import {
 } from "../engine/mod.ts";
 import { CanvasKinematicRenderer } from "./canvas-kinematic-renderer.ts";
 
-function createBodyState(position: Vector2, velocity: Vector2): BodyState {
-  return { position, velocity };
+function createBodyState(position: Vector2, velocity: Vector2, orientation = 0): BodyState {
+  return { position, velocity, orientation };
 }
 
 function createBodySnapshot(
@@ -20,11 +20,12 @@ function createBodySnapshot(
   position: Vector2,
   velocity = new Vector2(0, 0),
   definition = new Body(),
+  orientation = 0,
 ): BodySnapshot {
   return {
     id,
     definition,
-    state: createBodyState(position, velocity),
+    state: createBodyState(position, velocity, orientation),
   };
 }
 
@@ -75,6 +76,14 @@ class RecordingCanvasContext {
 
   restore(): void {
     this.calls.push(["restore"]);
+  }
+
+  translate(x: number, y: number): void {
+    this.calls.push(["translate", x, y]);
+  }
+
+  rotate(angle: number): void {
+    this.calls.push(["rotate", angle]);
   }
 }
 
@@ -446,7 +455,7 @@ Deno.test("CanvasKinematicRenderer renders Circle radius in world units", () => 
 
   const arcCalls = context.calls.filter(([name]) => name === "arc");
 
-  assertEquals(arcCalls, [["arc", 120, 20, 15, 0, Math.PI * 2]]);
+  assertEquals(arcCalls, [["arc", 0, 0, 15, 0, Math.PI * 2]]);
 });
 
 Deno.test("CanvasKinematicRenderer scales Circle radius with the viewport", () => {
@@ -468,7 +477,7 @@ Deno.test("CanvasKinematicRenderer scales Circle radius with the viewport", () =
 
   const arcCalls = context.calls.filter(([name]) => name === "arc");
 
-  assertEquals(arcCalls, [["arc", 100, 50, 20, 0, Math.PI * 2]]);
+  assertEquals(arcCalls, [["arc", 0, 0, 20, 0, Math.PI * 2]]);
 });
 
 Deno.test(
@@ -523,7 +532,7 @@ Deno.test("CanvasKinematicRenderer sizes interaction rings around Circle geometr
   const arcCalls = context.calls.filter(([name]) => name === "arc");
 
   assertEquals(arcCalls, [
-    ["arc", 100, 50, 20, 0, Math.PI * 2],
+    ["arc", 0, 0, 20, 0, Math.PI * 2],
     ["arc", 100, 50, 24, 0, Math.PI * 2],
     ["arc", 100, 50, 28, 0, Math.PI * 2],
   ]);
@@ -566,8 +575,64 @@ Deno.test("CanvasKinematicRenderer renders Rectangle dimensions in world units",
 
   const fillRectCalls = context.calls.filter(([name]) => name === "fillRect");
 
-  assertEquals(fillRectCalls, [["fillRect", 100, 30, 40, 20]]);
+  assertEquals(fillRectCalls, [["fillRect", -20, -10, 40, 20]]);
 });
+
+Deno.test(
+  "CanvasKinematicRenderer applies positive Rectangle orientation counter-clockwise in world space",
+  () => {
+    const context = new RecordingCanvasContext();
+    const renderer = new CanvasKinematicRenderer(context, 200, 100, 10, 3);
+
+    const snapshots: readonly BodySnapshot[] = [
+      createBodySnapshot(
+        7,
+        new Vector2(2, 1),
+        new Vector2(0, 0),
+        new Body({ shape: new Rectangle(4, 2) }),
+        Math.PI / 2,
+      ),
+    ];
+
+    renderer.render(snapshots);
+
+    const translateCalls = context.calls.filter(([name]) => name === "translate");
+    const rotateCalls = context.calls.filter(([name]) => name === "rotate");
+    const fillRectCalls = context.calls.filter(([name]) => name === "fillRect");
+
+    assertEquals(translateCalls, [["translate", 120, 40]]);
+    assertEquals(rotateCalls, [["rotate", -Math.PI / 2]]);
+    assertEquals(fillRectCalls, [["fillRect", -20, -10, 40, 20]]);
+  },
+);
+
+Deno.test(
+  "CanvasKinematicRenderer applies Circle orientation even though its outline is symmetric",
+  () => {
+    const context = new RecordingCanvasContext();
+    const renderer = new CanvasKinematicRenderer(context, 200, 100, 10, 3);
+
+    const snapshots: readonly BodySnapshot[] = [
+      createBodySnapshot(
+        7,
+        new Vector2(2, 3),
+        new Vector2(0, 0),
+        new Body({ shape: new Circle(1.5) }),
+        Math.PI / 3,
+      ),
+    ];
+
+    renderer.render(snapshots);
+
+    const translateCalls = context.calls.filter(([name]) => name === "translate");
+    const rotateCalls = context.calls.filter(([name]) => name === "rotate");
+    const arcCalls = context.calls.filter(([name]) => name === "arc");
+
+    assertEquals(translateCalls, [["translate", 120, 20]]);
+    assertEquals(rotateCalls, [["rotate", -Math.PI / 3]]);
+    assertEquals(arcCalls, [["arc", 0, 0, 15, 0, Math.PI * 2]]);
+  },
+);
 
 Deno.test("CanvasKinematicRenderer scales Rectangle dimensions with the viewport", () => {
   const context = new RecordingCanvasContext();
@@ -588,7 +653,7 @@ Deno.test("CanvasKinematicRenderer scales Rectangle dimensions with the viewport
 
   const fillRectCalls = context.calls.filter(([name]) => name === "fillRect");
 
-  assertEquals(fillRectCalls, [["fillRect", 60, 30, 80, 40]]);
+  assertEquals(fillRectCalls, [["fillRect", -40, -20, 80, 40]]);
 });
 
 Deno.test("CanvasKinematicRenderer sizes interaction rings around Rectangle geometry", () => {
@@ -609,7 +674,7 @@ Deno.test("CanvasKinematicRenderer sizes interaction rings around Rectangle geom
   const fillRectCalls = context.calls.filter(([name]) => name === "fillRect");
   const strokeRectCalls = context.calls.filter(([name]) => name === "strokeRect");
 
-  assertEquals(fillRectCalls, [["fillRect", 100, 30, 40, 20]]);
+  assertEquals(fillRectCalls, [["fillRect", -20, -10, 40, 20]]);
 
   assertEquals(strokeRectCalls, [
     ["strokeRect", 96, 26, 48, 28],

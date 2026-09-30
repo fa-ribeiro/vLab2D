@@ -38,11 +38,17 @@ world.addBody(particle, { position: new Vector2(4, 2), velocity: new Vector2(-1,
 
 const circle = new Body({ shape: new Circle(1) });
 
-world.addBody(circle, { position: new Vector2(2, 3) });
+world.addBody(circle, {
+  position: new Vector2(2, 3),
+  orientation: Math.PI / 4,
+});
 
 const rectangle = new Body({ shape: new Rectangle(2, 1) });
 
-world.addBody(rectangle, { position: new Vector2(5, 4) });
+world.addBody(rectangle, {
+  position: new Vector2(5, 4),
+  orientation: Math.PI / 6,
+});
 
 const simulation = new Simulation([world]);
 

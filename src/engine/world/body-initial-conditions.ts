@@ -11,4 +11,12 @@ export interface BodyInitialConditions {
 
   /** Initial velocity in world units per second. Defaults to `(0, 0)`. */
   readonly velocity?: Vector2;
+
+  /**
+   * Initial orientation in radians. Defaults to `0`.
+   *
+   * Zero aligns the body's local axes with the world axes. Positive values
+   * rotate counter-clockwise in the mathematical world coordinate system.
+   */
+  readonly orientation?: number;
 }

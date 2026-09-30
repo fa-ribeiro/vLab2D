@@ -1,9 +1,11 @@
+import { assertFiniteNumber, assertNonNegativeNumber } from "../math/validation.ts";
 import { Vector2 } from "../math/vector2.ts";
 import type { BodyState } from "../world/body-state.ts";
 
 export function assertFiniteBodyState(state: BodyState, name: string): void {
   assertFiniteVector(state.position, `${name} position`);
   assertFiniteVector(state.velocity, `${name} velocity`);
+  assertFiniteNumber(state.orientation, `${name} orientation`);
 }
 
 export function assertFiniteVector(vector: Vector2, name: string): void {
@@ -13,11 +15,6 @@ export function assertFiniteVector(vector: Vector2, name: string): void {
 }
 
 export function assertValidTimestep(dt: number): void {
-  if (!Number.isFinite(dt)) {
-    throw new RangeError("The timestep must be finite.");
-  }
-
-  if (dt < 0) {
-    throw new RangeError("The timestep must not be negative.");
-  }
+  assertFiniteNumber(dt, "The timestep");
+  assertNonNegativeNumber(dt, "The timestep");
 }

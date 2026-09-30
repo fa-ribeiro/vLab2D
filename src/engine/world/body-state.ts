@@ -16,4 +16,12 @@ export interface BodyState {
 
   /** The body's current velocity in world units per second. */
   readonly velocity: Vector2;
+
+  /**
+   * The body's current orientation in radians.
+   *
+   * Zero aligns the body's local axes with the world axes. Positive values
+   * rotate counter-clockwise in the mathematical world coordinate system.
+   */
+  readonly orientation: number;
 }

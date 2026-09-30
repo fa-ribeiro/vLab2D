@@ -19,6 +19,10 @@ const AXIS_OPACITY = 0.45;
  * - positive world Y maps up;
  * - positive SVG Y maps down.
  *
+ * Positive body orientation is counter-clockwise in world space. SVG display
+ * coordinates point downward on Y, so the renderer negates the world angle
+ * when expressing the equivalent display-space rotation.
+ *
  * A low-opacity grid marks integer world coordinates. The world X and Y axes
  * span the visible viewport, and the world origin is rendered as a small
  * crosshair at its mapped display position.
@@ -105,17 +109,30 @@ export class SvgKinematicRenderer {
     if (shape instanceof Rectangle) {
       const width = shape.width * this.#transform.pixelsPerUnit;
       const height = shape.height * this.#transform.pixelsPerUnit;
+      const rotation = this.#bodyRotationTransform(snapshot.state.orientation, x, y);
 
       return `  <rect data-body-id="${snapshot.id}" x="${x - width / 2}" y="${
         y - height / 2
-      }" width="${width}" height="${height}" />`;
+      }" width="${width}" height="${height}" transform="${rotation}" />`;
     }
 
     const radius = shape === undefined
       ? this.#bodyRadius
       : shape.radius * this.#transform.pixelsPerUnit;
 
-    return `  <circle data-body-id="${snapshot.id}" cx="${x}" cy="${y}" r="${radius}" />`;
+    if (shape === undefined) {
+      return `  <circle data-body-id="${snapshot.id}" cx="${x}" cy="${y}" r="${radius}" />`;
+    }
+
+    const rotation = this.#bodyRotationTransform(snapshot.state.orientation, x, y);
+
+    return `  <circle data-body-id="${snapshot.id}" cx="${x}" cy="${y}" r="${radius}" transform="${rotation}" />`;
+  }
+
+  #bodyRotationTransform(orientation: number, x: number, y: number): string {
+    const displayAngleDegrees = -(orientation * 180) / Math.PI;
+
+    return `rotate(${displayAngleDegrees} ${x} ${y})`;
   }
 
   #renderOrigin(): string {

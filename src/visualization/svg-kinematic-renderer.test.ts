@@ -11,8 +11,8 @@ import {
 } from "../engine/mod.ts";
 import { SvgKinematicRenderer } from "./svg-kinematic-renderer.ts";
 
-function createBodyState(position: Vector2, velocity: Vector2): BodyState {
-  return { position, velocity };
+function createBodyState(position: Vector2, velocity: Vector2, orientation = 0): BodyState {
+  return { position, velocity, orientation };
 }
 
 function createBodySnapshot(
@@ -20,11 +20,12 @@ function createBodySnapshot(
   position: Vector2,
   velocity = new Vector2(0, 0),
   definition = new Body(),
+  orientation = 0,
 ): BodySnapshot {
   return {
     id,
     definition,
-    state: createBodyState(position, velocity),
+    state: createBodyState(position, velocity, orientation),
   };
 }
 
@@ -185,7 +186,10 @@ Deno.test("SvgKinematicRenderer renders Circle radius in world units", () => {
 
   const svg = renderer.render(snapshots);
 
-  assertStringIncludes(svg, '<circle data-body-id="7" cx="120" cy="20" r="15" />');
+  assertStringIncludes(
+    svg,
+    '<circle data-body-id="7" cx="120" cy="20" r="15" transform="rotate(0 120 20)" />',
+  );
 });
 
 Deno.test("SvgKinematicRenderer scales Circle radius with the viewport", () => {
@@ -204,7 +208,10 @@ Deno.test("SvgKinematicRenderer scales Circle radius with the viewport", () => {
 
   const svg = renderer.render(snapshots);
 
-  assertStringIncludes(svg, '<circle data-body-id="7" cx="100" cy="50" r="20" />');
+  assertStringIncludes(
+    svg,
+    '<circle data-body-id="7" cx="100" cy="50" r="20" transform="rotate(0 100 50)" />',
+  );
 });
 
 Deno.test(
@@ -236,8 +243,59 @@ Deno.test("SvgKinematicRenderer renders Rectangle dimensions in world units", ()
 
   const svg = renderer.render(snapshots);
 
-  assertStringIncludes(svg, '<rect data-body-id="7" x="100" y="30" width="40" height="20" />');
+  assertStringIncludes(
+    svg,
+    '<rect data-body-id="7" x="100" y="30" width="40" height="20" transform="rotate(0 120 40)" />',
+  );
 });
+
+Deno.test(
+  "SvgKinematicRenderer maps positive Rectangle orientation to counter-clockwise world rotation",
+  () => {
+    const renderer = new SvgKinematicRenderer(200, 100, 10, 3);
+
+    const snapshots: readonly BodySnapshot[] = [
+      createBodySnapshot(
+        7,
+        new Vector2(2, 1),
+        new Vector2(0, 0),
+        new Body({ shape: new Rectangle(4, 2) }),
+        Math.PI / 2,
+      ),
+    ];
+
+    const svg = renderer.render(snapshots);
+
+    assertStringIncludes(
+      svg,
+      '<rect data-body-id="7" x="100" y="30" width="40" height="20" transform="rotate(-90 120 40)" />',
+    );
+  },
+);
+
+Deno.test(
+  "SvgKinematicRenderer represents Circle orientation even though its outline is symmetric",
+  () => {
+    const renderer = new SvgKinematicRenderer(200, 100, 10, 3);
+
+    const snapshots: readonly BodySnapshot[] = [
+      createBodySnapshot(
+        7,
+        new Vector2(2, 3),
+        new Vector2(0, 0),
+        new Body({ shape: new Circle(1.5) }),
+        Math.PI / 2,
+      ),
+    ];
+
+    const svg = renderer.render(snapshots);
+
+    assertStringIncludes(
+      svg,
+      '<circle data-body-id="7" cx="120" cy="20" r="15" transform="rotate(-90 120 20)" />',
+    );
+  },
+);
 
 Deno.test("SvgKinematicRenderer scales Rectangle dimensions with the viewport", () => {
   const renderer = new SvgKinematicRenderer(200, 100, 10, 3);
@@ -255,5 +313,8 @@ Deno.test("SvgKinematicRenderer scales Rectangle dimensions with the viewport", 
 
   const svg = renderer.render(snapshots);
 
-  assertStringIncludes(svg, '<rect data-body-id="7" x="60" y="30" width="80" height="40" />');
+  assertStringIncludes(
+    svg,
+    '<rect data-body-id="7" x="60" y="30" width="80" height="40" transform="rotate(0 100 50)" />',
+  );
 });

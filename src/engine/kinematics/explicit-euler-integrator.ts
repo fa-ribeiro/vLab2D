@@ -19,7 +19,8 @@ export class ExplicitEulerIntegrator implements KinematicIntegrator {
    * Advances body state by one timestep.
    *
    * Neither the supplied state nor the acceleration vector is modified.
-   * A new {@link BodyState} value is returned.
+   * A new {@link BodyState} value is returned. This integrator currently
+   * advances linear motion only, so orientation is preserved unchanged.
    *
    * @param state The body state at the beginning of the timestep.
    * @param acceleration The constant acceleration applied during the timestep,
@@ -34,6 +35,7 @@ export class ExplicitEulerIntegrator implements KinematicIntegrator {
     return {
       position: nextPosition,
       velocity: nextVelocity,
+      orientation: state.orientation,
     };
   }
 }
