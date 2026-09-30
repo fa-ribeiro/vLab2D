@@ -677,8 +677,36 @@ Deno.test("CanvasKinematicRenderer sizes interaction rings around Rectangle geom
   assertEquals(fillRectCalls, [["fillRect", -20, -10, 40, 20]]);
 
   assertEquals(strokeRectCalls, [
-    ["strokeRect", 96, 26, 48, 28],
-    ["strokeRect", 92, 22, 56, 36],
+    ["strokeRect", -24, -14, 48, 28],
+    ["strokeRect", -28, -18, 56, 36],
+  ]);
+});
+
+Deno.test("CanvasKinematicRenderer applies Rectangle orientation to interaction rings", () => {
+  const context = new RecordingCanvasContext();
+  const renderer = new CanvasKinematicRenderer(context, 200, 100, 10, 3);
+
+  const snapshots: readonly BodySnapshot[] = [
+    createBodySnapshot(
+      7,
+      new Vector2(2, 1),
+      new Vector2(0, 0),
+      new Body({ shape: new Rectangle(4, 2) }),
+      Math.PI / 2,
+    ),
+  ];
+
+  renderer.render(snapshots, 7, 7);
+
+  const translateCalls = context.calls.filter(([name]) => name === "translate");
+  const rotateCalls = context.calls.filter(([name]) => name === "rotate");
+  const strokeRectCalls = context.calls.filter(([name]) => name === "strokeRect");
+
+  assertEquals(translateCalls, [["translate", 120, 40]]);
+  assertEquals(rotateCalls, [["rotate", -Math.PI / 2]]);
+  assertEquals(strokeRectCalls, [
+    ["strokeRect", -24, -14, 48, 28],
+    ["strokeRect", -28, -18, 56, 36],
   ]);
 });
 

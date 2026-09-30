@@ -278,18 +278,14 @@ export class CanvasKinematicRenderer {
       this.#context.translate(x, y);
       this.#context.rotate(-snapshot.state.orientation);
       this.#context.fillRect(-width / 2, -height / 2, width, height);
-      this.#context.restore();
-
-      const left = x - width / 2;
-      const top = y - height / 2;
 
       if (hovered) {
         this.#context.save();
         this.#context.globalAlpha = HOVER_RING_OPACITY;
 
         this.#context.strokeRect(
-          left - HOVER_RING_PADDING,
-          top - HOVER_RING_PADDING,
+          -width / 2 - HOVER_RING_PADDING,
+          -height / 2 - HOVER_RING_PADDING,
           width + HOVER_RING_PADDING * 2,
           height + HOVER_RING_PADDING * 2,
         );
@@ -302,8 +298,8 @@ export class CanvasKinematicRenderer {
         this.#context.globalAlpha = SELECTION_RING_OPACITY;
 
         this.#context.strokeRect(
-          left - SELECTION_RING_PADDING,
-          top - SELECTION_RING_PADDING,
+          -width / 2 - SELECTION_RING_PADDING,
+          -height / 2 - SELECTION_RING_PADDING,
           width + SELECTION_RING_PADDING * 2,
           height + SELECTION_RING_PADDING * 2,
         );
@@ -311,6 +307,7 @@ export class CanvasKinematicRenderer {
         this.#context.restore();
       }
 
+      this.#context.restore();
       return;
     }
 
