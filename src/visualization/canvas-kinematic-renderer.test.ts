@@ -617,7 +617,40 @@ Deno.test("CanvasKinematicRenderer sizes interaction rings around Rectangle geom
   ]);
 });
 
-Deno.test("CanvasKinematicRenderer rejects unsupported Rectangle picking", () => {
+Deno.test("CanvasKinematicRenderer picks Rectangle using its rendered geometry extent", () => {
+  const context = new RecordingCanvasContext();
+  const renderer = new CanvasKinematicRenderer(context, 200, 100, 10, 6);
+
+  const snapshots: readonly BodySnapshot[] = [
+    createBodySnapshot(
+      7,
+      new Vector2(0, 0),
+      new Vector2(0, 0),
+      new Body({ shape: new Rectangle(4, 2) }),
+    ),
+  ];
+
+  assertEquals(renderer.findBodyAtDisplayPoint(snapshots, 119, 59), 7);
+});
+
+Deno.test("CanvasKinematicRenderer returns undefined outside Rectangle geometry", () => {
+  const context = new RecordingCanvasContext();
+  const renderer = new CanvasKinematicRenderer(context, 200, 100, 10, 6);
+
+  const snapshots: readonly BodySnapshot[] = [
+    createBodySnapshot(
+      7,
+      new Vector2(0, 0),
+      new Vector2(0, 0),
+      new Body({ shape: new Rectangle(4, 2) }),
+    ),
+  ];
+
+  assertEquals(renderer.findBodyAtDisplayPoint(snapshots, 121, 50), undefined);
+  assertEquals(renderer.findBodyAtDisplayPoint(snapshots, 100, 61), undefined);
+});
+
+Deno.test("CanvasKinematicRenderer scales Rectangle picking with the viewport", () => {
   const context = new RecordingCanvasContext();
   const renderer = new CanvasKinematicRenderer(context, 200, 100, 10, 6);
 
@@ -630,9 +663,9 @@ Deno.test("CanvasKinematicRenderer rejects unsupported Rectangle picking", () =>
     ),
   ];
 
-  assertThrows(
-    () => renderer.findBodyAtDisplayPoint(snapshots, 100, 50),
-    TypeError,
-    "CanvasKinematicRenderer does not support Rectangle picking yet.",
-  );
+  assertEquals(renderer.findBodyAtDisplayPoint(snapshots, 115, 50), undefined);
+
+  renderer.setViewportScale(20);
+
+  assertEquals(renderer.findBodyAtDisplayPoint(snapshots, 115, 50), 7);
 });

@@ -1,4 +1,4 @@
-import { type BodyId, type BodySnapshot, Circle, Rectangle } from "../engine/mod.ts";
+import { type BodyId, type BodySnapshot, Rectangle } from "../engine/mod.ts";
 import { ViewportTransform } from "./viewport-transform.ts";
 
 const ORIGIN_MARKER_HALF_SIZE = 5;
@@ -176,19 +176,21 @@ export class CanvasKinematicRenderer {
   }
 
   /**
-   * Finds the nearest body hit by its display-space picking radius.
+   * Finds the nearest body whose display-space picking extent contains a point.
    *
-   * Shapeless bodies use the renderer's fixed presentation radius.
-   * Circle bodies use their world-space radius transformed by the current
-   * viewport scale.
+   * Shapeless bodies use the renderer's fixed circular presentation marker.
+   * Circle and Rectangle bodies use their world-space geometry transformed by
+   * the current viewport scale. Rectangles are currently unrotated because
+   * body runtime state does not yet include orientation.
+   *
+   * When multiple bodies contain the point, the body with the nearest display-
+   * space center is returned.
    *
    * @param snapshots Detached body observations to test.
    * @param displayX Horizontal point coordinate in Canvas drawing-buffer units.
    * @param displayY Vertical point coordinate in Canvas drawing-buffer units.
    * @returns The identifier of the nearest hit body, or `undefined` when no
    * body contains the point.
-   * @throws {TypeError} If a supplied body uses Rectangle geometry, because
-   * Rectangle picking is not supported yet.
    */
   public findBodyAtDisplayPoint(
     snapshots: readonly BodySnapshot[],
@@ -202,13 +204,28 @@ export class CanvasKinematicRenderer {
       const bodyX = this.#transform.worldToDisplayX(snapshot.state.position.x);
       const bodyY = this.#transform.worldToDisplayY(snapshot.state.position.y);
 
-      const radius = this.#bodyDisplayRadius(snapshot);
-
       const deltaX = displayX - bodyX;
       const deltaY = displayY - bodyY;
       const distanceSquared = deltaX * deltaX + deltaY * deltaY;
 
-      if (distanceSquared <= radius * radius && distanceSquared < nearestDistanceSquared) {
+      const shape = snapshot.definition.shape;
+
+      let hit: boolean;
+
+      if (shape instanceof Rectangle) {
+        const halfWidth = (shape.width * this.#transform.pixelsPerUnit) / 2;
+        const halfHeight = (shape.height * this.#transform.pixelsPerUnit) / 2;
+
+        hit = Math.abs(deltaX) <= halfWidth && Math.abs(deltaY) <= halfHeight;
+      } else {
+        const radius = shape === undefined
+          ? this.#bodyRadius
+          : shape.radius * this.#transform.pixelsPerUnit;
+
+        hit = distanceSquared <= radius * radius;
+      }
+
+      if (hit && distanceSquared < nearestDistanceSquared) {
         nearestBodyId = snapshot.id;
         nearestDistanceSquared = distanceSquared;
       }
@@ -284,7 +301,9 @@ export class CanvasKinematicRenderer {
       return;
     }
 
-    const radius = this.#bodyDisplayRadius(snapshot);
+    const radius = shape === undefined
+      ? this.#bodyRadius
+      : shape.radius * this.#transform.pixelsPerUnit;
 
     this.#context.beginPath();
     this.#context.arc(x, y, radius, 0, Math.PI * 2);
@@ -374,20 +393,6 @@ export class CanvasKinematicRenderer {
     this.#context.moveTo(x1, y1);
     this.#context.lineTo(x2, y2);
     this.#context.stroke();
-  }
-
-  #bodyDisplayRadius(snapshot: BodySnapshot): number {
-    const shape = snapshot.definition.shape;
-
-    if (shape === undefined) {
-      return this.#bodyRadius;
-    }
-
-    if (shape instanceof Circle) {
-      return shape.radius * this.#transform.pixelsPerUnit;
-    }
-
-    throw new TypeError("CanvasKinematicRenderer does not support Rectangle picking yet.");
   }
 }
 
