@@ -100,10 +100,9 @@ export class BodyPicker {
 
         geometryDistanceSquared = outsideX * outsideX + outsideY * outsideY;
       } else {
-        const radius =
-          shape === undefined
-            ? this.#shapelessBodyRadius
-            : shape.radius * this.#transform.pixelsPerUnit;
+        const radius = shape === undefined
+          ? this.#shapelessBodyRadius
+          : shape.radius * this.#transform.pixelsPerUnit;
 
         const distanceFromCenter = Math.sqrt(centerDistanceSquared);
         const distanceFromGeometry = Math.max(0, distanceFromCenter - radius);

@@ -1,5 +1,5 @@
-import { type BodySnapshot, Rectangle } from "../engine/mod.ts";
-import { ViewportTransform } from "./viewport-transform.ts";
+import { type BodySnapshot, Rectangle } from "../../engine/mod.ts";
+import { ViewportTransform } from "../viewport/viewport-transform.ts";
 
 const ORIGIN_MARKER_HALF_SIZE = 5;
 const GRID_OPACITY = 0.15;

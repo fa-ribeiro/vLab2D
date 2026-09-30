@@ -8,7 +8,7 @@ import {
   Circle,
   Rectangle,
   Vector2,
-} from "../engine/mod.ts";
+} from "../../engine/mod.ts";
 import { SvgKinematicRenderer } from "./svg-kinematic-renderer.ts";
 
 function createBodyState(position: Vector2, velocity: Vector2, orientation = 0): BodyState {

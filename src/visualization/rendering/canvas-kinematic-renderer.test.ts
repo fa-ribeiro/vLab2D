@@ -8,9 +8,9 @@ import {
   Circle,
   Rectangle,
   Vector2,
-} from "../engine/mod.ts";
-import { CanvasKinematicRenderer } from "./canvas-kinematic-renderer.ts";
-import { ViewportTransform } from "./viewport-transform.ts";
+} from "../../engine/mod.ts";
+import { CanvasKinematicRenderer } from "../rendering/canvas-kinematic-renderer.ts";
+import { ViewportTransform } from "../viewport/viewport-transform.ts";
 
 function createBodyState(position: Vector2, velocity: Vector2, orientation = 0): BodyState {
   return { position, velocity, orientation };

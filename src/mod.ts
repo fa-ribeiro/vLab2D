@@ -16,9 +16,9 @@ export type { SimulationWorldStatus } from "./simulation/simulation.ts";
 export { BrowserSimulationRuntime } from "./runtime/browser/simulation-runtime.ts";
 export type { BrowserSimulationRuntimeOptions } from "./runtime/browser/simulation-runtime.ts";
 
-export { BodyPicker } from "./visualization/body-picker.ts";
-export { CanvasInspectionRenderer } from "./visualization/canvas-inspection-renderer.ts";
-export { CanvasKinematicRenderer } from "./visualization/canvas-kinematic-renderer.ts";
-export type { InspectionOptions } from "./visualization/inspection-options.ts";
-export { SvgKinematicRenderer } from "./visualization/svg-kinematic-renderer.ts";
-export { ViewportTransform } from "./visualization/viewport-transform.ts";
+export { BodyPicker } from "./visualization/interaction/body-picker.ts";
+export { CanvasInspectionRenderer } from "./visualization/inspection/canvas-inspection-renderer.ts";
+export { CanvasKinematicRenderer } from "./visualization/rendering/canvas-kinematic-renderer.ts";
+export type { InspectionOptions } from "./visualization/inspection/inspection-options.ts";
+export { SvgKinematicRenderer } from "./visualization/rendering/svg-kinematic-renderer.ts";
+export { ViewportTransform } from "./visualization/viewport/viewport-transform.ts";

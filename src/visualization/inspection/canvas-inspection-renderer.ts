@@ -1,6 +1,6 @@
-import { type BodySnapshot, Rectangle } from "../engine/mod.ts";
-import type { InspectionOptions } from "./inspection-options.ts";
-import { ViewportTransform } from "./viewport-transform.ts";
+import { type BodySnapshot, Rectangle } from "../../engine/mod.ts";
+import type { InspectionOptions } from "../inspection/inspection-options.ts";
+import { ViewportTransform } from "../viewport/viewport-transform.ts";
 
 const BODY_ORIGIN_RADIUS = 3;
 const ORIENTATION_LINE_LENGTH = 18;
