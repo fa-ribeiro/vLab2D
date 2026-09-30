@@ -188,9 +188,8 @@ export class CanvasKinematicRenderer {
    *
    * Shapeless bodies use the renderer's fixed circular presentation marker.
    * Circle and Rectangle bodies use their world-space geometry transformed by
-   * the current viewport scale. Rectangle picking currently evaluates the
-   * unrotated width and height extent; orientation-aware picking is a separate
-   * interaction capability.
+   * the current viewport scale. Rectangle picking transforms the display-space
+   * point into the body-local coordinate frame before testing local bounds.
    *
    * When multiple bodies contain the point, the body with the nearest display-
    * space center is returned.
@@ -225,7 +224,16 @@ export class CanvasKinematicRenderer {
         const halfWidth = (shape.width * this.#transform.pixelsPerUnit) / 2;
         const halfHeight = (shape.height * this.#transform.pixelsPerUnit) / 2;
 
-        hit = Math.abs(deltaX) <= halfWidth && Math.abs(deltaY) <= halfHeight;
+        // Rendering rotates Rectangle-local coordinates by -orientation because
+        // Canvas Y points down. Picking applies the inverse display rotation so
+        // the point can be tested against the simple local Rectangle bounds.
+        const cos = Math.cos(snapshot.state.orientation);
+        const sin = Math.sin(snapshot.state.orientation);
+
+        const localX = deltaX * cos - deltaY * sin;
+        const localY = deltaX * sin + deltaY * cos;
+
+        hit = Math.abs(localX) <= halfWidth && Math.abs(localY) <= halfHeight;
       } else {
         const radius = shape === undefined
           ? this.#bodyRadius

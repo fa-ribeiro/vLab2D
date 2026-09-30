@@ -726,6 +726,29 @@ Deno.test("CanvasKinematicRenderer picks Rectangle using its rendered geometry e
   assertEquals(renderer.findBodyAtDisplayPoint(snapshots, 119, 59), 7);
 });
 
+Deno.test("CanvasKinematicRenderer picking follows Rectangle orientation", () => {
+  const context = new RecordingCanvasContext();
+  const renderer = new CanvasKinematicRenderer(context, 200, 100, 10, 6);
+
+  const snapshots: readonly BodySnapshot[] = [
+    createBodySnapshot(
+      7,
+      new Vector2(0, 0),
+      new Vector2(0, 0),
+      new Body({ shape: new Rectangle(4, 2) }),
+      Math.PI / 2,
+    ),
+  ];
+
+  // After a 90° orientation, the 4 × 2 Rectangle is visually 2 × 4
+  // world units in display axes. This point is inside that rotated geometry.
+  assertEquals(renderer.findBodyAtDisplayPoint(snapshots, 100, 69), 7);
+
+  // This point was inside the old unrotated width, but is outside the
+  // Rectangle after orientation is applied.
+  assertEquals(renderer.findBodyAtDisplayPoint(snapshots, 119, 50), undefined);
+});
+
 Deno.test("CanvasKinematicRenderer returns undefined outside Rectangle geometry", () => {
   const context = new RecordingCanvasContext();
   const renderer = new CanvasKinematicRenderer(context, 200, 100, 10, 6);
