@@ -1257,3 +1257,79 @@ The second rule preserves the useful part of the earlier nearest-center policy a
 This decision supersedes the containment/nearest-center ranking details originally recorded in D-076 while preserving D-076's responsibility split and shared-viewport ownership.
 
 This decision does not introduce collision semantics, z-order picking, cycling through overlapping targets, a generic picking framework, or a user-options UI.
+
+## D-078 — Inspection visibility is renderer-neutral; Canvas diagnostics render as a separate overlay
+
+**Status:** Accepted and implemented
+
+Inspection is a Visualization concern distinct from normal appearance and interaction feedback.
+
+The first concrete inspection capability uses renderer-neutral visibility intent:
+
+```ts
+interface InspectionOptions {
+  readonly showGeometryContour: boolean;
+  readonly showBodyOrigin: boolean;
+  readonly showOrientation: boolean;
+}
+```
+
+The options deliberately describe **what diagnostic information is visible**, not how Canvas, SVG, or another output technology draws it.
+
+`CanvasInspectionRenderer` is the first concrete inspection renderer. It consumes detached `BodySnapshot[]` observations and the same explicitly composed `ViewportTransform` used by the live Canvas path. It does not clear the drawing surface. `CanvasExampleHost` invokes normal rendering first and inspection rendering second so diagnostics compose as an overlay.
+
+Current indicator semantics are:
+
+```text
+geometry contour
+    intrinsic Circle / Rectangle boundary
+    follows world geometry and viewport scale
+
+body origin
+    BodyState.position / Body-local origin in world space
+    fixed display-space marker
+
+orientation
+    plain line from body origin along Body-local +X / 0°
+    fixed display-space length
+```
+
+A shapeless Body has no domain geometry, so inspection does not invent a geometry contour for it. Its body origin remains meaningful. Although `BodyState.orientation` exists for every Body, the current inspection renderer suppresses the orientation glyph for shapeless Bodies because no concrete geometry provides a useful local frame to inspect.
+
+The term **body origin** is intentional. With the current centered Circle and Rectangle definitions it coincides with the geometric center, but it is not defined as centroid or center of mass. Those concepts may diverge later.
+
+The orientation diagnostic is a plain line rather than an arrow so arrow semantics remain available for a future velocity-vector diagnostic where direction and magnitude have a different meaning.
+
+Inspection styling is intentionally minimal and renderer-owned for now. User-configurable colors, line widths, lengths, or themes are deferred until an actual options/customization pass.
+
+This decision does not introduce a generic inspection-renderer interface, diagnostic plug-in framework, SVG inspection implementation, `Transform2D`, or `Vector2.rotate()`.
+
+## D-079 — Visualization source is organized by responsibility
+
+**Status:** Accepted and implemented
+
+The flat `src/visualization/` directory was sufficient while Visualization had only a few concrete components. Once viewport transformation, normal rendering, visual interaction, and diagnostic inspection became independent responsibilities, the flat directory began obscuring those boundaries.
+
+Visualization source is therefore grouped by responsibility:
+
+```text
+src/visualization/
+├── inspection/
+│   Canvas inspection rendering + InspectionOptions
+├── interaction/
+│   BodyPicker
+├── rendering/
+│   CanvasKinematicRenderer + SvgKinematicRenderer
+└── viewport/
+    ViewportTransform
+```
+
+Tests remain colocated with the implementation they exercise.
+
+The grouping is by **responsibility**, not by output technology. This keeps renderer-neutral concepts such as `InspectionOptions` with their semantic concern and avoids a generic `shared/` bucket whose name would communicate reuse rather than ownership.
+
+The public package facade in `src/mod.ts` continues exporting established concepts so examples and consumers do not depend on the internal folder layout.
+
+This is a structural organization decision, not a behavioral abstraction. It does not introduce additional barrel modules, renderer base classes, picker interfaces, a shared-services layer, or technology-specific `canvas/` and `svg/` subtrees.
+
+The directory structure should continue to evolve only when concrete responsibilities create enough pressure to justify another grouping.

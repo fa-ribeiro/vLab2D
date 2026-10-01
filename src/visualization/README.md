@@ -1,23 +1,143 @@
 # Visualization
 
-`src/visualization/` contains presentation and visual-interaction components for observed simulation state.
+`src/visualization/` contains presentation, interaction, viewport, and diagnostic components for observed simulation state.
 
-Visualization is intentionally outside the engine boundary. It consumes detached `BodySnapshot` observations and immutable definition data exposed by the engine; it does not advance simulation time, calculate physics, or mutate authoritative World state.
+Visualization is intentionally outside the engine boundary. It consumes detached `BodySnapshot` observations and immutable definition data; it does not advance simulation time or mutate authoritative `World` state.
+
+## Responsibility-based organization
+
+The directory is organized by responsibility rather than by output technology:
+
+```text
+src/visualization/
+├── inspection/
+│   optional diagnostic overlays and their renderer-neutral options
+├── interaction/
+│   visual interaction queries such as body picking
+├── rendering/
+│   normal Canvas/SVG scene rendering
+└── viewport/
+    world/display viewport geometry and coordinate conversion
+```
+
+This split reflects responsibilities that now have concrete independent consumers:
+
+```mermaid
+flowchart LR
+    V["viewport/<br/>coordinate mapping"]
+    R["rendering/<br/>normal presentation"]
+    P["interaction/<br/>picking"]
+    I["inspection/<br/>diagnostics"]
+
+    V --> R
+    V --> P
+    V --> I
+```
+
+The organization is structural rather than framework-oriented. There is still no generic renderer hierarchy, picker interface, diagnostic plug-in system, scene graph, or camera abstraction.
 
 ## Current components
 
-The visualization layer currently contains four concrete concepts:
+### Viewport
 
-- `ViewportTransform` — rendering-technology-independent viewport geometry and bidirectional world/display coordinate conversion;
-- `CanvasKinematicRenderer` — live Canvas 2D drawing;
-- `SvgKinematicRenderer` — static SVG document generation;
-- `BodyPicker` — Canvas-oriented display-space hit testing against observed body geometry.
+`ViewportTransform` owns rendering-technology-independent viewport geometry:
 
-They are intentionally concrete. There is no generic renderer hierarchy, picker interface, camera framework, scene graph, or transformation-matrix abstraction yet.
+- immutable viewport width and height;
+- mutable world-space center;
+- mutable `pixelsPerUnit` scale;
+- visible-world bounds;
+- world-to-display conversion;
+- display-to-world conversion;
+- display-space panning geometry;
+- anchor-preserving zoom geometry.
+
+It knows nothing about Canvas, SVG, DOM events, bodies, snapshots, or physics.
+
+### Normal rendering
+
+`CanvasKinematicRenderer` is the live Canvas renderer. It draws:
+
+- integer world grid;
+- world axes;
+- world-origin marker;
+- shapeless presentation markers;
+- Circle geometry;
+- Rectangle geometry;
+- hover feedback;
+- selection feedback.
+
+`SvgKinematicRenderer` is the secondary static renderer. It represents the same current domain geometry semantics in SVG and remains useful for deterministic snapshots, exports, debugging captures, and documentation images.
+
+Normal rendering answers:
+
+> What should the observed scene normally look like?
+
+It is distinct from both interaction hit testing and optional diagnostic overlays.
+
+### Interaction
+
+`BodyPicker` answers a visual interaction query:
+
+> Which observed Body is close enough to this display-space point to be the user's intended target?
+
+It shares the Canvas `ViewportTransform` and measures display-space distance to current pick geometry:
+
+```text
+shapeless Body
+    fixed circular presentation marker
+
+Circle
+    world radius × pixelsPerUnit
+
+Rectangle
+    world width/height × pixelsPerUnit
+    with current BodyState.orientation
+```
+
+A body is a candidate when its geometry distance is no greater than `pickTolerance`.
+
+Candidate ranking is:
+
+```text
+1. smallest distance to pick geometry
+2. if tied, smallest distance to displayed body center
+```
+
+`pickTolerance` is display-space interaction policy. It does not change physical/domain geometry and is not collision detection.
+
+### Inspection
+
+`InspectionOptions` describes renderer-neutral diagnostic visibility:
+
+```ts
+interface InspectionOptions {
+  readonly showGeometryContour: boolean;
+  readonly showBodyOrigin: boolean;
+  readonly showOrientation: boolean;
+}
+```
+
+These options describe **what diagnostic information should be visible**, not how a particular output technology draws it.
+
+`CanvasInspectionRenderer` is the first concrete consumer. It draws diagnostic overlays after normal Canvas rendering and deliberately does not clear the drawing surface.
+
+Current indicators are:
+
+| Indicator        | Meaning                                                | Units / behavior                          |
+| ---------------- | ------------------------------------------------------ | ----------------------------------------- |
+| geometry contour | intrinsic Circle/Rectangle boundary                    | follows world geometry and viewport scale |
+| body origin      | `BodyState.position`, i.e. local origin in world space | fixed display-space marker                |
+| orientation      | local `+X` / `0°` direction from body origin           | fixed display-space line                  |
+
+A shapeless Body has no domain geometry, so it has no geometry contour. Its body origin remains meaningful. Orientation is stored in `BodyState`, but the current inspection renderer suppresses the orientation glyph for shapeless Bodies because no concrete geometry provides a useful local frame to inspect.
+
+The term **body origin** is deliberate. With today's centered Circle and Rectangle definitions it coincides with their geometric center, but it must not be redefined as a future centroid or center of mass.
+
+The orientation indicator is a plain line rather than an arrow. This leaves arrow semantics available for a future velocity-vector indicator, where direction and magnitude have different meaning.
 
 ## Observation model
 
-Visualization receives `BodySnapshot` values:
+Visualization consumes detached `BodySnapshot` values:
 
 ```text
 BodySnapshot
@@ -26,7 +146,7 @@ BodySnapshot
 └── state
 ```
 
-The snapshot deliberately carries two different ownership categories:
+Ownership remains:
 
 ```text
 definition
@@ -40,11 +160,9 @@ state
     orientation
 ```
 
-The renderer or picker may inspect the shared immutable definition, but neither receives writable World storage.
+Visualization may inspect the shared immutable definition but never receives writable World storage.
 
-This lets Visualization answer questions such as “what geometry should this body display?” without moving geometry ownership into the World or duplicating definition data in every observation.
-
-## Domain geometry versus presentation geometry
+## Domain geometry versus presentation and inspection geometry
 
 The current Body definition may be shapeless or carry one concrete shape:
 
@@ -55,19 +173,27 @@ Body
 └── Rectangle(width, height)
 ```
 
-Those cases deliberately have different presentation semantics.
+The distinction is important:
 
-| Body definition | Domain spatial extent              | Normal visualization                                 |
-| --------------- | ---------------------------------- | ---------------------------------------------------- |
-| shapeless       | none                               | fixed display-space circular marker                  |
-| Circle          | finite radius in world units       | radius scaled through the viewport                   |
-| Rectangle       | finite width/height in world units | centered local rectangle scaled through the viewport |
+```text
+domain geometry
+    intrinsic spatial extent of the Body definition
 
-A shapeless marker is presentation-only. Its radius does not become physical geometry merely because it is visible or pickable.
+normal presentation geometry
+    how the Body is normally made visible
 
-Likewise, picking against observed geometry is not collision detection. Picking answers an interaction question about what the user is pointing at; collision detection would answer a physical simulation question and belongs to a different responsibility.
+interaction geometry
+    what may be acquired by the pointer
 
-## Coordinate systems
+inspection geometry
+    optional diagnostic aids about observed state/geometry
+```
+
+A shapeless body's visible marker is presentation-only. The marker does not become physical geometry because it can be rendered or picked.
+
+Likewise, the fixed display size of body-origin and orientation diagnostics does not become a domain length.
+
+## Coordinate systems and orientation
 
 The engine uses mathematical world coordinates:
 
@@ -79,385 +205,148 @@ positive orientation → counter-clockwise
 
 Canvas and SVG display coordinates use positive Y downward.
 
-`ViewportTransform` owns the translation between these coordinate systems. Its current responsibilities include:
-
-- immutable viewport width and height;
-- mutable world-space viewport center;
-- mutable display scale (`pixelsPerUnit`);
-- continuous visible-world bounds;
-- world-to-display X/Y conversion;
-- display-to-world X/Y conversion;
-- display-space panning geometry;
-- anchor-preserving zoom geometry.
-
-The transform contains no Canvas, SVG, DOM, World, snapshot, or `Vector2` behavior.
-
-### Orientation convention
-
-Body orientation is stored in world semantics: finite radians, positive counter-clockwise.
-
-Because display Y points downward, both renderers negate the world angle when expressing the equivalent display-space rotation.
-
-For a Rectangle, normal rendering conceptually does this:
-
-```text
-world BodyState
-    position + orientation
-        ↓
-move drawing frame to body position
-        ↓
-apply display-space rotation = -orientation
-        ↓
-draw Rectangle around local (0, 0)
-```
-
-The centered Rectangle geometry remains simple in body-local coordinates:
-
-```text
-x ∈ [-width / 2, +width / 2]
-y ∈ [-height / 2, +height / 2]
-```
-
-Circle geometry also carries orientation through runtime state, even though a plain circular outline is rotationally symmetric and therefore looks unchanged.
-
-## Canvas composition
-
-The interactive Canvas path deliberately uses one explicitly composed `ViewportTransform` instance.
-
-`examples/kinematic-world-canvas/main.ts` creates the transform and shares it with the collaborators that must observe the same mutable viewport state:
-
-```mermaid
-flowchart LR
-    H["CanvasExampleHost"]
-    V["ViewportTransform"]
-    P["BodyPicker"]
-    R["CanvasKinematicRenderer"]
-
-    H --> V
-    H --> P
-    H --> R
-    V --> P
-    V --> R
-```
-
-The responsibility split is:
-
-```text
-CanvasExampleHost
-    browser DOM/input policy
-    CSS → Canvas coordinate conversion
-    pan/zoom policy
-    hover identity
-    selection identity
-    inspection output
-
-ViewportTransform
-    viewport geometry
-    world ↔ display mapping
-    pan/zoom geometry
-
-BodyPicker
-    hit testing of detached observations
-
-CanvasKinematicRenderer
-    drawing only
-```
-
-This is an intentional evolution from the earlier Canvas design where the renderer constructed its transform internally and exposed viewport and picking façade methods.
-
-That earlier design was reasonable while the renderer was the only real viewport consumer. Once `BodyPicker` became a second independent consumer, sharing one explicitly composed transform removed duplicated ownership and prevented drawing and picking from drifting apart.
-
-The architectural lesson is not “injection is always better.” It is:
-
-> A shared collaborator becomes worth composing explicitly when multiple concrete responsibilities must observe the same state.
-
-## Canvas renderer
-
-`CanvasKinematicRenderer` renders detached observations into a Canvas-like 2D drawing context.
-
-It currently draws:
-
-1. a low-opacity integer grid;
-2. world X/Y axes;
-3. the world-origin marker;
-4. shapeless presentation markers;
-5. Circle geometry;
-6. Rectangle geometry;
-7. transient hover feedback;
-8. persistent-selection feedback.
-
-The renderer receives the shared `ViewportTransform` through its constructor:
-
-```ts
-new CanvasKinematicRenderer(context, viewport, shapelessBodyRadius);
-```
-
-It does not expose pan, zoom, inverse-coordinate, or picking methods. Those capabilities belong to the collaborators that own the corresponding responsibilities.
-
-### Rectangle rendering
-
-Rectangle geometry is drawn around the body's local origin and transformed by the body's current pose:
+For Canvas rendering and inspection, body-local drawing therefore follows this pattern:
 
 ```ts
 context.save();
 context.translate(displayX, displayY);
 context.rotate(-snapshot.state.orientation);
-context.fillRect(-width / 2, -height / 2, width, height);
+
+// draw local geometry / diagnostics around local (0, 0)
+
 context.restore();
 ```
 
-This keeps intrinsic geometry independent from world position and orientation.
+The negated angle represents positive world-space counter-clockwise orientation in a Y-down display coordinate system.
 
-### Circle rendering
-
-Circle radius is defined in world units and converted through the current viewport scale:
-
-```text
-display radius = Circle.radius × pixelsPerUnit
-```
-
-A shapeless Body instead uses the renderer's fixed display-space fallback radius, so zoom changes domain geometry on screen while leaving the presentation marker visually fixed.
-
-## Hover and selection presentation
-
-Hover and selection are application/interaction state owned by the Canvas host, not engine state and not persistent renderer state.
-
-The host passes optional body identities into each render call:
-
-```text
-render(snapshots, hoveredBodyId, selectedBodyId)
-```
-
-The renderer decides only how those identities are presented for the current frame.
-
-For Rectangle bodies, hover and selection outlines are drawn in the same body-local transformed frame as the Rectangle itself. Geometry and interaction feedback therefore rotate together.
-
-For Circle and shapeless markers, the feedback is circular and therefore visually invariant under orientation.
-
-This distinction matters:
-
-```text
-interaction state ownership
-    CanvasExampleHost
-
-interaction feedback drawing
-    CanvasKinematicRenderer
-```
-
-The renderer remains stateless about which body is hovered or selected.
-
-## Body picking
-
-`BodyPicker` owns display-space hit testing. It receives the same `ViewportTransform` instance used by the Canvas renderer together with presentation/picking policy values:
+The inspection orientation line is especially simple inside that local frame:
 
 ```ts
-new BodyPicker(viewport, shapelessBodyRadius, pickTolerance);
+context.moveTo(0, 0);
+context.lineTo(ORIENTATION_LINE_LENGTH, 0);
 ```
 
-`pickTolerance` is measured in display units. It deliberately belongs to visual interaction rather than Body/shape geometry, so zoom can change the visible size of world geometry without also changing how precisely the user must place the pointer.
+It literally represents Body-local `+X`, or local `0°`.
 
-Its public query is:
+## Canvas composition
 
-```ts
-findBodyAtDisplayPoint(
-  snapshots,
-  displayX,
-  displayY,
-): BodyId | undefined
-```
-
-The picker measures the pointer's distance to the geometry visible in the observed frame:
-
-```text
-shapeless Body
-    distance to fixed circular presentation marker
-
-Circle
-    distance to world radius × current viewport scale
-
-Rectangle
-    distance to world width/height × current viewport scale
-    after accounting for current BodyState.orientation
-```
-
-A body becomes a candidate when its geometry distance is no greater than `pickTolerance`. Points inside a body's pick geometry have distance zero.
-
-### Oriented Rectangle picking
-
-Rendering makes Rectangle geometry simple by drawing in body-local coordinates. Picking applies the inverse idea: transform the pointer displacement back into the Rectangle's local coordinate frame, then measure distance to ordinary centered Rectangle bounds.
-
-Conceptually:
-
-```text
-display-space pointer
-    ↓ subtract displayed body center
-body-relative display vector
-    ↓ inverse body rotation
-Rectangle-local vector
-    ↓
-distance to centered local Rectangle
-```
-
-The inverse rotation remains:
-
-```ts
-const cos = Math.cos(orientation);
-const sin = Math.sin(orientation);
-
-const localX = deltaX * cos - deltaY * sin;
-const localY = deltaX * sin + deltaY * cos;
-```
-
-The local Rectangle distance is then computed from the amount by which the point lies outside each half-extent:
-
-```ts
-const outsideX = Math.max(Math.abs(localX) - halfWidth, 0);
-const outsideY = Math.max(Math.abs(localY) - halfHeight, 0);
-
-const distanceSquared = outsideX * outsideX + outsideY * outsideY;
-```
-
-Using Euclidean distance here creates a true rounded tolerance around Rectangle corners rather than the larger diagonal reach produced by simply inflating width and height.
-
-### Candidate ranking
-
-When several bodies lie within tolerance, selection is deterministic and geometry-oriented:
-
-```text
-1. smallest distance to visible/pick geometry wins
-2. if geometry distances tie, nearest displayed center wins
-```
-
-The center rule is therefore a tie-breaker rather than the primary metric. This is especially useful when the pointer lies inside overlapping bodies: every containing geometry has distance zero, so center distance resolves the ambiguity without depending on `BodySnapshot[]` ordering.
-
-No collision shape, broad phase, spatial index, or generic picking framework is implied by this interaction query.
-
-## Canvas host interaction
-
-`CanvasExampleHost` remains example-local because there is still one concrete consumer for its combined browser policy.
-
-It owns:
-
-- pointer and wheel event handling;
-- pointer capture;
-- browser client-coordinate to Canvas drawing-buffer conversion;
-- click-versus-drag interpretation;
-- wheel-delta normalization;
-- zoom sensitivity and min/max limits;
-- transient hovered `BodyId`;
-- persistent selected `BodyId`;
-- read-only DOM inspection output;
-- per-frame rendering orchestration.
-
-It directly uses `ViewportTransform` for panning, anchored zoom, and world-coordinate inspection, and directly uses `BodyPicker` for hover/click hit testing.
-
-The host retains the latest detached snapshots used for the visible frame. Hover is recomputed from those observations every animation frame because simulation bodies can move underneath a stationary pointer.
-
-Selection stores only identity. The selected snapshot itself is not retained across frames; current position and velocity are resolved again from each fresh observation set.
-
-## SVG renderer
-
-`SvgKinematicRenderer` remains the secondary static visualization path.
-
-Unlike the Canvas path, SVG currently has no independent second consumer that must share its mutable viewport state. It therefore still creates and owns its `ViewportTransform` internally.
-
-It exposes only the programmatic viewport operations that have real SVG consumers:
-
-```text
-setViewportCenter(...)
-setViewportScale(...)
-```
-
-This difference is intentional:
-
-```text
-Canvas
-    one transform shared explicitly by renderer + picker + host
-
-SVG
-    renderer owns one transform internally
-```
-
-The project does not force the two renderers into identical construction or interaction APIs merely for symmetry.
-
-SVG renders the same domain geometry semantics as Canvas:
-
-- fixed marker for shapeless Bodies;
-- world-scaled Circle radius;
-- centered Rectangle width/height;
-- body orientation expressed as a negated display-space rotation.
-
-## Runtime is separate from visualization
-
-`BrowserSimulationRuntime` owns browser scheduling and fixed-timestep accumulation. It does not own Canvas, SVG, picking, hover, selection, snapshots, or DOM interaction state.
-
-The live flow is therefore:
+The Canvas composition root creates one mutable `ViewportTransform` and shares it among the responsibilities that must observe identical viewport state:
 
 ```mermaid
 flowchart LR
-    RT["BrowserSimulationRuntime"]
-    S["Simulation"]
-    W["World"]
-    H["CanvasExampleHost"]
-    P["BodyPicker"]
+    MAIN["main.ts"]
+    V["ViewportTransform"]
     R["CanvasKinematicRenderer"]
+    P["BodyPicker"]
+    I["CanvasInspectionRenderer"]
+    H["CanvasExampleHost"]
 
-    RT --> S --> W
-    RT -->|onFrame| H
-    W -->|detached snapshots| H
-    H --> P
-    H --> R
+    MAIN --> V
+    MAIN --> R
+    MAIN --> P
+    MAIN --> I
+    MAIN --> H
+
+    V --> R
+    V --> P
+    V --> I
+    V --> H
+
+    R --> H
+    P --> H
+    I --> H
 ```
 
-Variable browser frame timing drives Runtime scheduling only. Numerical progression remains fixed-timestep Simulation stepping.
-
-## Normal appearance versus diagnostics
-
-The project distinguishes three visual concerns:
+The host coordinates frame presentation in this order:
 
 ```text
-1. Domain representation
-   Body / shape / BodyState
-
-2. Normal appearance
-   how a body is presented
-   future materials / colors / textures / sprites
-
-3. Diagnostic / inspection visualization
-   optional information about simulation state
-   orientation axes / velocity vectors / bounds / contacts / IDs
+observe fresh World snapshots
+    ↓
+refresh hover / selected-body readouts
+    ↓
+normal Canvas rendering
+    ↓
+inspection overlay rendering
 ```
 
-Current hover and selection rings are interaction feedback, not physics diagnostics.
+This ensures diagnostics appear on top of the normal scene while remaining aligned with exactly the same pan/zoom state.
 
-A future orientation-axis overlay, for example, would reveal the orientation of a Circle whose plain outline is visually symmetric. That overlay would not change the Circle's domain geometry or its normal rendering semantics.
+## Canvas example host
 
-No material system, sprite system, diagnostic-overlay framework, or style/theme abstraction has been introduced yet.
+`CanvasExampleHost` remains example-local. It owns concrete browser/application policy:
+
+- pointer and wheel events;
+- pointer capture;
+- CSS-to-Canvas coordinate conversion;
+- click-versus-drag interpretation;
+- zoom sensitivity and limits;
+- hover identity;
+- selection identity;
+- selected-body textual readouts;
+- per-frame orchestration.
+
+It delegates:
+
+```text
+viewport geometry      → ViewportTransform
+hit testing            → BodyPicker
+normal scene drawing   → CanvasKinematicRenderer
+diagnostic overlays    → CanvasInspectionRenderer
+```
+
+No generic application or interaction framework has been introduced.
+
+## SVG and renderer-neutral inspection intent
+
+`InspectionOptions` is deliberately not named `CanvasInspectionOptions`: geometry contour, body origin, and orientation are semantic diagnostics that can also be represented by SVG or another future output target.
+
+SVG inspection has not yet been implemented. `SvgKinematicRenderer` currently returns a complete SVG document and owns its `ViewportTransform` internally, so forcing a parallel `SvgInspectionRenderer` before deciding how static-document composition should work would be premature.
+
+Renderer-neutral intent is established now; technology-specific implementation is added only when a concrete consumer needs it.
+
+## Appearance versus diagnostics
+
+The project keeps these concepts separate:
+
+```text
+Domain representation
+    Body / Shape / BodyState
+
+Normal appearance
+    how a body normally looks
+    future fill / contour mode / material / texture / sprite concerns
+
+Interaction feedback
+    hover / selection / picking tolerance
+
+Inspection diagnostics
+    optional contour / body origin / orientation
+    future velocity / bounds / contacts / IDs
+```
+
+A future “render shapes as contour only” mode is therefore an appearance/rendering choice, not the same thing as the current optional geometry-contour diagnostic overlay.
 
 ## Abstractions deliberately deferred
 
-Current implementation evidence does **not** yet justify:
+Current implementation evidence still does not justify:
 
-- a generic `Renderer` base class or interface;
-- a generic `Shape` inheritance hierarchy;
+- a generic `Renderer` interface/base class;
 - a generic `Picker` hierarchy;
-- `Transform2D` for body pose;
-- `Vector2.rotate()` merely for renderer-native transformations;
-- a camera object separate from `ViewportTransform`;
+- a diagnostic-overlay plug-in framework;
+- a renderer-neutral inspection renderer interface;
+- `Transform2D`;
+- `Vector2.rotate()` merely to wrap native Canvas/SVG transforms;
+- a camera abstraction separate from `ViewportTransform`;
 - a scene graph;
 - a collision system;
-- an interaction framework;
-- a materials/appearance framework;
-- a diagnostic-overlay framework.
+- a materials/appearance framework.
 
-Canvas and SVG already provide native rotation transforms for normal rendering. A project-owned `Transform2D` or vector-rotation primitive should be introduced only when our own code repeatedly needs to transform points/vectors between body-local and world coordinate frames.
+Canvas normal rendering and Canvas inspection both use native local-frame transforms naturally. Rectangle picking remains the main project-owned explicit inverse-rotation calculation, so reusable body-transform mathematics are still not sufficiently repeated to determine the right abstraction.
 
 ## Architecture evolution rule
 
-Visualization follows the same project-wide rule:
+Visualization follows the project-wide rule:
 
 > Concrete requirements create pressure; repeated pressure earns abstractions.
 
-`ViewportTransform` itself was extracted only after Canvas and SVG independently demonstrated the same viewport geometry. Later, its Canvas ownership evolved again when `BodyPicker` created a real second consumer of the same mutable viewport state.
-
-That evolution is expected. The goal is not to predict the final framework; it is to keep each current responsibility understandable and correctly placed.
+The current folder structure is itself an example. A flat `visualization/` directory was sufficient while the layer was small. Once viewport, normal rendering, picking, and inspection became independent responsibilities, grouping files by responsibility made the architecture easier to see without introducing any new behavioral abstraction.

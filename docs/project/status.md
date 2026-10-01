@@ -36,9 +36,9 @@ World snapshots
 Visualization
 ```
 
-Phase 2 currently supports shapeless, Circle, and Rectangle body definitions; finite-radian World-owned orientation; geometry-aware Canvas/SVG rendering; orientation-aware Canvas hover/selection feedback; and geometry/orientation-aware Canvas picking.
+Phase 2 currently supports shapeless, Circle, and Rectangle body definitions; finite-radian World-owned orientation; geometry-aware Canvas/SVG rendering; orientation-aware Canvas hover/selection feedback; geometry/orientation-aware Canvas picking; and the first optional Canvas inspection overlays.
 
-The latest architecture refinement separates drawing, hit testing, and browser interaction while keeping them synchronized through one explicitly composed Canvas viewport transform.
+The latest architecture refinement separates viewport geometry, normal rendering, visual interaction queries, and inspection diagnostics into explicit Visualization responsibilities while keeping Canvas collaborators synchronized through one shared viewport transform.
 
 ### Simulation engine
 
@@ -265,11 +265,47 @@ It owns the concrete browser/application policies that currently have one consum
 - selected-body read-only inspection;
 - per-frame rendering orchestration.
 
-The host uses `ViewportTransform` directly for coordinate and viewport operations, `BodyPicker` for hit testing, and `CanvasKinematicRenderer` for drawing.
+The host uses `ViewportTransform` directly for coordinate and viewport operations, `BodyPicker` for hit testing, `CanvasKinematicRenderer` for normal drawing, and `CanvasInspectionRenderer` for optional diagnostic overlays.
+
+Normal scene rendering happens first and inspection rendering happens afterward so diagnostics compose as an overlay without clearing or owning the normal scene.
 
 Hover is recomputed against the latest detached observations every frame because bodies can move under a stationary pointer.
 
 Selection stores identity rather than a snapshot. The host resolves the selected `BodyId` against fresh snapshots each frame to present current position and velocity without retaining stale state or reading mutable World storage.
+
+### Canvas inspection visualization
+
+`CanvasInspectionRenderer` is a separate diagnostic renderer. It observes the same detached `BodySnapshot[]` values and the same shared `ViewportTransform` as normal Canvas rendering, but it does not clear the surface or own normal appearance.
+
+Renderer-neutral `InspectionOptions` currently controls three indicators:
+
+```text
+showGeometryContour
+showBodyOrigin
+showOrientation
+```
+
+Current semantics are:
+
+- geometry contour — Circle/Rectangle domain boundary, scaled through the viewport;
+- body origin — fixed display-space marker at `BodyState.position`;
+- orientation — fixed display-space line along Body-local `+X` / `0°`.
+
+A shapeless Body has no geometry contour. Its body origin remains meaningful. The current inspection renderer suppresses its orientation glyph because there is no concrete geometry providing a useful local frame to inspect.
+
+“Body origin” is intentionally not defined as centroid or center of mass. Those concepts may diverge if future geometry, mass distribution, or compound bodies require them.
+
+The visualization source tree is now grouped by responsibility:
+
+```text
+src/visualization/
+├── inspection/
+├── interaction/
+├── rendering/
+└── viewport/
+```
+
+This is an organizational refinement only; it does not introduce a renderer hierarchy or inspection framework.
 
 ### SVG visualization
 
@@ -296,7 +332,8 @@ The Canvas entry point is intentionally small:
 create World + Bodies
 create Simulation
 create ViewportTransform
-create renderer
+create normal renderer
+create inspection renderer
 create picker
 create example host
 create Runtime
@@ -321,28 +358,17 @@ Current implementation pressure still does not justify:
 - a generic picking framework;
 - editable body-state UI;
 - a materials/textures/sprites appearance system;
-- a diagnostic-overlay framework;
+- a diagnostic-overlay plug-in framework;
+- configurable inspection colors/styles;
+- SVG inspection composition;
 - pinch zoom or generalized gesture handling.
 
-Normal rendering, future appearance, and future diagnostic overlays remain distinct concerns.
+Normal rendering, future appearance, interaction feedback, and optional diagnostics remain distinct concerns.
 
 ## Next step
 
-The geometry/orientation/picking sequence is now complete through display-space pick tolerance and candidate ranking.
+The first inspection slice is now established with optional geometry contour, body-origin, and orientation indicators in Canvas.
 
-Return to the planned **visual inspection layer** from the cleaner responsibility boundary:
+The next discussion should decide which diagnostic adds the most learning value without turning inspection into a framework. A velocity vector is a natural candidate because it introduces direction **and magnitude** semantics distinct from the plain orientation line.
 
-```text
-CanvasKinematicRenderer
-    normal body rendering + interaction feedback
-
-BodyPicker
-    visual hit policy
-
-future inspection layer
-    optional diagnostics only
-```
-
-A small orientation/local-axis indicator is a strong first inspection capability because it makes runtime orientation visible even for rotationally symmetric Circle geometry without changing normal body appearance.
-
-Use that real diagnostic consumer to reassess whether repeated local/world coordinate-frame work has finally earned `Vector2.rotate()`, `Transform2D`, or another shared transform helper. Do not introduce one before the new pressure is visible in actual code.
+Continue watching for genuine repetition in local/world transform mathematics before introducing `Vector2.rotate()`, `Transform2D`, or another shared transform helper.
