@@ -36,6 +36,7 @@ function inspectionOptions(overrides: Partial<InspectionOptions> = {}): Inspecti
     showGeometryContour: false,
     showBodyOrigin: false,
     showOrientation: false,
+    showVelocity: false,
     ...overrides,
   };
 }
@@ -226,5 +227,71 @@ Deno.test(
 
     assertEquals(arcCalls, []);
     assertEquals(strokeRectCalls, []);
+  },
+);
+
+Deno.test(
+  "CanvasInspectionRenderer draws velocity proportional to world speed with a fixed arrowhead",
+  () => {
+    const context = new RecordingCanvasContext();
+    const transform = new ViewportTransform(200, 100, 10);
+    const renderer = new CanvasInspectionRenderer(context, transform);
+
+    renderer.render(
+      [createBodySnapshot(7, new Vector2(2, 1), new Vector2(2, 0))],
+      inspectionOptions({ showVelocity: true }),
+    );
+
+    const moveToCalls = context.calls.filter(([name]) => name === "moveTo");
+    const lineToCalls = context.calls.filter(([name]) => name === "lineTo");
+
+    assertEquals(moveToCalls, [
+      ["moveTo", 120, 40],
+      ["moveTo", 140, 40],
+      ["moveTo", 140, 40],
+    ]);
+
+    assertEquals(lineToCalls, [
+      ["lineTo", 140, 40],
+      ["lineTo", 134, 43],
+      ["lineTo", 134, 37],
+    ]);
+  },
+);
+
+Deno.test("CanvasInspectionRenderer maps positive world Y velocity upward on display", () => {
+  const context = new RecordingCanvasContext();
+  const transform = new ViewportTransform(200, 100, 10);
+  const renderer = new CanvasInspectionRenderer(context, transform);
+
+  renderer.render(
+    [createBodySnapshot(7, new Vector2(0, 0), new Vector2(0, 2))],
+    inspectionOptions({ showVelocity: true }),
+  );
+
+  const lineToCalls = context.calls.filter(([name]) => name === "lineTo");
+
+  assertEquals(lineToCalls[0], ["lineTo", 100, 30]);
+});
+
+Deno.test(
+  "CanvasInspectionRenderer hides velocity vectors that are too small at the current viewport scale",
+  () => {
+    const context = new RecordingCanvasContext();
+    const transform = new ViewportTransform(200, 100, 10);
+    const renderer = new CanvasInspectionRenderer(context, transform);
+    const snapshots = [createBodySnapshot(7, new Vector2(0, 0), new Vector2(0.5, 0))];
+
+    renderer.render(snapshots, inspectionOptions({ showVelocity: true }));
+
+    assertEquals(
+      context.calls.filter(([name]) => name === "moveTo"),
+      [],
+    );
+
+    transform.setPixelsPerUnit(20);
+    renderer.render(snapshots, inspectionOptions({ showVelocity: true }));
+
+    assertEquals(context.calls.filter(([name]) => name === "moveTo").length > 0, true);
   },
 );

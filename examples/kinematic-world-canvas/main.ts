@@ -25,6 +25,7 @@ const INSPECTION_OPTIONS: InspectionOptions = {
   showGeometryContour: true,
   showBodyOrigin: true,
   showOrientation: true,
+  showVelocity: true,
 };
 
 // Resolve the browser drawing surface and its Canvas 2D context.

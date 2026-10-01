@@ -14,4 +14,7 @@ export interface InspectionOptions {
 
   /** Whether local 0° / +X orientation is shown from the Body origin. */
   readonly showOrientation: boolean;
+
+  /** Whether current BodyState velocity is shown as a directional vector. */
+  readonly showVelocity: boolean;
 }

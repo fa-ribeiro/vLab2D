@@ -5,6 +5,10 @@ import { ViewportTransform } from "../viewport/viewport-transform.ts";
 const BODY_ORIGIN_RADIUS = 3;
 const ORIENTATION_LINE_LENGTH = 18;
 
+const VELOCITY_VECTOR_TIME = 1;
+const VELOCITY_ARROWHEAD_SIZE = 6;
+const MIN_VELOCITY_VECTOR_LENGTH = 8;
+
 const INSPECTION_STROKE_STYLE = "#d97706";
 const INSPECTION_LINE_WIDTH = 1.5;
 
@@ -63,15 +67,26 @@ export class CanvasInspectionRenderer {
    * and orientation glyphs use fixed display-space dimensions so they remain
    * readable while zooming.
    *
-   * A shapeless Body has no geometry contour. Its Body origin is still
-   * meaningful, but orientation is not visualized until concrete geometry
-   * provides a useful local frame to inspect.
+   * Velocity vectors represent the displacement implied by the current
+   * velocity over a fixed visualization time. Their shaft therefore scales
+   * with world velocity and viewport scale, while the arrowhead remains a
+   * fixed display-space glyph. Vectors shorter than the minimum visible display
+   * length are omitted without changing the underlying BodyState velocity.
+   *
+   * A shapeless Body has no geometry contour. Its Body origin and velocity are
+   * still meaningful, but orientation is not visualized until concrete
+   * geometry provides a useful local frame to inspect.
    *
    * @param snapshots Detached Body observations to inspect.
    * @param options Renderer-neutral indicator visibility options.
    */
   public render(snapshots: readonly BodySnapshot[], options: InspectionOptions): void {
-    if (!options.showGeometryContour && !options.showBodyOrigin && !options.showOrientation) {
+    if (
+      !options.showGeometryContour &&
+      !options.showBodyOrigin &&
+      !options.showOrientation &&
+      !options.showVelocity
+    ) {
       return;
     }
 
@@ -129,6 +144,10 @@ export class CanvasInspectionRenderer {
       this.#context.restore();
     }
 
+    if (options.showVelocity) {
+      this.#renderVelocity(snapshot, x, y);
+    }
+
     if (options.showBodyOrigin) {
       // BodyState.position locates the Body's local origin in world space.
       // It coincides with the geometric center for today's centered Circle and
@@ -138,6 +157,54 @@ export class CanvasInspectionRenderer {
       this.#context.arc(x, y, BODY_ORIGIN_RADIUS, 0, Math.PI * 2);
       this.#context.stroke();
     }
+  }
+
+  #renderVelocity(snapshot: BodySnapshot, startX: number, startY: number): void {
+    const endWorldX = snapshot.state.position.x +
+      snapshot.state.velocity.x * VELOCITY_VECTOR_TIME;
+    const endWorldY = snapshot.state.position.y +
+      snapshot.state.velocity.y * VELOCITY_VECTOR_TIME;
+
+    const endX = this.#transform.worldToDisplayX(endWorldX);
+    const endY = this.#transform.worldToDisplayY(endWorldY);
+
+    const deltaX = endX - startX;
+    const deltaY = endY - startY;
+    const lengthSquared = deltaX * deltaX + deltaY * deltaY;
+
+    // Visibility is deliberately a display-space concern. A Body may still be
+    // physically moving even when zoom makes its velocity vector too small to
+    // communicate usefully on screen.
+    if (lengthSquared < MIN_VELOCITY_VECTOR_LENGTH * MIN_VELOCITY_VECTOR_LENGTH) {
+      return;
+    }
+
+    const length = Math.sqrt(lengthSquared);
+    const directionX = deltaX / length;
+    const directionY = deltaY / length;
+
+    // Build the fixed-size arrowhead directly from the display-space direction
+    // and its perpendicular. The shaft keeps physical/world scaling while the
+    // arrowhead remains a readable presentation glyph.
+    const baseX = endX - directionX * VELOCITY_ARROWHEAD_SIZE;
+    const baseY = endY - directionY * VELOCITY_ARROWHEAD_SIZE;
+
+    const halfWidth = VELOCITY_ARROWHEAD_SIZE / 2;
+    const perpendicularX = -directionY * halfWidth;
+    const perpendicularY = directionX * halfWidth;
+
+    this.#context.beginPath();
+
+    this.#context.moveTo(startX, startY);
+    this.#context.lineTo(endX, endY);
+
+    this.#context.moveTo(endX, endY);
+    this.#context.lineTo(baseX + perpendicularX, baseY + perpendicularY);
+
+    this.#context.moveTo(endX, endY);
+    this.#context.lineTo(baseX - perpendicularX, baseY - perpendicularY);
+
+    this.#context.stroke();
   }
 
   #strokeLine(x1: number, y1: number, x2: number, y2: number): void {
