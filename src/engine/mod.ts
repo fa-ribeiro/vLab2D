@@ -10,6 +10,9 @@
 export { Body } from "./body/body.ts";
 export type { BodyOptions } from "./body/body-options.ts";
 
+export type { Collision } from "./collision/collision.ts";
+export { detectCircleCircleCollision } from "./collision/circle-circle-collision.ts";
+
 export type { BodyShape } from "./geometry/body-shape.ts";
 
 export { Circle } from "./geometry/circle.ts";
