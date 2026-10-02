@@ -144,6 +144,13 @@ interface InspectionOptions {
     readonly minimumVisibleLength: number;
     readonly style?: Partial<InspectionStyle>;
   };
+
+  readonly collisionMtv: {
+    readonly visible: boolean;
+    readonly arrowheadSize: number;
+    readonly minimumVisibleLength: number;
+    readonly style?: Partial<InspectionStyle>;
+  };
 }
 ```
 
@@ -161,6 +168,7 @@ Current indicators are:
 | body origin      | `BodyState.position`, i.e. local origin in world space | configurable fixed display-space marker                |
 | orientation      | local `+X` / `0°` direction from body origin           | configurable fixed display-space line                  |
 | velocity         | current world-space velocity from body origin          | projected world displacement + fixed display arrowhead |
+| collision MTV    | engine `Collision(A, B)` minimum translation for B     | world penetration depth + fixed display arrowhead      |
 
 The velocity shaft endpoint is:
 
@@ -174,7 +182,15 @@ A shapeless Body has no domain geometry, so it has no geometry contour. Its body
 
 The term **body origin** is deliberate. With today's centered Circle, Rectangle, and RegularPolygon definitions it coincides with their geometric center, but it must not be redefined as a future centroid or center of mass.
 
-The orientation indicator remains a plain line while velocity uses an arrow, keeping the two diagnostic meanings visually distinct.
+The orientation indicator remains a plain line while velocity and collision MTV use arrows.
+
+Collision inspection deliberately consumes Engine-produced `BodyCollision` observations rather than enumerating body pairs or running narrow-phase geometry inside the renderer. For each ordered collision pair A/B, the MTV arrow begins at B's body origin and ends at:
+
+```text
+B.position + collision.normal × collision.penetrationDepth
+```
+
+The single directional arrow matches the Engine contract exactly: it visualizes the minimum translation that would move B out of overlap with A. It does not mean a future collision solver must actually move B.
 
 ## Observation model
 
@@ -308,6 +324,9 @@ refresh hover / selected-body readouts
     ↓
 normal Canvas rendering
     ↓
+when collision MTV inspection is enabled:
+    detectBodyCollisions(snapshots)
+    ↓
 inspection overlay rendering
 ```
 
@@ -333,6 +352,7 @@ It delegates:
 viewport geometry      → ViewportTransform
 hit testing            → BodyPicker
 normal scene drawing   → CanvasKinematicRenderer
+collision observations → detectBodyCollisions
 diagnostic overlays    → CanvasInspectionRenderer
 ```
 
@@ -340,7 +360,7 @@ No generic application or interaction framework has been introduced.
 
 ## SVG and renderer-neutral inspection intent
 
-`InspectionOptions` is deliberately not named `CanvasInspectionOptions`: geometry contour, body origin, orientation, velocity, and their styling/configuration semantics can also be represented by SVG or another future output target.
+`InspectionOptions` is deliberately not named `CanvasInspectionOptions`: geometry contour, body origin, orientation, velocity, collision MTV, and their styling/configuration semantics can also be represented by SVG or another future output target.
 
 SVG inspection has not yet been implemented. `SvgKinematicRenderer` currently returns a complete SVG document and owns its `ViewportTransform` internally, so forcing a parallel `SvgInspectionRenderer` before deciding how static-document composition should work would be premature.
 
@@ -362,7 +382,7 @@ Interaction feedback
     hover / selection / picking tolerance
 
 Inspection diagnostics
-    optional contour / body origin / orientation / velocity
+    optional contour / body origin / orientation / velocity / collision MTV
     future bounds / contacts / IDs
 ```
 
@@ -380,12 +400,13 @@ Current implementation evidence still does not justify:
 - `Vector2.rotate()` merely to wrap native Canvas/SVG transforms;
 - a camera abstraction separate from `ViewportTransform`;
 - a scene graph;
-- a collision system;
+- collision response / solver integration;
+- a visualization-owned collision detector or pair-generation system;
 - a materials/appearance framework.
 
-Canvas normal rendering and Canvas inspection both use native local-frame transforms naturally. Rectangle and RegularPolygon picking now both use project-owned inverse body rotation, so reusable local/world transform pressure is real.
+Canvas normal rendering and Canvas inspection both use native local-frame transforms naturally. Rectangle and RegularPolygon picking use project-owned inverse body rotation, while collision detection has now introduced `Vector2.rotate()` plus small local/world polygon helpers where the physics algorithms genuinely need them.
 
-Narrow-phase collision detection is the next planned geometry consumer. The project intentionally waits for that concrete physics use before deciding whether the right extraction is `Transform2D`, `Vector2.rotate()`, free geometry helpers, or another smaller abstraction.
+That pressure still does not justify a general `Transform2D`: current consumers are well served by the smaller operations they actually use.
 
 ## Architecture evolution rule
 

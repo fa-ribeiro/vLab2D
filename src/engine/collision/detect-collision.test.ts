@@ -88,3 +88,22 @@ Deno.test("detectCollision returns undefined for separated shapes", () => {
 
   assertEquals(collision, undefined);
 });
+
+Deno.test("detectCollision translation moves contained shape B to touching", () => {
+  const shapeA = new Rectangle(10, 10);
+  const shapeB = new Rectangle(2, 2);
+  const positionA = new Vector2(0, 0);
+  const positionB = new Vector2(0, 0);
+
+  const collision = detectCollision(shapeA, positionA, 0, shapeB, positionB, 0);
+
+  assert(collision !== undefined);
+  assertEquals(collision.penetrationDepth, 6);
+
+  const translatedB = positionB.add(collision.normal.scale(collision.penetrationDepth));
+
+  const touching = detectCollision(shapeA, positionA, 0, shapeB, translatedB, 0);
+
+  assert(touching !== undefined);
+  assertAlmostEquals(touching.penetrationDepth, 0, 1e-12);
+});

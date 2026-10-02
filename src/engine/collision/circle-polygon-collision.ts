@@ -16,7 +16,8 @@ import { getAxisCollision, getPolygonAxes, projectCircle, projectVertices } from
  * around polygon corners.
  *
  * Touching geometry counts as a collision with zero penetration depth. The
- * returned normal points from the Circle (A) toward the polygon (B).
+ * returned normal gives the minimum-separation direction for moving the
+ * polygon (B) out of overlap with the Circle (A).
  *
  * @param circle Intrinsic Circle geometry for shape A.
  * @param circlePosition World position of the Circle center.

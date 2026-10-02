@@ -53,6 +53,15 @@ const INSPECTION_OPTIONS: InspectionOptions = {
       color: "#dc2626",
     },
   },
+  collisionMtv: {
+    visible: true,
+    arrowheadSize: 6,
+    minimumVisibleLength: 2,
+    style: {
+      color: "#2563eb",
+      lineWidth: 2,
+    },
+  },
 };
 
 // Resolve the browser drawing surface and its Canvas 2D context.
@@ -80,6 +89,7 @@ world.addBody(particle, { position: new Vector2(4, 2), velocity: new Vector2(-1,
 const circle = new Body({ shape: new Circle(1) });
 
 world.addBody(circle, { position: new Vector2(2, 3), orientation: Math.PI / 4 });
+world.addBody(circle, { position: new Vector2(3.5, 3) });
 
 const rectangle = new Body({ shape: new Rectangle(2, 1) });
 

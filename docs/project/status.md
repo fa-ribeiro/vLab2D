@@ -36,7 +36,7 @@ World snapshots
 Visualization
 ```
 
-Phase 2 currently supports shapeless, Circle, Rectangle, and RegularPolygon body definitions; World-owned orientation and angular velocity; constant-angular-velocity rotational kinematics; geometry-aware Canvas/SVG rendering; orientation-aware Canvas hover/selection feedback; geometry/orientation-aware Canvas picking; and optional Canvas inspection overlays for geometry contour, body origin, orientation, and velocity.
+Phase 2 currently supports shapeless, Circle, Rectangle, and RegularPolygon body definitions; World-owned orientation and angular velocity; constant-angular-velocity rotational kinematics; geometry-aware Canvas/SVG rendering; orientation-aware Canvas hover/selection feedback; geometry/orientation-aware Canvas picking; complete narrow-phase collision detection for all current physical shape pairs; body-level collision queries over detached snapshots; and optional Canvas inspection overlays for geometry contour, body origin, orientation, velocity, and collision MTV.
 
 The latest Visualization refinement makes inspection configuration explicit plain data: each indicator owns its visibility and presentation parameters, a renderer-neutral default style supplies shared color/line width, and indicators may partially override that style. The Canvas renderer still receives the current configuration per render call and owns no persistent user settings.
 
@@ -57,7 +57,11 @@ The public engine currently provides:
 - Explicit Euler and Semi-Implicit Euler implementations;
 - `BodyId`, an opaque world-local runtime identity;
 - `BodySnapshot`, detached observation combining identity, immutable definition, and detached runtime state;
-- `World`, authoritative owner of body runtime state and environmental gravity.
+- `World`, authoritative owner of body runtime state and environmental gravity;
+- `Collision`, minimum-separation information for an ordered shape pair A/B;
+- `detectCollision(...)`, exhaustive narrow-phase dispatch across all current `BodyShape` combinations;
+- `BodyCollision`, identity-level body-pair collision observation;
+- `detectBodyCollisions(...)`, pure O(n²) collision query over detached snapshots.
 
 The ownership model is:
 
@@ -104,6 +108,58 @@ nextAngularVelocity = angularVelocity
 Angular acceleration, torque, moment of inertia, damping, and collision-driven rotation have not been introduced.
 
 `World.step(dt)` remains atomic: all candidate next states are calculated and validated before any authoritative body state is replaced.
+
+### Narrow-phase collision detection
+
+Collision detection is currently query-only. It does not run implicitly inside `World.step()` and does not change authoritative state.
+
+The shape-level flow is:
+
+```text
+BodyShape A + pose A
+BodyShape B + pose B
+        ↓
+detectCollision(...)
+        ↓
+Circle-Circle
+Circle-Polygon
+Polygon-Polygon / SAT
+        ↓
+Collision | undefined
+```
+
+Every current physical `BodyShape` pair is supported. `undefined` therefore means strict separation; touching is represented by a `Collision` with zero penetration depth.
+
+The ordered `Collision(A, B)` contract is:
+
+```text
+normal
+    minimum-separation direction for moving B out of A
+
+penetrationDepth
+    translation length in world units
+
+MTV
+    normal × penetrationDepth
+```
+
+At the body level:
+
+```text
+BodySnapshot[]
+    ↓
+detectBodyCollisions(...)
+    ↓
+skip shapeless
+unique unordered pairs
+O(n²) candidate generation
+    ↓
+detectCollision(...)
+    ↓
+BodyCollision[]
+```
+
+`detectBodyCollisions` is a pure observation query. Its simple O(n²) candidate generation is deliberate at this checkpoint and provides the stable boundary behind which a future AABB/broad phase can be introduced.
 
 ### Simulation orchestration
 
@@ -325,6 +381,12 @@ velocity
     arrowheadSize
     minimumVisibleLength
     style?
+
+collisionMtv
+    visible
+    arrowheadSize
+    minimumVisibleLength
+    style?
 ```
 
 An indicator without a style override inherits `defaultStyle`. An indicator may override only selected style properties; omitted properties continue to inherit from the default. This keeps inspection configuration renderer-neutral and leaves a clean future path for launch-time presets, runtime editing, and validated persistence without putting configuration ownership into the renderer.
@@ -334,7 +396,8 @@ Current indicator semantics are:
 - geometry contour — Circle/Rectangle/RegularPolygon domain boundary, scaled through the viewport;
 - body origin — fixed display-space marker at `BodyState.position`;
 - orientation — fixed display-space line along Body-local `+X` / `0°`;
-- velocity — arrow from the Body origin in the current velocity direction, with shaft length representing `velocity × projectionTime`.
+- velocity — arrow from the Body origin in the current velocity direction, with shaft length representing `velocity × projectionTime`;
+- collision MTV — single arrow from body B's origin along `Collision.normal`, with world-space shaft length equal to `penetrationDepth`.
 
 Velocity shaft length therefore scales with world velocity and viewport scale. Its arrowhead uses a configured fixed display-space size. A velocity vector shorter than `minimumVisibleLength` in display space is omitted as a visualization decision; the Body may still be physically moving.
 
@@ -394,7 +457,8 @@ No generic application, renderer, picker, interaction, or dependency-injection f
 
 Current implementation pressure still does not justify:
 
-- collision detection or response;
+- collision response, impulses, restitution, friction, contact manifolds, mass, or inertia;
+- AABB/broad-phase collision acceleration;
 - forces beyond current World gravity input;
 - mass or material properties;
 - angular acceleration, torque, moment of inertia, rotational damping, or collision-driven rotation;
@@ -414,8 +478,24 @@ Normal rendering, future appearance, interaction feedback, and optional diagnost
 
 ## Next step
 
-The RegularPolygon capability is now established across the Engine and Visualization layers. The shape stores immutable local geometry, rendering and inspection follow its oriented polygon boundary, and BodyPicker uses exact polygon geometry rather than its circumcircle.
+Narrow-phase collision detection and collision inspection are now established and consolidated behind a body-level observation query.
 
-The next planned work is **narrow-phase collision detection only**. Collision response remains explicitly out of scope for the first collision passes.
+The next planned collision-learning pass is **AABB / broad-phase candidate filtering**. The goal is not collision response: it is to learn how a cheap conservative test can reduce the number of expensive narrow-phase checks while preserving the existing `detectCollision(...)` algorithms and `BodyCollision` result model.
 
-The initial collision design should support the geometry that now actually exists—Circle, Rectangle, and RegularPolygon—while preserving the distinction that a shapeless Body has no collision geometry. The design should also observe the new pressure around local/world transforms and convex polygon operations before introducing abstractions such as `Transform2D` or a generic convex-shape interface.
+The intended evolution is:
+
+```text
+current
+    all shaped pairs O(n²)
+        ↓
+    narrow phase
+
+next
+    AABB calculation
+        ↓
+    broad-phase candidate filtering
+        ↓
+    same narrow phase
+```
+
+Collision response, impulses, restitution, friction, mass/inertia, and contact manifolds remain explicitly deferred.

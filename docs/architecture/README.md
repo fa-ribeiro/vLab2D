@@ -832,11 +832,11 @@ It deliberately does not answer a physics/collision question.
 
 Current picking geometry is:
 
-| Body kind | Picking geometry                                            |
-| --------- | ----------------------------------------------------------- |
-| shapeless | fixed circular display marker                               |
-| Circle    | world radius scaled by current viewport                     |
-| Rectangle | world width/height scaled by viewport + current orientation |
+| Body kind      | Picking geometry                                                |
+| -------------- | --------------------------------------------------------------- |
+| shapeless      | fixed circular display marker                                   |
+| Circle         | world radius scaled by current viewport                         |
+| Rectangle      | world width/height scaled by viewport + current orientation     |
 | RegularPolygon | exact polygon boundary scaled by viewport + current orientation |
 
 The picker adds a non-negative `pickTolerance` measured in display units. This is interaction policy rather than domain geometry: a thin Rectangle or small Circle can remain easy to acquire when zoomed out without changing its physical/world dimensions.
@@ -988,9 +988,9 @@ local direction → world direction
 world direction → local direction
 ```
 
-Rectangle and RegularPolygon picking now both require explicit conversion into a body-local display frame. This is real repeated pressure, but narrow-phase collision detection is about to become another geometry consumer and will provide better evidence about the right reusable abstraction.
+Rectangle and RegularPolygon picking both require explicit conversion into a body-local display frame. Narrow-phase collision then became a second geometry domain with repeated local/world rotation needs.
 
-The project therefore still defers `Transform2D`, `Vector2.rotate()`, or another local/world helper until collision requirements show which operations genuinely repeat across physics and visualization.
+That pressure earned the smaller `Vector2.rotate()` operation and internal collision polygon-transform helpers. It still does not justify a general `Transform2D`: native Canvas/SVG transforms remain natural for drawing, picking uses its focused inverse-rotation math, and collision code needs only a small set of vector/vertex operations.
 
 ---
 
@@ -1059,7 +1059,8 @@ sequenceDiagram
         Host->>Picker: refresh hover hit
         Picker-->>Host: BodyId or none
         Host->>Renderer: render(snapshots, hover, selection)
-        Host->>Inspection: render(snapshots, options)
+        Host->>Host: detectBodyCollisions(snapshots) when enabled
+        Host->>Inspection: render(snapshots, options, bodyCollisions)
     end
 ```
 
@@ -1067,11 +1068,81 @@ The composition root decides which concrete collaborators exist. Each collaborat
 
 ---
 
-## 23. What is not yet architecture
+---
+
+## 23. Collision detection as an observation/query subsystem
+
+Collision detection is now an implemented Engine capability, but it is deliberately not an automatic phase of `World.step()`.
+
+The architecture is:
+
+```mermaid
+flowchart LR
+    W["World"]
+    S["BodySnapshot[]"]
+    BQ["detectBodyCollisions"]
+    PAIRS["unordered shaped pairs<br/>O(n²) today"]
+    D["detectCollision"]
+    CC["Circle ↔ Circle"]
+    CP["Circle ↔ Polygon"]
+    PP["Polygon ↔ Polygon / SAT"]
+    BC["BodyCollision[]"]
+    I["CanvasInspectionRenderer"]
+
+    W --> S
+    S --> BQ
+    BQ --> PAIRS
+    PAIRS --> D
+    D --> CC
+    D --> CP
+    D --> PP
+    D --> BC
+    BC --> I
+    S --> I
+```
+
+The shape-level dispatcher is exhaustive over the current physical `BodyShape` union. Shapeless Bodies never enter narrow phase.
+
+`Collision(A, B)` has ordered semantics:
+
+```text
+normal
+    unit direction of the minimum translation
+    that moves B out of overlap with A
+
+penetrationDepth
+    non-negative translation length
+
+MTV
+    normal × penetrationDepth
+```
+
+This definition is stronger than describing the normal simply as “A toward B”. For ordinary external overlaps the two descriptions often coincide, but containment and coincident/degenerate configurations do not always have a unique useful center-to-center direction.
+
+`detectBodyCollisions` establishes the body-level query boundary. Its current pair generation is intentionally naïve O(n²), which is acceptable for the learning-scale worlds in this phase and creates a clean future insertion point:
+
+```text
+BodySnapshot[]
+    ↓
+future broad phase / AABB
+    ↓
+candidate pairs
+    ↓
+existing detectCollision()
+```
+
+The Canvas collision inspector consumes `BodyCollision[]`; it does not know how candidates are generated and does not execute shape-pair dispatch itself.
+
+The displayed single-arrow MTV is directional by design. It begins at B's body origin because the engine result describes the minimum translation for B relative to A. This is diagnostic semantics only, not a collision-response decision.
+
+No collision response, solver, impulses, restitution, friction, mass/inertia, contact manifold, or broad phase exists yet.
+
+## 24. What is not yet architecture
 
 The following are future possibilities rather than implemented structure:
 
-- collision detection and collision response;
+- collision response and solver integration;
+- AABB / broad-phase collision acceleration;
 - force accumulation;
 - rotational dynamics beyond constant angular velocity;
 - compound geometry;
@@ -1087,7 +1158,7 @@ When these become real passes, they should be designed from their concrete requi
 
 ---
 
-## 24. Current review checkpoint
+## 25. Current review checkpoint
 
 The current Phase 2 sequence has established:
 
@@ -1114,6 +1185,7 @@ Inspection
     body origin
     orientation
     velocity
+    collision MTV
     renderer-neutral configuration
     default + per-indicator styles
 
@@ -1128,6 +1200,8 @@ The first rotational-kinematics pass is now implemented.
 
 The Canvas example now gives Rectangle and RegularPolygon instances visible rotational motion, making World-owned orientation and angular velocity directly observable.
 
-RegularPolygon also establishes a second project-owned local-coordinate geometry consumer through exact polygon picking. The next planned architecture discussion is narrow-phase collision detection. That work should determine whether Rectangle and RegularPolygon now earn shared convex-polygon operations, local/world transform helpers, or another smaller abstraction.
+Narrow-phase collision detection is now established across all current physical shape pairs. The implementation reused concrete Rectangle/RegularPolygon geometry through small internal polygon helpers and `Vector2.rotate()` without introducing a generic Shape hierarchy, public ConvexPolygon abstraction, or `Transform2D`.
+
+Body-level collision discovery now sits behind `detectBodyCollisions(...)`, keeping pair generation out of visualization and creating the intended insertion point for the next learning topic: AABB / broad-phase candidate filtering.
 
 Collision response, angular acceleration, torque, moment of inertia, mass distribution, damping, and collision-driven rotation remain future capabilities.

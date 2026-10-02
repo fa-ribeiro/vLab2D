@@ -1,20 +1,30 @@
 import type { Vector2 } from "../math/vector2.ts";
 
 /**
- * Describes the minimum separation information produced by narrow-phase
- * collision detection.
+ * Describes minimum-separation information produced by narrow-phase collision
+ * detection for an ordered shape pair A/B.
  *
- * The normal is a unit vector that points from shape A toward shape B.
- * `penetrationDepth` is measured in simulation/world units and is
- * non-negative. A depth of `0` represents touching geometry.
+ * `normal` is a unit vector in the direction of the minimum translation that
+ * would move shape B out of overlap with shape A. `penetrationDepth` is the
+ * non-negative length of that translation in simulation/world units.
+ *
+ * For ordinary external overlaps this direction usually also reads visually as
+ * A toward B. Containment and coincident/degenerate configurations may not have
+ * a unique meaningful center-to-center A-to-B direction, so the
+ * minimum-separation definition is the authoritative contract.
+ *
+ * A depth of `0` represents touching geometry.
  */
 export interface Collision {
-  /** Unit normal pointing from shape A toward shape B. */
+  /**
+   * Unit direction of the minimum translation that separates shape B from
+   * shape A.
+   */
   readonly normal: Vector2;
 
   /**
-   * Minimum distance, in simulation/world units, needed to separate the
-   * overlapping shapes along the collision normal.
+   * Minimum distance, in simulation/world units, needed to move shape B out of
+   * overlap with shape A along {@link Collision.normal}.
    *
    * A value of `0` means the shapes are touching without penetration.
    */

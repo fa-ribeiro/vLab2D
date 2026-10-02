@@ -15,8 +15,9 @@ import { detectPolygonPolygonCollision } from "./polygon-polygon-collision.ts";
  * Every combination in BodyShape is supported. Consequently, `undefined`
  * unambiguously means the supplied shapes are strictly separated.
  *
- * The returned collision normal always points from shape A toward shape B.
- * Touching geometry counts as collision with zero penetration depth.
+ * The returned collision normal is the unit direction of the minimum
+ * translation that would move shape B out of overlap with shape A. Touching
+ * geometry counts as collision with zero penetration depth.
  *
  * This function accepts physical BodyShape values only. A Body without
  * geometry has nothing to collide and should be skipped by its caller rather

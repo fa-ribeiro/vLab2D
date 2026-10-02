@@ -74,4 +74,27 @@ export interface InspectionOptions {
 
     readonly style?: Partial<InspectionStyle>;
   };
+
+  /**
+   * Narrow-phase collision minimum-translation-vector inspection.
+   *
+   * For each colliding physical-shape pair A/B, the vector starts at B's Body
+   * origin and points along the collision normal by the penetration depth. It
+   * therefore shows the minimum translation that would move B out of A along
+   * the detected collision axis.
+   */
+  readonly collisionMtv: {
+    readonly visible: boolean;
+
+    /** Arrowhead size in display units. */
+    readonly arrowheadSize: number;
+
+    /**
+     * Minimum shaft length in display units required for the vector to be
+     * visually useful. Zero-depth touching therefore produces no visible MTV.
+     */
+    readonly minimumVisibleLength: number;
+
+    readonly style?: Partial<InspectionStyle>;
+  };
 }

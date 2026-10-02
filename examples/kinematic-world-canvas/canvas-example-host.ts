@@ -8,6 +8,7 @@ import type {
   ViewportTransform,
   World,
 } from "../../src/mod.ts";
+import { detectBodyCollisions } from "../../src/mod.ts";
 
 const MIN_VIEWPORT_SCALE = 10;
 const MAX_VIEWPORT_SCALE = 200;
@@ -115,7 +116,16 @@ export class CanvasExampleHost {
     this.#refreshSelectedBodyInspection();
 
     this.#renderer.render(this.#renderedSnapshots, this.#hoveredBodyId, this.#selectedBodyId);
-    this.#inspectionRenderer.render(this.#renderedSnapshots, this.#inspectionOptions);
+
+    const bodyCollisions = this.#inspectionOptions.collisionMtv.visible
+      ? detectBodyCollisions(this.#renderedSnapshots)
+      : [];
+
+    this.#inspectionRenderer.render(
+      this.#renderedSnapshots,
+      this.#inspectionOptions,
+      bodyCollisions,
+    );
   }
 
   // Wires browser input events to the example's interaction handlers.

@@ -1,7 +1,9 @@
 import {
+  type BodyCollision,
   type BodyShape,
   type BodySnapshot,
   Circle,
+  type Collision,
   Rectangle,
   RegularPolygon,
 } from "../../engine/mod.ts";
@@ -69,15 +71,27 @@ export class CanvasInspectionRenderer {
    * are deliberately not treated as physical contours. Orientation is shown
    * only when a concrete shape supplies a meaningful local frame.
    *
+   * Collision MTV inspection consumes BodyCollision observations supplied by
+   * the caller. Pair discovery and narrow-phase detection remain Engine
+   * responsibilities; this renderer only turns the supplied result into a
+   * display-space diagnostic.
+   *
    * @param snapshots Detached Body observations to inspect.
    * @param options Renderer-neutral inspection configuration for this frame.
+   * @param bodyCollisions Collision observations produced from the same
+   * snapshot set.
    */
-  public render(snapshots: readonly BodySnapshot[], options: InspectionOptions): void {
+  public render(
+    snapshots: readonly BodySnapshot[],
+    options: InspectionOptions,
+    bodyCollisions: readonly BodyCollision[] = [],
+  ): void {
     if (
       !options.geometryContour.visible &&
       !options.bodyOrigin.visible &&
       !options.orientation.visible &&
-      !options.velocity.visible
+      !options.velocity.visible &&
+      !options.collisionMtv.visible
     ) {
       return;
     }
@@ -86,6 +100,10 @@ export class CanvasInspectionRenderer {
 
     for (const snapshot of snapshots) {
       this.#renderBody(snapshot, options);
+    }
+
+    if (options.collisionMtv.visible) {
+      this.#renderCollisionMtvs(snapshots, bodyCollisions, options);
     }
 
     this.#context.restore();
@@ -184,8 +202,22 @@ export class CanvasInspectionRenderer {
     const startX = this.#transform.worldToDisplayX(snapshot.state.position.x);
     const startY = this.#transform.worldToDisplayY(snapshot.state.position.y);
 
+    const endWorldX = snapshot.state.position.x +
+      snapshot.state.velocity.x * options.velocity.projectionTime;
+    const endWorldY = snapshot.state.position.y +
+      snapshot.state.velocity.y * options.velocity.projectionTime;
+
+    const endX = this.#transform.worldToDisplayX(endWorldX);
+    const endY = this.#transform.worldToDisplayY(endWorldY);
+
+    if (
+      !this.#isArrowVisible(startX, startY, endX, endY, options.velocity.minimumVisibleLength)
+    ) {
+      return;
+    }
+
     this.#applyStyle(options.defaultStyle, options.velocity.style);
-    this.#renderVelocity(snapshot, startX, startY, options);
+    this.#strokeArrow(startX, startY, endX, endY, options.velocity.arrowheadSize);
   }
 
   #renderBodyOrigin(snapshot: BodySnapshot, options: InspectionOptions): void {
@@ -199,6 +231,67 @@ export class CanvasInspectionRenderer {
     this.#context.beginPath();
     this.#context.arc(x, y, options.bodyOrigin.radius, 0, Math.PI * 2);
     this.#context.stroke();
+  }
+
+  #renderCollisionMtvs(
+    snapshots: readonly BodySnapshot[],
+    bodyCollisions: readonly BodyCollision[],
+    options: InspectionOptions,
+  ): void {
+    const snapshotsById = new Map(
+      snapshots.map((snapshot) => [snapshot.id, snapshot] as const),
+    );
+
+    for (const bodyCollision of bodyCollisions) {
+      // Collision observations are expected to come from this same snapshot
+      // set. Ignore stale/mismatched observations rather than inventing a
+      // position for a body that is not currently being rendered.
+      if (!snapshotsById.has(bodyCollision.bodyAId)) {
+        continue;
+      }
+
+      const snapshotB = snapshotsById.get(bodyCollision.bodyBId);
+
+      if (snapshotB === undefined) {
+        continue;
+      }
+
+      this.#renderCollisionMtv(snapshotB, bodyCollision.collision, options);
+    }
+  }
+
+  #renderCollisionMtv(
+    snapshotB: BodySnapshot,
+    collision: Collision,
+    options: InspectionOptions,
+  ): void {
+    const startX = this.#transform.worldToDisplayX(snapshotB.state.position.x);
+    const startY = this.#transform.worldToDisplayY(snapshotB.state.position.y);
+
+    // Collision.normal is the minimum-separation direction for B relative to A.
+    // Extending from B by penetrationDepth therefore visualizes the exact MTV.
+    const endWorldX = snapshotB.state.position.x +
+      collision.normal.x * collision.penetrationDepth;
+    const endWorldY = snapshotB.state.position.y +
+      collision.normal.y * collision.penetrationDepth;
+
+    const endX = this.#transform.worldToDisplayX(endWorldX);
+    const endY = this.#transform.worldToDisplayY(endWorldY);
+
+    if (
+      !this.#isArrowVisible(
+        startX,
+        startY,
+        endX,
+        endY,
+        options.collisionMtv.minimumVisibleLength,
+      )
+    ) {
+      return;
+    }
+
+    this.#applyStyle(options.defaultStyle, options.collisionMtv.style);
+    this.#strokeArrow(startX, startY, endX, endY, options.collisionMtv.arrowheadSize);
   }
 
   #traceRegularPolygon(shape: RegularPolygon): void {
@@ -222,38 +315,41 @@ export class CanvasInspectionRenderer {
     this.#context.closePath();
   }
 
-  #renderVelocity(
-    snapshot: BodySnapshot,
+  #isArrowVisible(
     startX: number,
     startY: number,
-    options: InspectionOptions,
-  ): void {
-    const endWorldX = snapshot.state.position.x +
-      snapshot.state.velocity.x * options.velocity.projectionTime;
-    const endWorldY = snapshot.state.position.y +
-      snapshot.state.velocity.y * options.velocity.projectionTime;
-
-    const endX = this.#transform.worldToDisplayX(endWorldX);
-    const endY = this.#transform.worldToDisplayY(endWorldY);
-
+    endX: number,
+    endY: number,
+    minimumVisibleLength: number,
+  ): boolean {
     const deltaX = endX - startX;
     const deltaY = endY - startY;
     const lengthSquared = deltaX * deltaX + deltaY * deltaY;
-    const minimumVisibleLengthSquared = options.velocity.minimumVisibleLength *
-      options.velocity.minimumVisibleLength;
 
-    if (lengthSquared < minimumVisibleLengthSquared) {
-      return;
+    if (lengthSquared === 0) {
+      return false;
     }
 
-    const length = Math.sqrt(lengthSquared);
+    return lengthSquared >= minimumVisibleLength * minimumVisibleLength;
+  }
+
+  #strokeArrow(
+    startX: number,
+    startY: number,
+    endX: number,
+    endY: number,
+    arrowheadSize: number,
+  ): void {
+    const deltaX = endX - startX;
+    const deltaY = endY - startY;
+    const length = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
     const directionX = deltaX / length;
     const directionY = deltaY / length;
 
-    const baseX = endX - directionX * options.velocity.arrowheadSize;
-    const baseY = endY - directionY * options.velocity.arrowheadSize;
+    const baseX = endX - directionX * arrowheadSize;
+    const baseY = endY - directionY * arrowheadSize;
 
-    const halfWidth = options.velocity.arrowheadSize / 2;
+    const halfWidth = arrowheadSize / 2;
     const perpendicularX = -directionY * halfWidth;
     const perpendicularY = directionX * halfWidth;
 

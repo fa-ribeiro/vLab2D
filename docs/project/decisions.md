@@ -1528,7 +1528,7 @@ The regular polygon owns no world position or orientation. Runtime pose remains 
 Circle | Rectangle | RegularPolygon
 ```
 
-The addition of a third shape creates real branching pressure in rendering, inspection, and picking, but it still does not establish a useful general `Shape` interface or class hierarchy. Current consumers ask materially different questions of geometry, and narrow-phase collision detection is expected to provide stronger evidence about which geometry operations actually deserve reuse.
+The addition of a third shape creates real branching pressure in rendering, inspection, and picking, but it still does not establish a useful general `Shape` interface or class hierarchy. Current consumers ask materially different questions of geometry. Narrow-phase collision detection later supplied the additional evidence recorded in D-084 and still did not justify a generic Shape hierarchy.
 
 Visualization no longer relies on two-shape fall-through assumptions such as “non-Rectangle means Circle.” Physical geometries are dispatched explicitly. A shapeless Body is also handled explicitly as `undefined`; its circular marker remains presentation-only and is not promoted into domain geometry.
 
@@ -1557,5 +1557,120 @@ RegularPolygon visualization uses its exact polygon boundary:
 
 Hover and selection outlines for RegularPolygon are expanded by edge-normal distance. The expansion uses the regular polygon apothem relationship so a configured display-space padding moves polygon edges outward by the requested amount instead of merely increasing circumradius by that amount.
 
-This decision does not introduce arbitrary polygons, concave polygons, a generic convex-polygon interface, `Transform2D`, collision detection, or collision response. Narrow-phase collision detection is the next planned geometry consumer and should determine whether any of those smaller reusable geometry abstractions have now earned their place.
+This decision does not introduce arbitrary polygons, concave polygons, a generic convex-polygon interface, `Transform2D`, or collision response. Narrow-phase collision detection was the next geometry consumer and is now established by D-084; the resulting implementation kept concrete BodyShape dispatch and extracted only the smaller polygon/SAT operations that gained real reuse.
 
+## D-084 — Collision detection is a pure observation query with explicit minimum-separation semantics
+
+**Status:** Accepted and implemented
+
+Narrow-phase collision detection now supports every pair in the current physical `BodyShape` union:
+
+```text
+Circle ↔ Circle
+Circle ↔ Rectangle
+Circle ↔ RegularPolygon
+Rectangle ↔ Rectangle
+Rectangle ↔ RegularPolygon
+RegularPolygon ↔ RegularPolygon
+```
+
+Shapeless Bodies remain valid engine entities but have no collision geometry and are excluded from physical collision queries.
+
+The shape-level public dispatcher is:
+
+```ts
+detectCollision(
+  shapeA,
+  positionA,
+  orientationA,
+  shapeB,
+  positionB,
+  orientationB,
+): Collision | undefined
+```
+
+Every current `BodyShape` combination is supported, so `undefined` means only that the supplied shapes are strictly separated. Touching counts as a collision with `penetrationDepth === 0`.
+
+`Collision` uses ordered A/B semantics:
+
+```text
+normal
+    unit direction of the minimum translation
+    that would move shape B out of overlap with shape A
+
+penetrationDepth
+    non-negative length of that translation
+    in world units
+
+MTV
+    normal × penetrationDepth
+```
+
+For ordinary external overlaps the normal often also looks like a center-to-center A→B direction. That visual interpretation is not the authoritative contract because containment and coincident/degenerate configurations may not have a unique useful center-to-center direction. The minimum-separation translation for B is the stable definition.
+
+The current narrow-phase algorithms are:
+
+```text
+Circle ↔ Circle
+    direct center-distance test
+
+Polygon ↔ Polygon
+    Separating Axis Theorem (SAT)
+
+Circle ↔ Polygon
+    SAT using polygon edge normals
+    + circle-center → closest-polygon-vertex axis
+```
+
+Rectangle remains an expressive domain shape defined by width/height. It does not become a generic Polygon merely because collision code can derive local vertices for SAT. `RegularPolygon` reuses its intrinsic immutable local vertices. Shared polygon projection/axis helpers remain internal collision machinery rather than a public convex-shape hierarchy.
+
+At the body-observation level, collision discovery is exposed as:
+
+```ts
+detectBodyCollisions(
+  snapshots: readonly BodySnapshot[],
+): readonly BodyCollision[]
+```
+
+`BodyCollision` contains `bodyAId`, `bodyBId`, and the corresponding `Collision`.
+
+This query:
+
+- skips shapeless Bodies;
+- generates each unordered shaped-body pair once;
+- currently uses deliberately simple O(n²) pair generation;
+- delegates all geometry to `detectCollision`;
+- includes touching pairs;
+- does not mutate snapshots, Body definitions, or World state.
+
+The query is intentionally outside `World.step()`. World remains the authoritative state owner and kinematic updater; collision detection is an explicit observation/query capability over detached snapshots.
+
+This boundary also creates the intended evolution point for broad phase work:
+
+```text
+today
+    BodySnapshot[]
+        ↓
+    all unordered pairs O(n²)
+        ↓
+    narrow phase
+
+later
+    BodySnapshot[]
+        ↓
+    broad phase / AABB candidate generation
+        ↓
+    same narrow phase
+```
+
+Consumers such as collision inspection should not need to change when candidate generation becomes more selective.
+
+Canvas collision inspection visualizes the exact directional MTV returned by the engine. For pair A/B, the single arrow begins at body B's current origin and ends at:
+
+```text
+B.position + normal × penetrationDepth
+```
+
+This is a diagnostic representation of the collision result, not collision response policy. A future solver may move A, B, both, or neither according to static/dynamic state, mass, constraints, or other rules.
+
+This decision does **not** introduce collision response, impulses, restitution, friction, mass, inertia, contact manifolds, AABB/broad-phase acceleration, or automatic collision processing inside `World.step()`.

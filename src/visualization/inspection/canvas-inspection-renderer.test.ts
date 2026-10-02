@@ -2,6 +2,7 @@ import { assertEquals } from "@std/assert";
 
 import {
   Body,
+  type BodyCollision,
   type BodyId,
   type BodySnapshot,
   type BodyState,
@@ -38,6 +39,7 @@ type InspectionOptionsOverrides = {
   readonly bodyOrigin?: Partial<InspectionOptions["bodyOrigin"]>;
   readonly orientation?: Partial<InspectionOptions["orientation"]>;
   readonly velocity?: Partial<InspectionOptions["velocity"]>;
+  readonly collisionMtv?: Partial<InspectionOptions["collisionMtv"]>;
 };
 
 function inspectionOptions(overrides: InspectionOptionsOverrides = {}): InspectionOptions {
@@ -67,6 +69,12 @@ function inspectionOptions(overrides: InspectionOptionsOverrides = {}): Inspecti
       arrowheadSize: 6,
       minimumVisibleLength: 8,
       ...overrides.velocity,
+    },
+    collisionMtv: {
+      visible: false,
+      arrowheadSize: 6,
+      minimumVisibleLength: 1,
+      ...overrides.collisionMtv,
     },
   };
 }
@@ -527,3 +535,190 @@ Deno.test("CanvasInspectionRenderer contours oriented RegularPolygon geometry", 
   assertEquals(moveToCalls, [["moveTo", 20, 0]]);
   assertEquals(closePathCalls, [["closePath"]]);
 });
+
+Deno.test("CanvasInspectionRenderer draws supplied collision MTV from shape B origin", () => {
+  const context = new RecordingCanvasContext();
+  const transform = new ViewportTransform(200, 100, 10);
+  const renderer = new CanvasInspectionRenderer(context, transform);
+  const circle = new Body({ shape: new Circle(1) });
+  const snapshots = [
+    createBodySnapshot(1, new Vector2(0, 0), new Vector2(0, 0), circle),
+    createBodySnapshot(2, new Vector2(1.5, 0), new Vector2(0, 0), circle),
+  ];
+  const bodyCollisions: readonly BodyCollision[] = [
+    {
+      bodyAId: 1,
+      bodyBId: 2,
+      collision: {
+        normal: new Vector2(1, 0),
+        penetrationDepth: 0.5,
+      },
+    },
+  ];
+
+  renderer.render(
+    snapshots,
+    inspectionOptions({
+      collisionMtv: {
+        visible: true,
+        arrowheadSize: 4,
+        minimumVisibleLength: 1,
+      },
+    }),
+    bodyCollisions,
+  );
+
+  const moveToCalls = context.calls.filter(([name]) => name === "moveTo");
+  const lineToCalls = context.calls.filter(([name]) => name === "lineTo");
+
+  assertEquals(moveToCalls, [
+    ["moveTo", 115, 50],
+    ["moveTo", 120, 50],
+    ["moveTo", 120, 50],
+  ]);
+
+  assertEquals(lineToCalls, [
+    ["lineTo", 120, 50],
+    ["lineTo", 116, 52],
+    ["lineTo", 116, 48],
+  ]);
+});
+
+Deno.test(
+  "CanvasInspectionRenderer maps positive world Y collision MTV upward on display",
+  () => {
+    const context = new RecordingCanvasContext();
+    const transform = new ViewportTransform(200, 100, 10);
+    const renderer = new CanvasInspectionRenderer(context, transform);
+    const circle = new Body({ shape: new Circle(1) });
+    const snapshots = [
+      createBodySnapshot(1, new Vector2(0, 0), new Vector2(0, 0), circle),
+      createBodySnapshot(2, new Vector2(0, 1.5), new Vector2(0, 0), circle),
+    ];
+
+    renderer.render(
+      snapshots,
+      inspectionOptions({
+        collisionMtv: { visible: true, minimumVisibleLength: 1 },
+      }),
+      [
+        {
+          bodyAId: 1,
+          bodyBId: 2,
+          collision: {
+            normal: new Vector2(0, 1),
+            penetrationDepth: 0.5,
+          },
+        },
+      ],
+    );
+
+    const lineToCalls = context.calls.filter(([name]) => name === "lineTo");
+
+    assertEquals(lineToCalls[0], ["lineTo", 100, 30]);
+  },
+);
+
+Deno.test("CanvasInspectionRenderer omits zero-depth touching collision MTV", () => {
+  const context = new RecordingCanvasContext();
+  const transform = new ViewportTransform(200, 100, 10);
+  const renderer = new CanvasInspectionRenderer(context, transform);
+  const circle = new Body({ shape: new Circle(1) });
+  const snapshots = [
+    createBodySnapshot(1, new Vector2(0, 0), new Vector2(0, 0), circle),
+    createBodySnapshot(2, new Vector2(2, 0), new Vector2(0, 0), circle),
+  ];
+
+  renderer.render(
+    snapshots,
+    inspectionOptions({
+      collisionMtv: { visible: true, minimumVisibleLength: 0 },
+    }),
+    [
+      {
+        bodyAId: 1,
+        bodyBId: 2,
+        collision: {
+          normal: new Vector2(1, 0),
+          penetrationDepth: 0,
+        },
+      },
+    ],
+  );
+
+  assertEquals(
+    context.calls.filter(([name]) => name === "moveTo"),
+    [],
+  );
+});
+
+Deno.test(
+  "CanvasInspectionRenderer ignores collision observations outside its snapshot set",
+  () => {
+    const context = new RecordingCanvasContext();
+    const transform = new ViewportTransform(200, 100, 10);
+    const renderer = new CanvasInspectionRenderer(context, transform);
+    const circle = new Body({ shape: new Circle(1) });
+
+    renderer.render(
+      [createBodySnapshot(1, new Vector2(0, 0), new Vector2(0, 0), circle)],
+      inspectionOptions({
+        collisionMtv: { visible: true, minimumVisibleLength: 1 },
+      }),
+      [
+        {
+          bodyAId: 1,
+          bodyBId: 2,
+          collision: {
+            normal: new Vector2(1, 0),
+            penetrationDepth: 0.5,
+          },
+        },
+      ],
+    );
+
+    assertEquals(
+      context.calls.filter(([name]) => name === "moveTo"),
+      [],
+    );
+  },
+);
+
+Deno.test(
+  "CanvasInspectionRenderer applies display-space collision MTV visibility threshold",
+  () => {
+    const context = new RecordingCanvasContext();
+    const transform = new ViewportTransform(200, 100, 10);
+    const renderer = new CanvasInspectionRenderer(context, transform);
+    const circle = new Body({ shape: new Circle(1) });
+    const snapshots = [
+      createBodySnapshot(1, new Vector2(0, 0), new Vector2(0, 0), circle),
+      createBodySnapshot(2, new Vector2(1.9, 0), new Vector2(0, 0), circle),
+    ];
+    const bodyCollisions: readonly BodyCollision[] = [
+      {
+        bodyAId: 1,
+        bodyBId: 2,
+        collision: {
+          normal: new Vector2(1, 0),
+          penetrationDepth: 0.1,
+        },
+      },
+    ];
+    const options = inspectionOptions({
+      collisionMtv: { visible: true, minimumVisibleLength: 2 },
+    });
+
+    renderer.render(snapshots, options, bodyCollisions);
+
+    assertEquals(
+      context.calls.filter(([name]) => name === "moveTo"),
+      [],
+    );
+
+    transform.setPixelsPerUnit(20);
+    renderer.render(snapshots, options, bodyCollisions);
+
+    assertEquals(context.calls.filter(([name]) => name === "moveTo").length > 0, true);
+  },
+);
