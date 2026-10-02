@@ -1,4 +1,4 @@
-import { assert, assertEquals } from "@std/assert";
+import { assert, assertAlmostEquals, assertEquals } from "@std/assert";
 
 import { Vector2 } from "./vector2.ts";
 
@@ -73,6 +73,29 @@ Deno.test("Vector2.scale does not modify the original vector", () => {
   const vector = new Vector2(3, -4);
 
   const result = vector.scale(2);
+
+  assert(result !== vector);
+  assertVector(vector, 3, -4);
+});
+
+Deno.test("Vector2.rotate uses positive counter-clockwise angles", () => {
+  const result = new Vector2(2, 0).rotate(Math.PI / 2);
+
+  assertAlmostEquals(result.x, 0, 1e-12);
+  assertAlmostEquals(result.y, 2, 1e-12);
+});
+
+Deno.test("Vector2.rotate preserves vector length", () => {
+  const vector = new Vector2(3, 4);
+  const result = vector.rotate(Math.PI / 3);
+
+  assertAlmostEquals(result.x * result.x + result.y * result.y, 25, 1e-12);
+});
+
+Deno.test("Vector2.rotate does not modify the original vector", () => {
+  const vector = new Vector2(3, -4);
+
+  const result = vector.rotate(Math.PI / 2);
 
   assert(result !== vector);
   assertVector(vector, 3, -4);

@@ -49,4 +49,18 @@ export class Vector2 {
   public scale(scalar: number): Vector2 {
     return new Vector2(this.x * scalar, this.y * scalar);
   }
+
+  /**
+   * Returns this vector rotated around the origin by the given angle.
+   *
+   * Positive angles rotate counter-clockwise in mathematical coordinates.
+   *
+   * @param angle Rotation angle in radians.
+   */
+  public rotate(angle: number): Vector2 {
+    const cosine = Math.cos(angle);
+    const sine = Math.sin(angle);
+
+    return new Vector2(this.x * cosine - this.y * sine, this.x * sine + this.y * cosine);
+  }
 }
