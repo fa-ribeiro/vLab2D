@@ -1334,7 +1334,6 @@ This is a structural organization decision, not a behavioral abstraction. It doe
 
 The directory structure should continue to evolve only when concrete responsibilities create enough pressure to justify another grouping.
 
-
 ## D-080 — Velocity inspection represents projected displacement and uses a display-space visibility threshold
 
 **Status:** Accepted and implemented

@@ -148,12 +148,12 @@ The options are deliberately behavior-free and serializable. The Canvas renderer
 
 Current indicators are:
 
-| Indicator        | Meaning                                                   | Units / behavior                                           |
-| ---------------- | --------------------------------------------------------- | ---------------------------------------------------------- |
-| geometry contour | intrinsic Circle/Rectangle boundary                       | follows world geometry and viewport scale                  |
-| body origin      | `BodyState.position`, i.e. local origin in world space    | configurable fixed display-space marker                    |
-| orientation      | local `+X` / `0°` direction from body origin              | configurable fixed display-space line                      |
-| velocity         | current world-space velocity from body origin             | projected world displacement + fixed display arrowhead     |
+| Indicator        | Meaning                                                | Units / behavior                                       |
+| ---------------- | ------------------------------------------------------ | ------------------------------------------------------ |
+| geometry contour | intrinsic Circle/Rectangle boundary                    | follows world geometry and viewport scale              |
+| body origin      | `BodyState.position`, i.e. local origin in world space | configurable fixed display-space marker                |
+| orientation      | local `+X` / `0°` direction from body origin           | configurable fixed display-space line                  |
+| velocity         | current world-space velocity from body origin          | projected world displacement + fixed display arrowhead |
 
 The velocity shaft endpoint is:
 
