@@ -12,6 +12,7 @@ export type { BodyOptions } from "./body/body-options.ts";
 
 export type { Collision } from "./collision/collision.ts";
 export { detectCircleCircleCollision } from "./collision/circle-circle-collision.ts";
+export { detectCirclePolygonCollision } from "./collision/circle-polygon-collision.ts";
 export { detectPolygonPolygonCollision } from "./collision/polygon-polygon-collision.ts";
 
 export type { BodyShape } from "./geometry/body-shape.ts";
