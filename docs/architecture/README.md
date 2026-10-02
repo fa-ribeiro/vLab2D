@@ -213,7 +213,7 @@ x ∈ [-width / 2, +width / 2]
 y ∈ [-height / 2, +height / 2]
 ```
 
-Neither geometry object owns world position or orientation.
+Neither geometry object owns world position, orientation, or angular velocity.
 
 A shapeless Body remains valid and has no domain spatial extent. Visualization may still give it a fixed presentation marker so it can be seen and interacted with.
 
@@ -225,14 +225,16 @@ A shapeless Body remains valid and has no domain spatial extent. Visualization m
 position
 velocity
 orientation
+angularVelocity
 ```
 
 Current defaults are:
 
 ```text
-position     (0, 0)
-velocity     (0, 0)
-orientation  0 radians
+position         (0, 0)
+velocity         (0, 0)
+orientation      0 radians
+angularVelocity  0 radians / second
 ```
 
 Initial conditions do not become intrinsic Body properties.
@@ -245,15 +247,16 @@ Initial conditions do not become intrinsic Body properties.
 position
 velocity
 orientation
+angularVelocity
 ```
 
 It is not a constructible behavior-owning domain object.
 
-Position and velocity are vectors. Orientation is a finite scalar in radians.
+Position and velocity are vectors. Orientation is a finite scalar in radians. Angular velocity is a finite scalar in radians per second.
 
 ---
 
-## 5. Orientation convention
+## 5. Orientation and angular velocity
 
 The engine uses mathematical world coordinates:
 
@@ -270,29 +273,55 @@ Positive orientation is counter-clockwise and measured in radians.
 π          local +X points world -X
 ```
 
-Any finite radian value is valid. Orientation is not normalized to a canonical interval yet.
-
-This is intentional: normalization should be introduced only when a real consumer requires canonical angles, shortest angular deltas, or bounded long-running rotational state.
-
-Orientation belongs to runtime state rather than Body or shape definition because it describes the pose of one instantiated body in one World.
-
-This remains true even for a Circle whose plain outline is rotationally symmetric.
-
-### Current integration behavior
-
-The current kinematic integrators advance linear position/velocity only.
-
-They preserve orientation unchanged:
+Angular velocity is measured in radians per second:
 
 ```text
-position     integrated
-velocity     integrated
-orientation  preserved
+positive angular velocity  → counter-clockwise
+negative angular velocity  → clockwise
+zero angular velocity      → orientation remains unchanged
 ```
 
-This is an important state-evolution property: an algorithm responsible for one part of state must not silently erase unrelated state.
+Both orientation and angular velocity belong to World-owned runtime state rather than to the reusable `Body` or shape definition. They describe the rotational state of one instantiated Body in one World.
 
-Angular velocity, torque, moment of inertia, and rotational integration do not exist yet.
+This remains true for shapeless Bodies and Circles even when their present visual representation does not reveal orientation directly.
+
+Any finite orientation is valid. Orientation is intentionally not normalized to a canonical interval yet. Normalization should be introduced only when a real consumer requires canonical angles, shortest angular deltas, or bounded long-running rotational state.
+
+### Current rotational integration
+
+The current kinematic integrators now advance rotational state as well as translational state.
+
+Because angular acceleration has not yet been introduced, angular velocity is constant across a timestep:
+
+```text
+nextOrientation     = orientation + angularVelocity × dt
+nextAngularVelocity = angularVelocity
+```
+
+The complete current state-evolution picture is therefore:
+
+```text
+position         integrated from linear velocity
+velocity         integrated from linear acceleration
+orientation      integrated from angular velocity
+angularVelocity  preserved
+```
+
+Both Explicit Euler and Semi-Implicit Euler use the same rotational equation at this stage. Their existing distinction still concerns accelerated linear motion:
+
+```text
+Explicit Euler
+    advances position from the velocity at the beginning of the step
+
+Semi-Implicit Euler
+    advances velocity first, then position from the updated velocity
+```
+
+If angular acceleration is introduced later, the two methods may also acquire meaningfully different rotational update orderings. That future pressure should determine whether the current `KinematicIntegrator` contract remains appropriate or whether rotational integration deserves a separate abstraction.
+
+No separate `RotationalIntegrator` is introduced now. The current `KinematicIntegrator` already maps a complete `BodyState` to its next kinematic state, and one constant-angular-velocity equation does not justify another strategy hierarchy.
+
+Angular acceleration, torque, moment of inertia, rotational damping, and collision-driven rotation do not exist yet.
 
 ---
 
@@ -707,6 +736,7 @@ BodySnapshot.definition
 BodySnapshot.state
     position
     orientation
+    angularVelocity
 
 ViewportTransform
     world ↔ display placement and scale
@@ -1027,7 +1057,7 @@ The following are future possibilities rather than implemented structure:
 
 - collision detection and collision response;
 - force accumulation;
-- rotational dynamics;
+- rotational dynamics beyond constant angular velocity;
 - compound geometry;
 - body materials/mass/inertia;
 - editable body controls;
@@ -1049,8 +1079,8 @@ The current Phase 2 sequence has established:
 Body geometry
     Circle + Rectangle
 
-World-owned pose
-    position + velocity + orientation
+World-owned motion state
+    position + velocity + orientation + angularVelocity
 
 Normal rendering
     orientation-aware Canvas + SVG
@@ -1076,8 +1106,10 @@ Responsibility refinement
     renderer ≠ inspection ≠ picker ≠ host policy
 ```
 
-The next planned implementation discussion returns to the **Engine / Domain** and makes orientation dynamic.
+The first rotational-kinematics pass is now implemented.
 
-The first rotational pass should determine the smallest coherent runtime-state and integration change needed to represent angular velocity and advance orientation through time. Torque, angular acceleration, moment of inertia, mass distribution, and collision-driven rotation remain later concerns unless the design discussion demonstrates that one of them is required immediately.
+`BodyState` carries angular velocity, `BodyInitialConditions` can supply it, and both current kinematic integrators advance orientation from constant angular velocity. World validation, atomic stepping, and detached observation semantics extend to the new runtime value.
 
-The existing visualization already provides a useful observation surface for that work: oriented Rectangle geometry and the orientation inspection line will make rotational state evolution directly visible.
+The Canvas example now gives Rectangle instances opposite angular velocities, making the evolving orientation immediately visible through normal geometry rendering and the existing orientation inspection line.
+
+Angular acceleration, torque, moment of inertia, mass distribution, damping, and collision-driven rotation remain future engine capabilities. They should be designed from their own concrete requirements rather than being inferred automatically from the constant-angular-velocity implementation.

@@ -9,8 +9,13 @@ function assertVector(actual: Vector2, expectedX: number, expectedY: number): vo
   assertEquals(actual.y, expectedY);
 }
 
-function createBodyState(position: Vector2, velocity: Vector2, orientation = 0): BodyState {
-  return { position, velocity, orientation };
+function createBodyState(
+  position: Vector2,
+  velocity: Vector2,
+  orientation = 0,
+  angularVelocity = 0,
+): BodyState {
+  return { position, velocity, orientation, angularVelocity };
 }
 
 Deno.test("SemiImplicitEulerIntegrator updates velocity before position", () => {
@@ -42,20 +47,51 @@ Deno.test("SemiImplicitEulerIntegrator advances state using updated velocity", (
   assertVector(result.position, 3.5, 2.5);
 });
 
-Deno.test("SemiImplicitEulerIntegrator preserves orientation", () => {
+Deno.test(
+  "SemiImplicitEulerIntegrator preserves orientation when angular velocity is zero",
+  () => {
+    const integrator = new SemiImplicitEulerIntegrator();
+
+    const state = createBodyState(new Vector2(1, 2), new Vector2(3, 4), Math.PI / 3);
+
+    const result = integrator.integrate(state, new Vector2(5, 6), 0.5);
+
+    assertEquals(result.orientation, Math.PI / 3);
+    assertEquals(result.angularVelocity, 0);
+  },
+);
+
+Deno.test("SemiImplicitEulerIntegrator advances orientation using angular velocity", () => {
   const integrator = new SemiImplicitEulerIntegrator();
 
-  const state = createBodyState(new Vector2(1, 2), new Vector2(3, 4), Math.PI / 3);
+  const state = createBodyState(new Vector2(1, 2), new Vector2(3, 4), Math.PI / 3, Math.PI);
 
   const result = integrator.integrate(state, new Vector2(5, 6), 0.5);
 
-  assertEquals(result.orientation, Math.PI / 3);
+  assertEquals(result.orientation, Math.PI / 3 + Math.PI * 0.5);
+  assertEquals(result.angularVelocity, Math.PI);
+});
+
+Deno.test("SemiImplicitEulerIntegrator supports clockwise angular velocity", () => {
+  const integrator = new SemiImplicitEulerIntegrator();
+
+  const state = createBodyState(
+    new Vector2(0, 0),
+    new Vector2(0, 0),
+    Math.PI / 2,
+    -Math.PI / 2,
+  );
+
+  const result = integrator.integrate(state, new Vector2(0, 0), 1);
+
+  assertEquals(result.orientation, 0);
+  assertEquals(result.angularVelocity, -Math.PI / 2);
 });
 
 Deno.test("SemiImplicitEulerIntegrator leaves its inputs unchanged", () => {
   const integrator = new SemiImplicitEulerIntegrator();
 
-  const state = createBodyState(new Vector2(1, 2), new Vector2(3, 4), Math.PI / 6);
+  const state = createBodyState(new Vector2(1, 2), new Vector2(3, 4), Math.PI / 6, Math.PI / 4);
 
   const acceleration = new Vector2(5, 6);
 
@@ -66,17 +102,24 @@ Deno.test("SemiImplicitEulerIntegrator leaves its inputs unchanged", () => {
   assertVector(state.position, 1, 2);
   assertVector(state.velocity, 3, 4);
   assertEquals(state.orientation, Math.PI / 6);
+  assertEquals(state.angularVelocity, Math.PI / 4);
   assertVector(acceleration, 5, 6);
 });
 
 Deno.test("SemiImplicitEulerIntegrator with a zero timestep preserves state values", () => {
   const integrator = new SemiImplicitEulerIntegrator();
 
-  const state = createBodyState(new Vector2(3, 7), new Vector2(-2, 5), -Math.PI / 4);
+  const state = createBodyState(
+    new Vector2(3, 7),
+    new Vector2(-2, 5),
+    -Math.PI / 4,
+    Math.PI / 3,
+  );
 
   const result = integrator.integrate(state, new Vector2(10, -20), 0);
 
   assertVector(result.position, 3, 7);
   assertVector(result.velocity, -2, 5);
   assertEquals(result.orientation, -Math.PI / 4);
+  assertEquals(result.angularVelocity, Math.PI / 3);
 });

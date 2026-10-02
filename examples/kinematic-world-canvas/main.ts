@@ -82,8 +82,16 @@ world.addBody(circle, { position: new Vector2(2, 3), orientation: Math.PI / 4 })
 
 const rectangle = new Body({ shape: new Rectangle(2, 1) });
 
-world.addBody(rectangle, { position: new Vector2(5, 4), orientation: Math.PI / 6 });
-world.addBody(rectangle, { position: new Vector2(-5, 4), orientation: Math.PI / 3 });
+world.addBody(rectangle, {
+  position: new Vector2(5, 4),
+  orientation: Math.PI / 6,
+  angularVelocity: Math.PI / 4,
+});
+world.addBody(rectangle, {
+  position: new Vector2(-5, 4),
+  orientation: Math.PI / 3,
+  angularVelocity: -Math.PI / 6,
+});
 
 const simulation = new Simulation([world]);
 

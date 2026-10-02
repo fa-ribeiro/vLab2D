@@ -12,8 +12,13 @@ function assertVector(actual: Vector2, expectedX: number, expectedY: number): vo
   assertEquals(actual.y, expectedY);
 }
 
-function createBodyState(position: Vector2, velocity: Vector2, orientation = 0): BodyState {
-  return { position, velocity, orientation };
+function createBodyState(
+  position: Vector2,
+  velocity: Vector2,
+  orientation = 0,
+  angularVelocity = 0,
+): BodyState {
+  return { position, velocity, orientation, angularVelocity };
 }
 
 type IntegrationCall = {
@@ -53,6 +58,7 @@ Deno.test("World adds a body and exposes its initial runtime state", () => {
     position: new Vector2(3, 4),
     velocity: new Vector2(-2, 5),
     orientation: Math.PI / 4,
+    angularVelocity: Math.PI / 2,
   });
 
   const state = world.getBodyState(bodyId);
@@ -62,6 +68,7 @@ Deno.test("World adds a body and exposes its initial runtime state", () => {
   assertVector(state.position, 3, 4);
   assertVector(state.velocity, -2, 5);
   assertEquals(state.orientation, Math.PI / 4);
+  assertEquals(state.angularVelocity, Math.PI / 2);
 });
 
 Deno.test("World uses zero-valued body initial-condition defaults", () => {
@@ -76,6 +83,7 @@ Deno.test("World uses zero-valued body initial-condition defaults", () => {
   assertVector(state.position, 0, 0);
   assertVector(state.velocity, 0, 0);
   assertEquals(state.orientation, 0);
+  assertEquals(state.angularVelocity, 0);
 });
 
 Deno.test("World assigns different identifiers to different body instances", () => {
@@ -102,12 +110,14 @@ Deno.test("World can reuse one Body definition with independent runtime states",
     position: new Vector2(1, 2),
     velocity: new Vector2(3, 4),
     orientation: Math.PI / 6,
+    angularVelocity: Math.PI / 4,
   });
 
   const secondId = world.addBody(body, {
     position: new Vector2(10, 20),
     velocity: new Vector2(30, 40),
     orientation: -Math.PI / 3,
+    angularVelocity: -Math.PI / 2,
   });
 
   const firstState = world.getBodyState(firstId);
@@ -119,10 +129,12 @@ Deno.test("World can reuse one Body definition with independent runtime states",
   assertVector(firstState.position, 1, 2);
   assertVector(firstState.velocity, 3, 4);
   assertEquals(firstState.orientation, Math.PI / 6);
+  assertEquals(firstState.angularVelocity, Math.PI / 4);
 
   assertVector(secondState.position, 10, 20);
   assertVector(secondState.velocity, 30, 40);
   assertEquals(secondState.orientation, -Math.PI / 3);
+  assertEquals(secondState.angularVelocity, -Math.PI / 2);
 });
 
 Deno.test("World copies body initial conditions into runtime state", () => {
@@ -135,6 +147,7 @@ Deno.test("World copies body initial conditions into runtime state", () => {
     position,
     velocity,
     orientation: Math.PI / 8,
+    angularVelocity: Math.PI / 5,
   });
 
   // Deliberately bypass TypeScript's readonly contract to verify that
@@ -149,6 +162,7 @@ Deno.test("World copies body initial conditions into runtime state", () => {
   assertVector(state.position, 1, 2);
   assertVector(state.velocity, 3, 4);
   assertEquals(state.orientation, Math.PI / 8);
+  assertEquals(state.angularVelocity, Math.PI / 5);
 });
 
 Deno.test("World rejects invalid body initial conditions", () => {
@@ -174,15 +188,34 @@ Deno.test("World rejects invalid body initial conditions", () => {
     "Initial body state orientation must be finite.",
   );
 
+  assertThrows(
+    () =>
+      world.addBody(new Body(), {
+        angularVelocity: Number.NEGATIVE_INFINITY,
+      }),
+    RangeError,
+    "Initial body state angular velocity must be finite.",
+  );
+
   assertEquals(world.getBodySnapshots(), []);
 });
 
 Deno.test("World advances every body using the injected integrator", () => {
   const gravity = new Vector2(0, -10);
 
-  const firstNextState = createBodyState(new Vector2(5, 6), new Vector2(7, 8), 0.25);
+  const firstNextState = createBodyState(
+    new Vector2(5, 6),
+    new Vector2(7, 8),
+    0.25,
+    Math.PI / 5,
+  );
 
-  const secondNextState = createBodyState(new Vector2(50, 60), new Vector2(70, 80), -0.5);
+  const secondNextState = createBodyState(
+    new Vector2(50, 60),
+    new Vector2(70, 80),
+    -0.5,
+    -Math.PI / 6,
+  );
 
   const integrator = new StubIntegrator((state) => {
     if (state.position.x === 1) {
@@ -204,12 +237,14 @@ Deno.test("World advances every body using the injected integrator", () => {
     position: new Vector2(1, 2),
     velocity: new Vector2(3, 4),
     orientation: Math.PI / 6,
+    angularVelocity: Math.PI / 4,
   });
 
   const secondBodyId = world.addBody(body, {
     position: new Vector2(10, 20),
     velocity: new Vector2(30, 40),
     orientation: -Math.PI / 3,
+    angularVelocity: -Math.PI / 2,
   });
 
   world.step(0.5);
@@ -223,15 +258,20 @@ Deno.test("World advances every body using the injected integrator", () => {
   assertVector(firstResult.position, 5, 6);
   assertVector(firstResult.velocity, 7, 8);
   assertEquals(firstResult.orientation, 0.25);
+  assertEquals(firstResult.angularVelocity, Math.PI / 5);
 
   assertVector(secondResult.position, 50, 60);
   assertVector(secondResult.velocity, 70, 80);
   assertEquals(secondResult.orientation, -0.5);
+  assertEquals(secondResult.angularVelocity, -Math.PI / 6);
 
   assertEquals(integrator.calls.length, 2);
 
   assertEquals(integrator.calls[0].state.orientation, Math.PI / 6);
+  assertEquals(integrator.calls[0].state.angularVelocity, Math.PI / 4);
+
   assertEquals(integrator.calls[1].state.orientation, -Math.PI / 3);
+  assertEquals(integrator.calls[1].state.angularVelocity, -Math.PI / 2);
 
   for (const call of integrator.calls) {
     assertStrictEquals(call.acceleration, gravity);
@@ -278,6 +318,7 @@ Deno.test("World rejects an invalid timestep before integrating bodies", () => {
     position: new Vector2(1, 2),
     velocity: new Vector2(3, 4),
     orientation: Math.PI / 7,
+    angularVelocity: Math.PI / 9,
   });
 
   assertThrows(() => world.step(-1), RangeError, "The timestep must not be negative.");
@@ -291,12 +332,18 @@ Deno.test("World rejects an invalid timestep before integrating bodies", () => {
   assertVector(stateAfterRejectedStep.position, 1, 2);
   assertVector(stateAfterRejectedStep.velocity, 3, 4);
   assertEquals(stateAfterRejectedStep.orientation, Math.PI / 7);
+  assertEquals(stateAfterRejectedStep.angularVelocity, Math.PI / 9);
 });
 
 Deno.test("World preserves all body states when any integration result is invalid", () => {
-  const firstNextState = createBodyState(new Vector2(5, 6), new Vector2(7, 8));
+  const firstNextState = createBodyState(new Vector2(5, 6), new Vector2(7, 8), 0, Math.PI / 5);
 
-  const invalidSecondState = createBodyState(new Vector2(Number.NaN, 60), new Vector2(70, 80));
+  const invalidSecondState = createBodyState(
+    new Vector2(Number.NaN, 60),
+    new Vector2(70, 80),
+    0,
+    -Math.PI / 6,
+  );
 
   const integrator = new StubIntegrator((state) => {
     if (state.position.x === 1) {
@@ -318,12 +365,14 @@ Deno.test("World preserves all body states when any integration result is invali
     position: new Vector2(1, 2),
     velocity: new Vector2(3, 4),
     orientation: Math.PI / 6,
+    angularVelocity: Math.PI / 4,
   });
 
   const secondBodyId = world.addBody(body, {
     position: new Vector2(10, 20),
     velocity: new Vector2(30, 40),
     orientation: -Math.PI / 3,
+    angularVelocity: -Math.PI / 2,
   });
 
   assertThrows(
@@ -341,17 +390,84 @@ Deno.test("World preserves all body states when any integration result is invali
   assertVector(firstResult.position, 1, 2);
   assertVector(firstResult.velocity, 3, 4);
   assertEquals(firstResult.orientation, Math.PI / 6);
+  assertEquals(firstResult.angularVelocity, Math.PI / 4);
 
   assertVector(secondResult.position, 10, 20);
   assertVector(secondResult.velocity, 30, 40);
   assertEquals(secondResult.orientation, -Math.PI / 3);
+  assertEquals(secondResult.angularVelocity, -Math.PI / 2);
 });
 
 Deno.test("World rejects a non-finite integrator orientation atomically", () => {
-  const firstNextState = createBodyState(new Vector2(5, 6), new Vector2(7, 8), 0.25);
+  const firstNextState = createBodyState(
+    new Vector2(5, 6),
+    new Vector2(7, 8),
+    0.25,
+    Math.PI / 5,
+  );
   const invalidSecondState = createBodyState(
     new Vector2(50, 60),
     new Vector2(70, 80),
+    Number.NaN,
+    -Math.PI / 6,
+  );
+
+  const integrator = new StubIntegrator((state) => {
+    if (state.position.x === 1) {
+      return firstNextState;
+    }
+
+    if (state.position.x === 10) {
+      return invalidSecondState;
+    }
+
+    throw new Error("Unexpected state.");
+  });
+
+  const world = new World(new Vector2(0, -10), integrator);
+  const body = new Body();
+
+  const firstBodyId = world.addBody(body, {
+    position: new Vector2(1, 2),
+    orientation: Math.PI / 6,
+    angularVelocity: Math.PI / 4,
+  });
+  const secondBodyId = world.addBody(body, {
+    position: new Vector2(10, 20),
+    orientation: -Math.PI / 3,
+    angularVelocity: -Math.PI / 2,
+  });
+
+  assertThrows(
+    () => world.step(0.5),
+    RangeError,
+    `Integrator result for body ${secondBodyId} orientation must be finite.`,
+  );
+
+  const firstResult = world.getBodyState(firstBodyId);
+  const secondResult = world.getBodyState(secondBodyId);
+
+  assert(firstResult !== undefined);
+  assert(secondResult !== undefined);
+
+  assertEquals(firstResult.orientation, Math.PI / 6);
+  assertEquals(firstResult.angularVelocity, Math.PI / 4);
+
+  assertEquals(secondResult.orientation, -Math.PI / 3);
+  assertEquals(secondResult.angularVelocity, -Math.PI / 2);
+});
+
+Deno.test("World rejects a non-finite integrator angular velocity atomically", () => {
+  const firstNextState = createBodyState(
+    new Vector2(5, 6),
+    new Vector2(7, 8),
+    0.25,
+    Math.PI / 5,
+  );
+  const invalidSecondState = createBodyState(
+    new Vector2(50, 60),
+    new Vector2(70, 80),
+    -0.5,
     Number.NaN,
   );
 
@@ -372,17 +488,17 @@ Deno.test("World rejects a non-finite integrator orientation atomically", () => 
 
   const firstBodyId = world.addBody(body, {
     position: new Vector2(1, 2),
-    orientation: Math.PI / 6,
+    angularVelocity: Math.PI / 4,
   });
   const secondBodyId = world.addBody(body, {
     position: new Vector2(10, 20),
-    orientation: -Math.PI / 3,
+    angularVelocity: -Math.PI / 2,
   });
 
   assertThrows(
     () => world.step(0.5),
     RangeError,
-    `Integrator result for body ${secondBodyId} orientation must be finite.`,
+    `Integrator result for body ${secondBodyId} angular velocity must be finite.`,
   );
 
   const firstResult = world.getBodyState(firstBodyId);
@@ -391,8 +507,8 @@ Deno.test("World rejects a non-finite integrator orientation atomically", () => 
   assert(firstResult !== undefined);
   assert(secondResult !== undefined);
 
-  assertEquals(firstResult.orientation, Math.PI / 6);
-  assertEquals(secondResult.orientation, -Math.PI / 3);
+  assertEquals(firstResult.angularVelocity, Math.PI / 4);
+  assertEquals(secondResult.angularVelocity, -Math.PI / 2);
 });
 
 Deno.test("World rejects invalid initial gravity", () => {
@@ -413,12 +529,14 @@ Deno.test("World exposes snapshots of all bodies", () => {
     position: new Vector2(1, 2),
     velocity: new Vector2(3, 4),
     orientation: Math.PI / 6,
+    angularVelocity: Math.PI / 4,
   });
 
   const secondId = world.addBody(body, {
     position: new Vector2(10, 20),
     velocity: new Vector2(30, 40),
     orientation: -Math.PI / 3,
+    angularVelocity: -Math.PI / 2,
   });
 
   const snapshots = world.getBodySnapshots();
@@ -435,11 +553,13 @@ Deno.test("World exposes snapshots of all bodies", () => {
   assertVector(first.state.position, 1, 2);
   assertVector(first.state.velocity, 3, 4);
   assertEquals(first.state.orientation, Math.PI / 6);
+  assertEquals(first.state.angularVelocity, Math.PI / 4);
 
   assertStrictEquals(second.definition, body);
   assertVector(second.state.position, 10, 20);
   assertVector(second.state.velocity, 30, 40);
   assertEquals(second.state.orientation, -Math.PI / 3);
+  assertEquals(second.state.angularVelocity, -Math.PI / 2);
 });
 
 Deno.test("World snapshots expose Circle geometry through the Body definition", () => {
@@ -448,7 +568,10 @@ Deno.test("World snapshots expose Circle geometry through the Body definition", 
   const circle = new Circle(2);
   const body = new Body({ shape: circle });
 
-  const bodyId = world.addBody(body, { orientation: Math.PI / 5 });
+  const bodyId = world.addBody(body, {
+    orientation: Math.PI / 5,
+    angularVelocity: Math.PI / 7,
+  });
 
   const snapshot = world.getBodySnapshots().find(({ id }) => id === bodyId);
 
@@ -456,6 +579,7 @@ Deno.test("World snapshots expose Circle geometry through the Body definition", 
   assertStrictEquals(snapshot.definition, body);
   assertStrictEquals(snapshot.definition.shape, circle);
   assertEquals(snapshot.state.orientation, Math.PI / 5);
+  assertEquals(snapshot.state.angularVelocity, Math.PI / 7);
 });
 
 Deno.test("World exposes an empty body snapshot collection when empty", () => {
@@ -471,6 +595,7 @@ Deno.test("World body snapshots detach runtime state from authoritative world st
     position: new Vector2(1, 2),
     velocity: new Vector2(3, 4),
     orientation: Math.PI / 6,
+    angularVelocity: Math.PI / 4,
   });
 
   const snapshots = world.getBodySnapshots();
@@ -480,6 +605,7 @@ Deno.test("World body snapshots detach runtime state from authoritative world st
   // Deliberately bypass TypeScript's readonly contract to verify that
   // observed runtime values are not authoritative World state.
   (observedState.position as { x: number }).x = 999;
+  (observedState as { angularVelocity: number }).angularVelocity = 999;
 
   const authoritativeSnapshot = world.getBodyState(bodyId);
 
@@ -487,6 +613,7 @@ Deno.test("World body snapshots detach runtime state from authoritative world st
 
   assertVector(authoritativeSnapshot.position, 1, 2);
   assertEquals(authoritativeSnapshot.orientation, Math.PI / 6);
+  assertEquals(authoritativeSnapshot.angularVelocity, Math.PI / 4);
 });
 
 Deno.test("World getBodyState returns detached state", () => {
@@ -496,6 +623,7 @@ Deno.test("World getBodyState returns detached state", () => {
     position: new Vector2(1, 2),
     velocity: new Vector2(3, 4),
     orientation: Math.PI / 6,
+    angularVelocity: Math.PI / 4,
   });
 
   const observedState = world.getBodyState(bodyId);
@@ -503,6 +631,7 @@ Deno.test("World getBodyState returns detached state", () => {
   assert(observedState !== undefined);
 
   (observedState.velocity as { x: number }).x = 999;
+  (observedState as { angularVelocity: number }).angularVelocity = 999;
 
   const nextObservation = world.getBodyState(bodyId);
 
@@ -510,4 +639,5 @@ Deno.test("World getBodyState returns detached state", () => {
 
   assertVector(nextObservation.velocity, 3, 4);
   assertEquals(nextObservation.orientation, Math.PI / 6);
+  assertEquals(nextObservation.angularVelocity, Math.PI / 4);
 });

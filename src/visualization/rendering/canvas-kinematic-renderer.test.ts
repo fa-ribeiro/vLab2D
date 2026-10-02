@@ -13,7 +13,7 @@ import { CanvasKinematicRenderer } from "../rendering/canvas-kinematic-renderer.
 import { ViewportTransform } from "../viewport/viewport-transform.ts";
 
 function createBodyState(position: Vector2, velocity: Vector2, orientation = 0): BodyState {
-  return { position, velocity, orientation };
+  return { position, velocity, orientation, angularVelocity: 0 };
 }
 
 function createBodySnapshot(

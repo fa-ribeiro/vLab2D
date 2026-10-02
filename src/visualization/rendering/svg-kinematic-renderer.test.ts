@@ -12,7 +12,7 @@ import {
 import { SvgKinematicRenderer } from "./svg-kinematic-renderer.ts";
 
 function createBodyState(position: Vector2, velocity: Vector2, orientation = 0): BodyState {
-  return { position, velocity, orientation };
+  return { position, velocity, orientation, angularVelocity: 0 };
 }
 
 function createBodySnapshot(

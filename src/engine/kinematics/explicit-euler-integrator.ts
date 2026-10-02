@@ -10,6 +10,11 @@ import type { KinematicIntegrator } from "./kinematic-integrator.ts";
  *
  * - `nextPosition = position + velocity * dt`
  * - `nextVelocity = velocity + acceleration * dt`
+ * - `nextOrientation = orientation + angularVelocity * dt`
+ * - `nextAngularVelocity = angularVelocity`
+ *
+ * Angular velocity is currently constant because angular acceleration has not
+ * yet been introduced.
  *
  * This method is intentionally simple and provides a useful baseline for
  * comparison with other numerical integration methods.
@@ -19,23 +24,24 @@ export class ExplicitEulerIntegrator implements KinematicIntegrator {
    * Advances body state by one timestep.
    *
    * Neither the supplied state nor the acceleration vector is modified.
-   * A new {@link BodyState} value is returned. This integrator currently
-   * advances linear motion only, so orientation is preserved unchanged.
+   * A new {@link BodyState} value is returned.
    *
    * @param state The body state at the beginning of the timestep.
-   * @param acceleration The constant acceleration applied during the timestep,
-   * expressed in world units per second squared.
+   * @param acceleration The constant linear acceleration applied during the
+   * timestep, expressed in world units per second squared.
    * @param dt The timestep duration in seconds.
    * @returns The approximated body state at the end of the timestep.
    */
   public integrate(state: BodyState, acceleration: Vector2, dt: number): BodyState {
     const nextPosition = state.position.add(state.velocity.scale(dt));
     const nextVelocity = state.velocity.add(acceleration.scale(dt));
+    const nextOrientation = state.orientation + state.angularVelocity * dt;
 
     return {
       position: nextPosition,
       velocity: nextVelocity,
-      orientation: state.orientation,
+      orientation: nextOrientation,
+      angularVelocity: state.angularVelocity,
     };
   }
 }

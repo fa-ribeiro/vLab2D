@@ -19,4 +19,12 @@ export interface BodyInitialConditions {
    * rotate counter-clockwise in the mathematical world coordinate system.
    */
   readonly orientation?: number;
+
+  /**
+   * Initial angular velocity in radians per second. Defaults to `0`.
+   *
+   * Positive values rotate counter-clockwise in the mathematical world
+   * coordinate system; negative values rotate clockwise.
+   */
+  readonly angularVelocity?: number;
 }

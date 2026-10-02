@@ -6,6 +6,7 @@ export function assertFiniteBodyState(state: BodyState, name: string): void {
   assertFiniteVector(state.position, `${name} position`);
   assertFiniteVector(state.velocity, `${name} velocity`);
   assertFiniteNumber(state.orientation, `${name} orientation`);
+  assertFiniteNumber(state.angularVelocity, `${name} angular velocity`);
 }
 
 export function assertFiniteVector(vector: Vector2, name: string): void {

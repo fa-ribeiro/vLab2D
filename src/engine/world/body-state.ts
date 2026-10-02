@@ -24,4 +24,12 @@ export interface BodyState {
    * rotate counter-clockwise in the mathematical world coordinate system.
    */
   readonly orientation: number;
+
+  /**
+   * The body's current angular velocity in radians per second.
+   *
+   * Positive values rotate counter-clockwise in the mathematical world
+   * coordinate system; negative values rotate clockwise.
+   */
+  readonly angularVelocity: number;
 }

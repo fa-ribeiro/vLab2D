@@ -36,7 +36,7 @@ World snapshots
 Visualization
 ```
 
-Phase 2 currently supports shapeless, Circle, and Rectangle body definitions; finite-radian World-owned orientation; geometry-aware Canvas/SVG rendering; orientation-aware Canvas hover/selection feedback; geometry/orientation-aware Canvas picking; and optional Canvas inspection overlays for geometry contour, body origin, orientation, and velocity.
+Phase 2 currently supports shapeless, Circle, and Rectangle body definitions; World-owned orientation and angular velocity; constant-angular-velocity rotational kinematics; geometry-aware Canvas/SVG rendering; orientation-aware Canvas hover/selection feedback; geometry/orientation-aware Canvas picking; and optional Canvas inspection overlays for geometry contour, body origin, orientation, and velocity.
 
 The latest Visualization refinement makes inspection configuration explicit plain data: each indicator owns its visibility and presentation parameters, a renderer-neutral default style supplies shared color/line width, and indicators may partially override that style. The Canvas renderer still receives the current configuration per render call and owns no persistent user settings.
 
@@ -50,8 +50,8 @@ The public engine currently provides:
 - `Rectangle`, immutable centered geometry with positive finite width and height in world units;
 - `Body`, an immutable reusable definition with optional geometry;
 - `BodyShape`, currently the concrete union `Circle | Rectangle`;
-- `BodyInitialConditions`, optional world-specific position, velocity, and orientation;
-- `BodyState`, readonly runtime data containing position, velocity, and orientation;
+- `BodyInitialConditions`, optional world-specific position, velocity, orientation, and angular velocity;
+- `BodyState`, readonly runtime data containing position, velocity, orientation, and angular velocity;
 - `KinematicIntegrator`, the narrow integration strategy used by World;
 - Explicit Euler and Semi-Implicit Euler implementations;
 - `BodyId`, an opaque world-local runtime identity;
@@ -66,13 +66,13 @@ Body / Circle / Rectangle
 
 BodyInitialConditions
     insertion-time state
-    position / velocity / orientation
+    position / velocity / orientation / angularVelocity
 
 World
     authoritative runtime state owner
 
 BodyState
-    position / velocity / orientation
+    position / velocity / orientation / angularVelocity
 
 BodySnapshot
     world-local identity
@@ -88,11 +88,19 @@ World coordinates use mathematical orientation:
 +X → right
 +Y → up
 positive orientation → counter-clockwise
+positive angular velocity → counter-clockwise
 ```
 
-Orientation is expressed in radians, defaults to `0`, and accepts any finite value. It is not normalized yet.
+Orientation is expressed in radians, defaults to `0`, and accepts any finite value. Angular velocity is expressed in radians per second, also defaults to `0`, and accepts any finite value. Orientation is intentionally not normalized yet.
 
-Current integrators evolve translational position and velocity and preserve orientation unchanged. Angular velocity, torque, moment of inertia, and rotational integration have not been introduced.
+Both current kinematic integrators now evolve translational position/velocity and rotational orientation. With no angular acceleration yet, they use the same rotational rule:
+
+```text
+nextOrientation = orientation + angularVelocity × dt
+nextAngularVelocity = angularVelocity
+```
+
+Angular acceleration, torque, moment of inertia, damping, and collision-driven rotation have not been introduced.
 
 `World.step(dt)` remains atomic: all candidate next states are calculated and validated before any authoritative body state is replaced.
 
@@ -378,7 +386,7 @@ Current implementation pressure still does not justify:
 - collision detection or response;
 - forces beyond current World gravity input;
 - mass or material properties;
-- rotational dynamics beyond the currently stored static orientation;
+- angular acceleration, torque, moment of inertia, rotational damping, or collision-driven rotation;
 - compound geometry attachments;
 - a generic Shape interface/base hierarchy;
 - `Transform2D`;
@@ -395,8 +403,8 @@ Normal rendering, future appearance, interaction feedback, and optional diagnost
 
 ## Next step
 
-The first useful inspection set is now established: geometry contour, body origin, orientation, and velocity, with renderer-neutral configuration and per-indicator style overrides.
+The first rotational-kinematics capability is now established: angular velocity is World-owned runtime state and the current kinematic integrators advance orientation from it while preserving constant angular velocity.
 
-The next planned work returns to the **Engine / Domain** and makes orientation dynamic. The rotation discussion should define the smallest coherent rotational-motion capability before implementation, including the role of angular velocity, how orientation advances through time, how existing translational integrators should preserve or participate in rotational state evolution, and which concepts remain deliberately deferred.
+The Canvas example exercises the capability directly with Rectangle instances rotating in opposite directions, while the existing normal rendering, picking, and orientation inspection continue to observe the evolving World-owned orientation.
 
-Likely later rotational/rigid-body concerns include angular acceleration, torque, moment of inertia, mass distribution, and collision response. They should not be introduced automatically with the first angular-velocity step.
+The next engine capability should be chosen deliberately after reviewing this checkpoint. Angular acceleration, torque, moment of inertia, mass distribution, damping, and collision-driven rotation remain later concerns rather than automatic extensions of the angular-velocity pass.

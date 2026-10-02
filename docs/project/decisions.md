@@ -1436,3 +1436,63 @@ validation + defaults + version migration at an external-data boundary
 Those future capabilities are not implemented by this decision. In particular, no options UI, persistence format, parser, migration framework, or runtime settings service is introduced yet.
 
 This decision evolves the styling/configuration clauses of D-078 while preserving its separation between renderer-neutral inspection intent and Canvas-specific drawing.
+
+## D-082 — Angular velocity is World-owned runtime state and current kinematic integrators advance orientation from it
+
+**Status:** Accepted and implemented
+
+The first rotational-motion capability extends the existing World-owned body runtime state with angular velocity.
+
+`BodyInitialConditions` accepts optional `angularVelocity`, and `BodyState` stores the current value:
+
+```text
+BodyInitialConditions
+    position?
+    velocity?
+    orientation?
+    angularVelocity?
+
+BodyState
+    position
+    velocity
+    orientation
+    angularVelocity
+```
+
+Angular velocity is expressed in radians per second and defaults to `0`. Positive values rotate counter-clockwise in the established mathematical world coordinate system; negative values rotate clockwise.
+
+Angular velocity belongs to the world-local runtime instance rather than to the reusable `Body`, `Circle`, or `Rectangle` definition. The same Body definition may therefore be instantiated multiple times with independent orientations and angular velocities.
+
+Shapeless Bodies and Circles may also carry angular velocity. Rotational state belongs to the runtime instance even when the current geometry or presentation does not make that rotation visually obvious.
+
+The current `KinematicIntegrator` implementations advance orientation directly from constant angular velocity:
+
+```text
+nextOrientation     = orientation + angularVelocity × dt
+nextAngularVelocity = angularVelocity
+```
+
+Orientation remains unnormalized. Any finite radian value is valid, and the engine does not currently wrap angles into `[0, 2π)`, `[-π, π)`, or another canonical interval.
+
+Both Explicit Euler and Semi-Implicit Euler use the same rotational equation at this stage because angular acceleration does not yet exist. Their current numerical distinction remains in the ordering of linear velocity and position updates.
+
+A separate `RotationalIntegrator` is deliberately not introduced. The existing `KinematicIntegrator` already consumes and returns complete `BodyState`, and the project currently has only one demonstrated rotational update rule. If later angular acceleration creates materially different rotational integration ordering or other independent rotational policies, that pressure can justify revisiting the abstraction.
+
+World validation and atomic stepping extend to angular velocity. Initial angular velocity and integrator-produced angular velocity must be finite. If any candidate BodyState contains a non-finite angular velocity, the entire World step is rejected before authoritative state is replaced.
+
+Detached World observations include angular velocity together with the rest of BodyState, preserving the existing state-ownership boundary.
+
+This decision introduces **rotational kinematics**, not full rotational dynamics. It does not introduce:
+
+- angular acceleration;
+- torque;
+- moment of inertia;
+- mass distribution;
+- rotational damping;
+- collision-generated angular impulses;
+- orientation normalization;
+- a specialized rotational integration strategy.
+
+Those capabilities should be introduced only when their concrete physics and architecture requirements are understood.
+
+This decision evolves D-074's original checkpoint clauses that the current integrators preserved orientation unchanged and that angular velocity remained deferred. D-074's ownership, units, sign convention, and non-normalization decisions remain in force.

@@ -6,11 +6,13 @@ import type { BodyState } from "../world/body-state.ts";
  * state.
  *
  * Implementations approximate the state at the end of a timestep from the
- * current body state and constant acceleration available at the beginning of
- * that timestep.
+ * current body state and constant linear acceleration available at the
+ * beginning of that timestep.
  *
  * The interface is deliberately specific to kinematic motion rather than being
- * a general-purpose numerical integration abstraction.
+ * a general-purpose numerical integration abstraction. Current BodyState
+ * includes angular velocity, but angular acceleration has not yet been
+ * introduced as an integration input.
  */
 export interface KinematicIntegrator {
   /**
@@ -19,8 +21,8 @@ export interface KinematicIntegrator {
    * Implementations must not modify the supplied state or acceleration.
    *
    * @param state The body state at the beginning of the timestep.
-   * @param acceleration The acceleration applied during the timestep, expressed
-   * in world units per second squared.
+   * @param acceleration The linear acceleration applied during the timestep,
+   * expressed in world units per second squared.
    * @param dt The timestep duration in seconds.
    * @returns The approximated body state at the end of the timestep.
    */

@@ -21,10 +21,10 @@ interface WorldBody {
  * instances.
  *
  * Reusable {@link Body} definitions enter the world through `addBody(...)`.
- * Initial position, velocity, and orientation are supplied separately as
- * world-specific initial conditions. The world copies those values into
- * authoritative runtime state that remains private and may be observed through
- * detached snapshots.
+ * Initial position, velocity, orientation, and angular velocity are supplied
+ * separately as world-specific initial conditions. The world copies those
+ * values into authoritative runtime state that remains private and may be
+ * observed through detached snapshots.
  *
  * All body instances currently share the same world gravity and numerical
  * integration strategy.
@@ -78,19 +78,22 @@ export class World {
    * Adds a reusable body definition to the world as an independent runtime
    * instance.
    *
-   * Position, velocity, and orientation are world-specific initial conditions
-   * rather than intrinsic body properties. Omitted values default to zero. The
-   * supplied vectors are copied before becoming authoritative runtime state.
-   * Orientation is expressed in radians; positive values rotate
-   * counter-clockwise in the mathematical world coordinate system.
+   * Position, velocity, orientation, and angular velocity are world-specific
+   * initial conditions rather than intrinsic body properties. Omitted values
+   * default to zero. The supplied vectors are copied before becoming
+   * authoritative runtime state.
+   *
+   * Orientation is expressed in radians. Angular velocity is expressed in
+   * radians per second. Positive values rotate counter-clockwise in the
+   * mathematical world coordinate system.
    *
    * The same body definition may be added more than once, including to
    * different worlds. Each addition receives its own world-local identifier
    * and independent runtime state.
    *
    * @param body The reusable body definition to instantiate in this world.
-   * @param initialConditions Optional initial position, velocity, and
-   * orientation.
+   * @param initialConditions Optional initial position, velocity, orientation,
+   * and angular velocity.
    * @returns The world-local identifier assigned to the new body instance.
    * @throws {RangeError} If an initial condition contains a non-finite value.
    */
@@ -98,11 +101,13 @@ export class World {
     const position = initialConditions.position ?? new Vector2(0, 0);
     const velocity = initialConditions.velocity ?? new Vector2(0, 0);
     const orientation = initialConditions.orientation ?? 0;
+    const angularVelocity = initialConditions.angularVelocity ?? 0;
 
     const initialState: BodyState = {
       position: new Vector2(position.x, position.y),
       velocity: new Vector2(velocity.x, velocity.y),
       orientation,
+      angularVelocity,
     };
 
     assertFiniteBodyState(initialState, "Initial body state");
@@ -196,5 +201,6 @@ function copyState(state: BodyState): BodyState {
     position: new Vector2(state.position.x, state.position.y),
     velocity: new Vector2(state.velocity.x, state.velocity.y),
     orientation: state.orientation,
+    angularVelocity: state.angularVelocity,
   };
 }
