@@ -7,6 +7,7 @@ import { Vector2 } from "../math/vector2.ts";
 import type { BodyId } from "../world/body-id.ts";
 import type { BodySnapshot } from "../world/body-snapshot.ts";
 import type { BodyState } from "../world/body-state.ts";
+import { aabbsOverlap, computeShapeAabb } from "./aabb.ts";
 import { detectBodyCollisions } from "./detect-body-collisions.ts";
 
 function state(position: Vector2, orientation = 0): BodyState {
@@ -66,7 +67,7 @@ Deno.test("detectBodyCollisions skips shapeless Bodies", () => {
   );
 });
 
-Deno.test("detectBodyCollisions tests each unordered shaped pair once", () => {
+Deno.test("detectBodyCollisions reports each colliding unordered shaped pair once", () => {
   const circle = new Body({ shape: new Circle(2) });
 
   const collisions = detectBodyCollisions([
@@ -85,7 +86,7 @@ Deno.test("detectBodyCollisions tests each unordered shaped pair once", () => {
   );
 });
 
-Deno.test("detectBodyCollisions forwards body orientation to narrow phase", () => {
+Deno.test("detectBodyCollisions forwards body orientation to broad and narrow phases", () => {
   const rectangle = new Body({ shape: new Rectangle(4, 1) });
   const circle = new Body({ shape: new Circle(0.5) });
 
@@ -101,4 +102,33 @@ Deno.test("detectBodyCollisions forwards body orientation to narrow phase", () =
 
   assertEquals(unrotated, []);
   assert(rotated.length === 1);
+});
+
+Deno.test("detectBodyCollisions lets narrow phase reject an AABB false positive", () => {
+  const shape = new Circle(1);
+  const circle = new Body({ shape });
+  const positionA = new Vector2(0, 0);
+  const positionB = new Vector2(1.9, 1.9);
+
+  const aabbA = computeShapeAabb(shape, positionA, 0);
+  const aabbB = computeShapeAabb(shape, positionB, 0);
+
+  assert(aabbsOverlap(aabbA, aabbB));
+
+  assertEquals(
+    detectBodyCollisions([snapshot(1, circle, positionA), snapshot(2, circle, positionB)]),
+    [],
+  );
+});
+
+Deno.test("detectBodyCollisions preserves touching collisions through AABB filtering", () => {
+  const circle = new Body({ shape: new Circle(1) });
+
+  const collisions = detectBodyCollisions([
+    snapshot(1, circle, new Vector2(0, 0)),
+    snapshot(2, circle, new Vector2(2, 0)),
+  ]);
+
+  assertEquals(collisions.length, 1);
+  assertEquals(collisions[0].collision.penetrationDepth, 0);
 });
