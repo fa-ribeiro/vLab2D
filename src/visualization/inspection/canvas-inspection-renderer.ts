@@ -1,5 +1,6 @@
 import {
   type BodyCollision,
+  type BodyCollisionCandidate,
   type BodyShape,
   type BodySnapshot,
   Circle,
@@ -72,20 +73,23 @@ export class CanvasInspectionRenderer {
    * are deliberately not treated as physical contours. Orientation is shown
    * only when a concrete shape supplies a meaningful local frame.
    *
-   * Collision MTV inspection consumes BodyCollision observations supplied by
-   * the caller. Pair discovery and narrow-phase detection remain Engine
-   * responsibilities; this renderer only turns the supplied result into a
-   * display-space diagnostic.
+   * Broad-phase candidate and collision MTV inspection consume Engine
+   * observations supplied by the caller. Pair discovery and narrow-phase
+   * detection remain Engine responsibilities; this renderer only turns those
+   * observations into display-space diagnostics.
    *
    * @param snapshots Detached Body observations to inspect.
    * @param options Renderer-neutral inspection configuration for this frame.
-   * @param bodyCollisions Collision observations produced from the same
-   * snapshot set.
+   * @param bodyCollisions Confirmed narrow-phase collisions produced from
+   * the same snapshot set.
+   * @param bodyCollisionCandidates Broad-phase AABB candidates produced from
+   * the same snapshot set.
    */
   public render(
     snapshots: readonly BodySnapshot[],
     options: InspectionOptions,
     bodyCollisions: readonly BodyCollision[] = [],
+    bodyCollisionCandidates: readonly BodyCollisionCandidate[] = [],
   ): void {
     if (
       !options.aabb.visible &&
@@ -93,6 +97,7 @@ export class CanvasInspectionRenderer {
       !options.bodyOrigin.visible &&
       !options.orientation.visible &&
       !options.velocity.visible &&
+      !options.broadPhaseCandidates.visible &&
       !options.collisionMtv.visible
     ) {
       return;
@@ -102,6 +107,10 @@ export class CanvasInspectionRenderer {
 
     for (const snapshot of snapshots) {
       this.#renderBody(snapshot, options);
+    }
+
+    if (options.broadPhaseCandidates.visible) {
+      this.#renderBroadPhaseCandidates(snapshots, bodyCollisionCandidates, options);
     }
 
     if (options.collisionMtv.visible) {
@@ -259,6 +268,38 @@ export class CanvasInspectionRenderer {
     this.#context.beginPath();
     this.#context.arc(x, y, options.bodyOrigin.radius, 0, Math.PI * 2);
     this.#context.stroke();
+  }
+
+  #renderBroadPhaseCandidates(
+    snapshots: readonly BodySnapshot[],
+    candidates: readonly BodyCollisionCandidate[],
+    options: InspectionOptions,
+  ): void {
+    const snapshotsById = new Map(
+      snapshots.map((snapshot) => [snapshot.id, snapshot] as const),
+    );
+
+    this.#applyStyle(options.defaultStyle, options.broadPhaseCandidates.style);
+
+    for (const candidate of candidates) {
+      const snapshotA = snapshotsById.get(candidate.bodyAId);
+      const snapshotB = snapshotsById.get(candidate.bodyBId);
+
+      // Candidate observations are expected to come from this same snapshot
+      // set. Ignore stale/mismatched identities instead of inventing positions.
+      if (snapshotA === undefined || snapshotB === undefined) {
+        continue;
+      }
+
+      const startX = this.#transform.worldToDisplayX(snapshotA.state.position.x);
+      const startY = this.#transform.worldToDisplayY(snapshotA.state.position.y);
+      const endX = this.#transform.worldToDisplayX(snapshotB.state.position.x);
+      const endY = this.#transform.worldToDisplayY(snapshotB.state.position.y);
+
+      // A broad-phase candidate has no direction or response meaning, so a
+      // plain connector is used instead of an arrow.
+      this.#strokeLine(startX, startY, endX, endY);
+    }
   }
 
   #renderCollisionMtvs(

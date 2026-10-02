@@ -87,6 +87,18 @@ export interface InspectionOptions {
   };
 
   /**
+   * Broad-phase AABB candidate-pair inspection.
+   *
+   * Each candidate is drawn as a simple connector between the two Body origins.
+   * The connector means only that the Bodies' AABBs overlap or touch; exact
+   * narrow-phase geometry may still reject the pair.
+   */
+  readonly broadPhaseCandidates: {
+    readonly visible: boolean;
+    readonly style?: Partial<InspectionStyle>;
+  };
+
+  /**
    * Narrow-phase collision minimum-translation-vector inspection.
    *
    * For each colliding physical-shape pair A/B, the vector starts at B's Body

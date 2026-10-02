@@ -7,7 +7,7 @@ import { Vector2 } from "../math/vector2.ts";
 import type { BodyId } from "../world/body-id.ts";
 import type { BodySnapshot } from "../world/body-snapshot.ts";
 import type { BodyState } from "../world/body-state.ts";
-import { aabbsOverlap, computeShapeAabb } from "./aabb.ts";
+import { detectBodyCollisionCandidates } from "./detect-body-collision-candidates.ts";
 import { detectBodyCollisions } from "./detect-body-collisions.ts";
 
 function state(position: Vector2, orientation = 0): BodyState {
@@ -86,7 +86,7 @@ Deno.test("detectBodyCollisions reports each colliding unordered shaped pair onc
   );
 });
 
-Deno.test("detectBodyCollisions forwards body orientation to broad and narrow phases", () => {
+Deno.test("detectBodyCollisions forwards body orientation through both phases", () => {
   const rectangle = new Body({ shape: new Rectangle(4, 1) });
   const circle = new Body({ shape: new Circle(0.5) });
 
@@ -104,31 +104,40 @@ Deno.test("detectBodyCollisions forwards body orientation to broad and narrow ph
   assert(rotated.length === 1);
 });
 
-Deno.test("detectBodyCollisions lets narrow phase reject an AABB false positive", () => {
-  const shape = new Circle(1);
-  const circle = new Body({ shape });
-  const positionA = new Vector2(0, 0);
-  const positionB = new Vector2(1.9, 1.9);
+Deno.test(
+  "detectBodyCollisions lets narrow phase reject a supplied false-positive candidate",
+  () => {
+    const circle = new Body({ shape: new Circle(1) });
+    const snapshots = [
+      snapshot(1, circle, new Vector2(0, 0)),
+      snapshot(2, circle, new Vector2(1.9, 1.9)),
+    ];
+    const candidates = detectBodyCollisionCandidates(snapshots);
 
-  const aabbA = computeShapeAabb(shape, positionA, 0);
-  const aabbB = computeShapeAabb(shape, positionB, 0);
+    assertEquals(candidates, [{ bodyAId: 1, bodyBId: 2 }]);
+    assertEquals(detectBodyCollisions(snapshots, candidates), []);
+  },
+);
 
-  assert(aabbsOverlap(aabbA, aabbB));
+Deno.test(
+  "detectBodyCollisions preserves touching collisions through supplied candidates",
+  () => {
+    const circle = new Body({ shape: new Circle(1) });
+    const snapshots = [
+      snapshot(1, circle, new Vector2(0, 0)),
+      snapshot(2, circle, new Vector2(2, 0)),
+    ];
+    const candidates = detectBodyCollisionCandidates(snapshots);
+    const collisions = detectBodyCollisions(snapshots, candidates);
 
-  assertEquals(
-    detectBodyCollisions([snapshot(1, circle, positionA), snapshot(2, circle, positionB)]),
-    [],
-  );
-});
+    assertEquals(collisions.length, 1);
+    assertEquals(collisions[0].collision.penetrationDepth, 0);
+  },
+);
 
-Deno.test("detectBodyCollisions preserves touching collisions through AABB filtering", () => {
+Deno.test("detectBodyCollisions ignores supplied candidates outside the snapshot set", () => {
   const circle = new Body({ shape: new Circle(1) });
+  const snapshots = [snapshot(1, circle, new Vector2(0, 0))];
 
-  const collisions = detectBodyCollisions([
-    snapshot(1, circle, new Vector2(0, 0)),
-    snapshot(2, circle, new Vector2(2, 0)),
-  ]);
-
-  assertEquals(collisions.length, 1);
-  assertEquals(collisions[0].collision.penetrationDepth, 0);
+  assertEquals(detectBodyCollisions(snapshots, [{ bodyAId: 1, bodyBId: 2 }]), []);
 });

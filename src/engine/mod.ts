@@ -12,7 +12,9 @@ export type { BodyOptions } from "./body/body-options.ts";
 
 export type { Aabb } from "./collision/aabb.ts";
 export { aabbsOverlap, computeShapeAabb } from "./collision/aabb.ts";
+export type { BodyCollisionCandidate } from "./collision/body-collision-candidate.ts";
 export type { BodyCollision } from "./collision/body-collision.ts";
+export { detectBodyCollisionCandidates } from "./collision/detect-body-collision-candidates.ts";
 export type { Collision } from "./collision/collision.ts";
 export { detectBodyCollisions } from "./collision/detect-body-collisions.ts";
 export { detectCircleCircleCollision } from "./collision/circle-circle-collision.ts";

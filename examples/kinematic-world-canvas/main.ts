@@ -60,6 +60,13 @@ const INSPECTION_OPTIONS: InspectionOptions = {
       color: "#dc2626",
     },
   },
+  broadPhaseCandidates: {
+    visible: true,
+    style: {
+      color: "#7c3aed",
+      lineWidth: 1,
+    },
+  },
   collisionMtv: {
     visible: true,
     arrowheadSize: 6,
@@ -97,6 +104,11 @@ const circle = new Body({ shape: new Circle(1) });
 
 world.addBody(circle, { position: new Vector2(2, 3), orientation: Math.PI / 4 });
 world.addBody(circle, { position: new Vector2(3.5, 3) });
+
+// These two circles are deliberately a broad-phase false positive: their
+// AABBs overlap, but their center distance is greater than the sum of radii.
+world.addBody(circle, { position: new Vector2(-1, -2) });
+world.addBody(circle, { position: new Vector2(0.9, -0.1) });
 
 const rectangle = new Body({ shape: new Rectangle(2, 1) });
 

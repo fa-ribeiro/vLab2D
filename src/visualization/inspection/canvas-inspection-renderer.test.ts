@@ -3,6 +3,7 @@ import { assertAlmostEquals, assertEquals } from "@std/assert";
 import {
   Body,
   type BodyCollision,
+  type BodyCollisionCandidate,
   type BodyId,
   type BodySnapshot,
   type BodyState,
@@ -40,6 +41,7 @@ type InspectionOptionsOverrides = {
   readonly bodyOrigin?: Partial<InspectionOptions["bodyOrigin"]>;
   readonly orientation?: Partial<InspectionOptions["orientation"]>;
   readonly velocity?: Partial<InspectionOptions["velocity"]>;
+  readonly broadPhaseCandidates?: Partial<InspectionOptions["broadPhaseCandidates"]>;
   readonly collisionMtv?: Partial<InspectionOptions["collisionMtv"]>;
 };
 
@@ -74,6 +76,10 @@ function inspectionOptions(overrides: InspectionOptionsOverrides = {}): Inspecti
       arrowheadSize: 6,
       minimumVisibleLength: 8,
       ...overrides.velocity,
+    },
+    broadPhaseCandidates: {
+      visible: false,
+      ...overrides.broadPhaseCandidates,
     },
     collisionMtv: {
       visible: false,
@@ -658,6 +664,98 @@ Deno.test("CanvasInspectionRenderer contours oriented RegularPolygon geometry", 
   assertEquals(moveToCalls, [["moveTo", 20, 0]]);
   assertEquals(closePathCalls, [["closePath"]]);
 });
+
+Deno.test("CanvasInspectionRenderer connects broad-phase candidate body origins", () => {
+  const context = new RecordingCanvasContext();
+  const transform = new ViewportTransform(200, 100, 10);
+  const renderer = new CanvasInspectionRenderer(context, transform);
+  const circle = new Body({ shape: new Circle(1) });
+  const snapshots = [
+    createBodySnapshot(1, new Vector2(0, 0), new Vector2(0, 0), circle),
+    createBodySnapshot(2, new Vector2(2, 1), new Vector2(0, 0), circle),
+  ];
+  const candidates: readonly BodyCollisionCandidate[] = [{ bodyAId: 1, bodyBId: 2 }];
+
+  renderer.render(
+    snapshots,
+    inspectionOptions({
+      broadPhaseCandidates: { visible: true },
+    }),
+    [],
+    candidates,
+  );
+
+  assertEquals(
+    context.calls.filter(([name]) => name === "moveTo"),
+    [["moveTo", 100, 50]],
+  );
+  assertEquals(
+    context.calls.filter(([name]) => name === "lineTo"),
+    [["lineTo", 120, 40]],
+  );
+});
+
+Deno.test("CanvasInspectionRenderer lets broad-phase candidate style override default", () => {
+  const context = new RecordingCanvasContext();
+  const transform = new ViewportTransform(200, 100, 10);
+  const renderer = new CanvasInspectionRenderer(context, transform);
+  const circle = new Body({ shape: new Circle(1) });
+
+  renderer.render(
+    [
+      createBodySnapshot(1, new Vector2(0, 0), new Vector2(0, 0), circle),
+      createBodySnapshot(2, new Vector2(1, 0), new Vector2(0, 0), circle),
+    ],
+    inspectionOptions({
+      broadPhaseCandidates: {
+        visible: true,
+        style: {
+          color: "#7c3aed",
+          lineWidth: 2,
+        },
+      },
+    }),
+    [],
+    [{ bodyAId: 1, bodyBId: 2 }],
+  );
+
+  assertEquals(
+    context.calls.filter(([name]) => name === "strokeStyle"),
+    [["strokeStyle", "#7c3aed"]],
+  );
+  assertEquals(
+    context.calls.filter(([name]) => name === "lineWidth"),
+    [["lineWidth", 2]],
+  );
+});
+
+Deno.test(
+  "CanvasInspectionRenderer ignores broad-phase candidates outside snapshot set",
+  () => {
+    const context = new RecordingCanvasContext();
+    const transform = new ViewportTransform(200, 100, 10);
+    const renderer = new CanvasInspectionRenderer(context, transform);
+    const circle = new Body({ shape: new Circle(1) });
+
+    renderer.render(
+      [createBodySnapshot(1, new Vector2(0, 0), new Vector2(0, 0), circle)],
+      inspectionOptions({
+        broadPhaseCandidates: { visible: true },
+      }),
+      [],
+      [{ bodyAId: 1, bodyBId: 2 }],
+    );
+
+    assertEquals(
+      context.calls.filter(([name]) => name === "moveTo"),
+      [],
+    );
+    assertEquals(
+      context.calls.filter(([name]) => name === "lineTo"),
+      [],
+    );
+  },
+);
 
 Deno.test("CanvasInspectionRenderer draws supplied collision MTV from shape B origin", () => {
   const context = new RecordingCanvasContext();
