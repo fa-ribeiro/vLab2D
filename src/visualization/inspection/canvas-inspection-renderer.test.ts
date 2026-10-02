@@ -1,4 +1,4 @@
-import { assertEquals } from "@std/assert";
+import { assertAlmostEquals, assertEquals } from "@std/assert";
 
 import {
   Body,
@@ -35,6 +35,7 @@ function createBodySnapshot(
 
 type InspectionOptionsOverrides = {
   readonly defaultStyle?: Partial<InspectionOptions["defaultStyle"]>;
+  readonly aabb?: Partial<InspectionOptions["aabb"]>;
   readonly geometryContour?: Partial<InspectionOptions["geometryContour"]>;
   readonly bodyOrigin?: Partial<InspectionOptions["bodyOrigin"]>;
   readonly orientation?: Partial<InspectionOptions["orientation"]>;
@@ -48,6 +49,10 @@ function inspectionOptions(overrides: InspectionOptionsOverrides = {}): Inspecti
       color: "#d97706",
       lineWidth: 1.5,
       ...overrides.defaultStyle,
+    },
+    aabb: {
+      visible: false,
+      ...overrides.aabb,
     },
     geometryContour: {
       visible: false,
@@ -363,6 +368,124 @@ Deno.test(
     assertEquals(lineToCalls, [["lineTo", 24, 0]]);
   },
 );
+
+Deno.test("CanvasInspectionRenderer draws Circle AABB in display space", () => {
+  const context = new RecordingCanvasContext();
+  const transform = new ViewportTransform(200, 100, 10);
+  const renderer = new CanvasInspectionRenderer(context, transform);
+
+  renderer.render(
+    [
+      createBodySnapshot(
+        7,
+        new Vector2(2, 3),
+        new Vector2(0, 0),
+        new Body({ shape: new Circle(1.5) }),
+      ),
+    ],
+    inspectionOptions({ aabb: { visible: true } }),
+  );
+
+  const strokeRectCalls = context.calls.filter(([name]) => name === "strokeRect");
+
+  assertEquals(strokeRectCalls, [["strokeRect", 105, 5, 30, 30]]);
+});
+
+Deno.test(
+  "CanvasInspectionRenderer draws world-axis-aligned bounds for rotated Rectangle",
+  () => {
+    const context = new RecordingCanvasContext();
+    const transform = new ViewportTransform(200, 100, 10);
+    const renderer = new CanvasInspectionRenderer(context, transform);
+
+    renderer.render(
+      [
+        createBodySnapshot(
+          7,
+          new Vector2(0, 0),
+          new Vector2(0, 0),
+          new Body({ shape: new Rectangle(4, 2) }),
+          Math.PI / 4,
+        ),
+      ],
+      inspectionOptions({ aabb: { visible: true } }),
+    );
+
+    const strokeRectCalls = context.calls.filter(([name]) => name === "strokeRect");
+
+    assertEquals(strokeRectCalls.length, 1);
+
+    const [, left, top, width, height] = strokeRectCalls[0] as [
+      string,
+      number,
+      number,
+      number,
+      number,
+    ];
+
+    const extent = (3 / Math.sqrt(2)) * 10;
+
+    assertAlmostEquals(left, 100 - extent, 1e-12);
+    assertAlmostEquals(top, 50 - extent, 1e-12);
+    assertAlmostEquals(width, extent * 2, 1e-12);
+    assertAlmostEquals(height, extent * 2, 1e-12);
+  },
+);
+
+Deno.test("CanvasInspectionRenderer does not draw AABB for shapeless Bodies", () => {
+  const context = new RecordingCanvasContext();
+  const transform = new ViewportTransform(200, 100, 10);
+  const renderer = new CanvasInspectionRenderer(context, transform);
+
+  renderer.render(
+    [createBodySnapshot(7, new Vector2(2, 3))],
+    inspectionOptions({ aabb: { visible: true } }),
+  );
+
+  assertEquals(
+    context.calls.filter(([name]) => name === "strokeRect"),
+    [],
+  );
+});
+
+Deno.test("CanvasInspectionRenderer lets AABB override the default inspection style", () => {
+  const context = new RecordingCanvasContext();
+  const transform = new ViewportTransform(200, 100, 10);
+  const renderer = new CanvasInspectionRenderer(context, transform);
+
+  renderer.render(
+    [
+      createBodySnapshot(
+        7,
+        new Vector2(0, 0),
+        new Vector2(0, 0),
+        new Body({ shape: new Circle(1) }),
+      ),
+    ],
+    inspectionOptions({
+      defaultStyle: {
+        color: "#d97706",
+        lineWidth: 1.5,
+      },
+      aabb: {
+        visible: true,
+        style: {
+          color: "#0891b2",
+          lineWidth: 2.5,
+        },
+      },
+    }),
+  );
+
+  assertEquals(
+    context.calls.filter(([name]) => name === "strokeStyle"),
+    [["strokeStyle", "#0891b2"]],
+  );
+  assertEquals(
+    context.calls.filter(([name]) => name === "lineWidth"),
+    [["lineWidth", 2.5]],
+  );
+});
 
 Deno.test("CanvasInspectionRenderer contours Circle geometry at viewport scale", () => {
   const context = new RecordingCanvasContext();

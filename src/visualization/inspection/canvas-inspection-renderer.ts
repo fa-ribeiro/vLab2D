@@ -4,6 +4,7 @@ import {
   type BodySnapshot,
   Circle,
   type Collision,
+  computeShapeAabb,
   Rectangle,
   RegularPolygon,
 } from "../../engine/mod.ts";
@@ -87,6 +88,7 @@ export class CanvasInspectionRenderer {
     bodyCollisions: readonly BodyCollision[] = [],
   ): void {
     if (
+      !options.aabb.visible &&
       !options.geometryContour.visible &&
       !options.bodyOrigin.visible &&
       !options.orientation.visible &&
@@ -110,6 +112,10 @@ export class CanvasInspectionRenderer {
   }
 
   #renderBody(snapshot: BodySnapshot, options: InspectionOptions): void {
+    if (options.aabb.visible) {
+      this.#renderAabb(snapshot, options);
+    }
+
     if (options.geometryContour.visible) {
       this.#renderGeometryContour(snapshot, options);
     }
@@ -125,6 +131,28 @@ export class CanvasInspectionRenderer {
     if (options.bodyOrigin.visible) {
       this.#renderBodyOrigin(snapshot, options);
     }
+  }
+
+  #renderAabb(snapshot: BodySnapshot, options: InspectionOptions): void {
+    const shape = snapshot.definition.shape;
+
+    // Shapeless Bodies have no physical geometry and therefore no physical
+    // broad-phase bounds to inspect.
+    if (shape === undefined) {
+      return;
+    }
+
+    const bounds = computeShapeAabb(shape, snapshot.state.position, snapshot.state.orientation);
+
+    // World +Y maps upward while Canvas +Y maps downward. Therefore the
+    // display-space rectangle starts at world maxY and ends at world minY.
+    const left = this.#transform.worldToDisplayX(bounds.min.x);
+    const right = this.#transform.worldToDisplayX(bounds.max.x);
+    const top = this.#transform.worldToDisplayY(bounds.max.y);
+    const bottom = this.#transform.worldToDisplayY(bounds.min.y);
+
+    this.#applyStyle(options.defaultStyle, options.aabb.style);
+    this.#context.strokeRect(left, top, right - left, bottom - top);
   }
 
   #renderGeometryContour(snapshot: BodySnapshot, options: InspectionOptions): void {

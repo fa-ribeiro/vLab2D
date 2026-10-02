@@ -26,6 +26,17 @@ export interface InspectionOptions {
   /** Fallback style used by indicators without a complete style override. */
   readonly defaultStyle: InspectionStyle;
 
+  /**
+   * World-space axis-aligned bounding box for the current physical Body shape.
+   *
+   * The box follows the Engine's conservative collision bounds. It remains
+   * aligned with world X/Y even when the underlying Body geometry rotates.
+   */
+  readonly aabb: {
+    readonly visible: boolean;
+    readonly style?: Partial<InspectionStyle>;
+  };
+
   /** Intrinsic Body geometry contour inspection. */
   readonly geometryContour: {
     readonly visible: boolean;

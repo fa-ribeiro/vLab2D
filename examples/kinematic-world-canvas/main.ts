@@ -27,6 +27,13 @@ const INSPECTION_OPTIONS: InspectionOptions = {
     color: "#e4611f",
     lineWidth: 1.5,
   },
+  aabb: {
+    visible: true,
+    style: {
+      color: "#0891b2",
+      lineWidth: 1,
+    },
+  },
   geometryContour: {
     visible: true,
   },
