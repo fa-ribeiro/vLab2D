@@ -22,10 +22,36 @@ const SHAPELESS_BODY_RADIUS = 6;
 const PICK_TOLERANCE = 4;
 
 const INSPECTION_OPTIONS: InspectionOptions = {
-  showGeometryContour: true,
-  showBodyOrigin: true,
-  showOrientation: true,
-  showVelocity: true,
+  defaultStyle: {
+    color: "#e4611f",
+    lineWidth: 1.5,
+  },
+  geometryContour: {
+    visible: true,
+  },
+  bodyOrigin: {
+    visible: true,
+    radius: 3,
+    style: {
+      color: "#ffcc00",
+    },
+  },
+  orientation: {
+    visible: true,
+    length: 18,
+    style: {
+      color: "#e4611f",
+    },
+  },
+  velocity: {
+    visible: true,
+    projectionTime: 1,
+    arrowheadSize: 6,
+    minimumVisibleLength: 8,
+    style: {
+      color: "#dc2626",
+    },
+  },
 };
 
 // Resolve the browser drawing surface and its Canvas 2D context.

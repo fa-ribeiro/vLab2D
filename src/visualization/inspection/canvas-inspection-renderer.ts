@@ -1,16 +1,6 @@
 import { type BodySnapshot, Rectangle } from "../../engine/mod.ts";
-import type { InspectionOptions } from "../inspection/inspection-options.ts";
+import type { InspectionOptions, InspectionStyle } from "./inspection-options.ts";
 import { ViewportTransform } from "../viewport/viewport-transform.ts";
-
-const BODY_ORIGIN_RADIUS = 3;
-const ORIENTATION_LINE_LENGTH = 18;
-
-const VELOCITY_VECTOR_TIME = 1;
-const VELOCITY_ARROWHEAD_SIZE = 6;
-const MIN_VELOCITY_VECTOR_LENGTH = 8;
-
-const INSPECTION_STROKE_STYLE = "#d97706";
-const INSPECTION_LINE_WIDTH = 1.5;
 
 interface CanvasInspectionDrawingContext {
   beginPath(): void;
@@ -44,6 +34,11 @@ interface CanvasInspectionDrawingContext {
  * composes on top of normal Canvas rendering. It observes the same shared
  * ViewportTransform as the normal renderer so inspection geometry remains
  * spatially aligned with the visible scene.
+ *
+ * Inspection policy and presentation values arrive as plain InspectionOptions
+ * on every render call. The renderer therefore owns no persistent user
+ * configuration and can later consume launch-time, runtime-edited, or restored
+ * settings without changing its drawing responsibilities.
  */
 export class CanvasInspectionRenderer {
   readonly #context: CanvasInspectionDrawingContext;
@@ -64,35 +59,37 @@ export class CanvasInspectionRenderer {
    * Draws the enabled inspection indicators for the supplied observations.
    *
    * Geometry contours follow domain geometry and viewport scale. Body-origin
-   * and orientation glyphs use fixed display-space dimensions so they remain
-   * readable while zooming.
+   * and orientation glyphs use configured display-space dimensions so they
+   * remain readable while zooming.
    *
    * Velocity vectors represent the displacement implied by the current
-   * velocity over a fixed visualization time. Their shaft therefore scales
+   * velocity over the configured projection time. Their shaft therefore scales
    * with world velocity and viewport scale, while the arrowhead remains a
-   * fixed display-space glyph. Vectors shorter than the minimum visible display
-   * length are omitted without changing the underlying BodyState velocity.
+   * configured display-space glyph. Vectors shorter than the configured
+   * minimum visible display length are omitted without changing the underlying
+   * BodyState velocity.
    *
    * A shapeless Body has no geometry contour. Its Body origin and velocity are
    * still meaningful, but orientation is not visualized until concrete
    * geometry provides a useful local frame to inspect.
    *
+   * Each indicator resolves its own optional style override against
+   * options.defaultStyle immediately before drawing.
+   *
    * @param snapshots Detached Body observations to inspect.
-   * @param options Renderer-neutral indicator visibility options.
+   * @param options Renderer-neutral inspection configuration for this frame.
    */
   public render(snapshots: readonly BodySnapshot[], options: InspectionOptions): void {
     if (
-      !options.showGeometryContour &&
-      !options.showBodyOrigin &&
-      !options.showOrientation &&
-      !options.showVelocity
+      !options.geometryContour.visible &&
+      !options.bodyOrigin.visible &&
+      !options.orientation.visible &&
+      !options.velocity.visible
     ) {
       return;
     }
 
     this.#context.save();
-    this.#context.strokeStyle = INSPECTION_STROKE_STYLE;
-    this.#context.lineWidth = INSPECTION_LINE_WIDTH;
 
     for (const snapshot of snapshots) {
       this.#renderBody(snapshot, options);
@@ -108,7 +105,7 @@ export class CanvasInspectionRenderer {
     const shape = snapshot.definition.shape;
 
     const needsLocalFrame = shape !== undefined &&
-      (options.showOrientation || options.showGeometryContour);
+      (options.orientation.visible || options.geometryContour.visible);
 
     if (needsLocalFrame) {
       this.#context.save();
@@ -119,7 +116,9 @@ export class CanvasInspectionRenderer {
       // display-space frame uses the negated angle.
       this.#context.rotate(-snapshot.state.orientation);
 
-      if (options.showGeometryContour) {
+      if (options.geometryContour.visible) {
+        this.#applyStyle(options.defaultStyle, options.geometryContour.style);
+
         if (shape instanceof Rectangle) {
           const width = shape.width * this.#transform.pixelsPerUnit;
           const height = shape.height * this.#transform.pixelsPerUnit;
@@ -134,36 +133,46 @@ export class CanvasInspectionRenderer {
         }
       }
 
-      if (options.showOrientation) {
+      if (options.orientation.visible) {
+        this.#applyStyle(options.defaultStyle, options.orientation.style);
+
         // The Body-local +X axis is local 0°. Drawing along +X inside the
         // already-rotated local frame makes orientation visible without
         // introducing angle trigonometry or an arrow semantic.
-        this.#strokeLine(0, 0, ORIENTATION_LINE_LENGTH, 0);
+        this.#strokeLine(0, 0, options.orientation.length, 0);
       }
 
       this.#context.restore();
     }
 
-    if (options.showVelocity) {
-      this.#renderVelocity(snapshot, x, y);
+    if (options.velocity.visible) {
+      this.#applyStyle(options.defaultStyle, options.velocity.style);
+      this.#renderVelocity(snapshot, x, y, options);
     }
 
-    if (options.showBodyOrigin) {
+    if (options.bodyOrigin.visible) {
+      this.#applyStyle(options.defaultStyle, options.bodyOrigin.style);
+
       // BodyState.position locates the Body's local origin in world space.
       // It coincides with the geometric center for today's centered Circle and
       // Rectangle definitions, but it must not be confused with a future
       // centroid or center of mass.
       this.#context.beginPath();
-      this.#context.arc(x, y, BODY_ORIGIN_RADIUS, 0, Math.PI * 2);
+      this.#context.arc(x, y, options.bodyOrigin.radius, 0, Math.PI * 2);
       this.#context.stroke();
     }
   }
 
-  #renderVelocity(snapshot: BodySnapshot, startX: number, startY: number): void {
+  #renderVelocity(
+    snapshot: BodySnapshot,
+    startX: number,
+    startY: number,
+    options: InspectionOptions,
+  ): void {
     const endWorldX = snapshot.state.position.x +
-      snapshot.state.velocity.x * VELOCITY_VECTOR_TIME;
+      snapshot.state.velocity.x * options.velocity.projectionTime;
     const endWorldY = snapshot.state.position.y +
-      snapshot.state.velocity.y * VELOCITY_VECTOR_TIME;
+      snapshot.state.velocity.y * options.velocity.projectionTime;
 
     const endX = this.#transform.worldToDisplayX(endWorldX);
     const endY = this.#transform.worldToDisplayY(endWorldY);
@@ -171,11 +180,13 @@ export class CanvasInspectionRenderer {
     const deltaX = endX - startX;
     const deltaY = endY - startY;
     const lengthSquared = deltaX * deltaX + deltaY * deltaY;
+    const minimumVisibleLengthSquared = options.velocity.minimumVisibleLength *
+      options.velocity.minimumVisibleLength;
 
     // Visibility is deliberately a display-space concern. A Body may still be
     // physically moving even when zoom makes its velocity vector too small to
     // communicate usefully on screen.
-    if (lengthSquared < MIN_VELOCITY_VECTOR_LENGTH * MIN_VELOCITY_VECTOR_LENGTH) {
+    if (lengthSquared < minimumVisibleLengthSquared) {
       return;
     }
 
@@ -186,10 +197,10 @@ export class CanvasInspectionRenderer {
     // Build the fixed-size arrowhead directly from the display-space direction
     // and its perpendicular. The shaft keeps physical/world scaling while the
     // arrowhead remains a readable presentation glyph.
-    const baseX = endX - directionX * VELOCITY_ARROWHEAD_SIZE;
-    const baseY = endY - directionY * VELOCITY_ARROWHEAD_SIZE;
+    const baseX = endX - directionX * options.velocity.arrowheadSize;
+    const baseY = endY - directionY * options.velocity.arrowheadSize;
 
-    const halfWidth = VELOCITY_ARROWHEAD_SIZE / 2;
+    const halfWidth = options.velocity.arrowheadSize / 2;
     const perpendicularX = -directionY * halfWidth;
     const perpendicularY = directionX * halfWidth;
 
@@ -205,6 +216,14 @@ export class CanvasInspectionRenderer {
     this.#context.lineTo(baseX - perpendicularX, baseY - perpendicularY);
 
     this.#context.stroke();
+  }
+
+  #applyStyle(
+    defaultStyle: InspectionStyle,
+    override: Partial<InspectionStyle> | undefined,
+  ): void {
+    this.#context.strokeStyle = override?.color ?? defaultStyle.color;
+    this.#context.lineWidth = override?.lineWidth ?? defaultStyle.lineWidth;
   }
 
   #strokeLine(x1: number, y1: number, x2: number, y2: number): void {

@@ -1,20 +1,77 @@
 /**
- * Selects which renderer-neutral simulation inspection indicators are visible.
+ * Describes renderer-neutral styling for inspection indicators.
  *
- * These options describe diagnostic intent rather than drawing technology.
- * Canvas, SVG, or future visualization targets may render the same indicators
- * using technology-appropriate primitives.
+ * The style is deliberately plain serializable data so it can later come from
+ * launch configuration, runtime controls, or persisted settings.
+ */
+export interface InspectionStyle {
+  /** Stroke color understood by the target renderer. */
+  readonly color: string;
+
+  /** Stroke width in display units. */
+  readonly lineWidth: number;
+}
+
+/**
+ * Configures renderer-neutral simulation inspection indicators.
+ *
+ * The options are deliberately plain serializable data. They describe
+ * inspection intent and presentation values without depending on Canvas, SVG,
+ * DOM objects, functions, or persistence behavior.
+ *
+ * Each indicator may partially override the default style. Any omitted style
+ * property inherits from defaultStyle.
  */
 export interface InspectionOptions {
-  /** Whether intrinsic Body geometry is outlined as an inspection overlay. */
-  readonly showGeometryContour: boolean;
+  /** Fallback style used by indicators without a complete style override. */
+  readonly defaultStyle: InspectionStyle;
 
-  /** Whether the Body local origin / current BodyState position is marked. */
-  readonly showBodyOrigin: boolean;
+  /** Intrinsic Body geometry contour inspection. */
+  readonly geometryContour: {
+    readonly visible: boolean;
+    readonly style?: Partial<InspectionStyle>;
+  };
 
-  /** Whether local 0° / +X orientation is shown from the Body origin. */
-  readonly showOrientation: boolean;
+  /** Body-local origin / current BodyState position inspection. */
+  readonly bodyOrigin: {
+    readonly visible: boolean;
 
-  /** Whether current BodyState velocity is shown as a directional vector. */
-  readonly showVelocity: boolean;
+    /** Marker radius in display units. */
+    readonly radius: number;
+
+    readonly style?: Partial<InspectionStyle>;
+  };
+
+  /** Body-local 0° / +X orientation inspection. */
+  readonly orientation: {
+    readonly visible: boolean;
+
+    /** Orientation-line length in display units. */
+    readonly length: number;
+
+    readonly style?: Partial<InspectionStyle>;
+  };
+
+  /** Current BodyState velocity inspection. */
+  readonly velocity: {
+    readonly visible: boolean;
+
+    /**
+     * Time interval represented by the velocity shaft.
+     *
+     * The vector endpoint is position + velocity × projectionTime.
+     */
+    readonly projectionTime: number;
+
+    /** Arrowhead size in display units. */
+    readonly arrowheadSize: number;
+
+    /**
+     * Minimum shaft length in display units required for the vector to be
+     * visually useful.
+     */
+    readonly minimumVisibleLength: number;
+
+    readonly style?: Partial<InspectionStyle>;
+  };
 }

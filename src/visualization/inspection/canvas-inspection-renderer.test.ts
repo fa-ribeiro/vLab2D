@@ -31,21 +31,68 @@ function createBodySnapshot(
   };
 }
 
-function inspectionOptions(overrides: Partial<InspectionOptions> = {}): InspectionOptions {
+type InspectionOptionsOverrides = {
+  readonly defaultStyle?: Partial<InspectionOptions["defaultStyle"]>;
+  readonly geometryContour?: Partial<InspectionOptions["geometryContour"]>;
+  readonly bodyOrigin?: Partial<InspectionOptions["bodyOrigin"]>;
+  readonly orientation?: Partial<InspectionOptions["orientation"]>;
+  readonly velocity?: Partial<InspectionOptions["velocity"]>;
+};
+
+function inspectionOptions(overrides: InspectionOptionsOverrides = {}): InspectionOptions {
   return {
-    showGeometryContour: false,
-    showBodyOrigin: false,
-    showOrientation: false,
-    showVelocity: false,
-    ...overrides,
+    defaultStyle: {
+      color: "#d97706",
+      lineWidth: 1.5,
+      ...overrides.defaultStyle,
+    },
+    geometryContour: {
+      visible: false,
+      ...overrides.geometryContour,
+    },
+    bodyOrigin: {
+      visible: false,
+      radius: 3,
+      ...overrides.bodyOrigin,
+    },
+    orientation: {
+      visible: false,
+      length: 18,
+      ...overrides.orientation,
+    },
+    velocity: {
+      visible: false,
+      projectionTime: 1,
+      arrowheadSize: 6,
+      minimumVisibleLength: 8,
+      ...overrides.velocity,
+    },
   };
 }
 
 class RecordingCanvasContext {
   readonly calls: unknown[][] = [];
 
-  strokeStyle: string | CanvasGradient | CanvasPattern = "";
-  lineWidth = 1;
+  #strokeStyle: string | CanvasGradient | CanvasPattern = "";
+  #lineWidth = 1;
+
+  get strokeStyle(): string | CanvasGradient | CanvasPattern {
+    return this.#strokeStyle;
+  }
+
+  set strokeStyle(value: string | CanvasGradient | CanvasPattern) {
+    this.#strokeStyle = value;
+    this.calls.push(["strokeStyle", value]);
+  }
+
+  get lineWidth(): number {
+    return this.#lineWidth;
+  }
+
+  set lineWidth(value: number) {
+    this.#lineWidth = value;
+    this.calls.push(["lineWidth", value]);
+  }
 
   beginPath(): void {
     this.calls.push(["beginPath"]);
@@ -98,20 +145,160 @@ Deno.test("CanvasInspectionRenderer draws nothing when all indicators are disabl
   assertEquals(context.calls, []);
 });
 
-Deno.test("CanvasInspectionRenderer marks the Body origin in display space", () => {
+Deno.test(
+  "CanvasInspectionRenderer uses default style when an indicator has no override",
+  () => {
+    const context = new RecordingCanvasContext();
+    const transform = new ViewportTransform(200, 100, 10);
+    const renderer = new CanvasInspectionRenderer(context, transform);
+
+    renderer.render(
+      [createBodySnapshot(7, new Vector2(2, 3))],
+      inspectionOptions({
+        defaultStyle: { color: "#123456", lineWidth: 2 },
+        bodyOrigin: { visible: true },
+      }),
+    );
+
+    assertEquals(
+      context.calls.filter(([name]) => name === "strokeStyle"),
+      [["strokeStyle", "#123456"]],
+    );
+    assertEquals(
+      context.calls.filter(([name]) => name === "lineWidth"),
+      [["lineWidth", 2]],
+    );
+  },
+);
+
+Deno.test("CanvasInspectionRenderer lets an indicator fully override default style", () => {
   const context = new RecordingCanvasContext();
   const transform = new ViewportTransform(200, 100, 10);
   const renderer = new CanvasInspectionRenderer(context, transform);
 
   renderer.render(
-    [createBodySnapshot(7, new Vector2(2, 3))],
-    inspectionOptions({ showBodyOrigin: true }),
+    [createBodySnapshot(7, new Vector2(0, 0), new Vector2(2, 0))],
+    inspectionOptions({
+      velocity: {
+        visible: true,
+        style: {
+          color: "#16a34a",
+          lineWidth: 3,
+        },
+      },
+    }),
   );
 
-  const arcCalls = context.calls.filter(([name]) => name === "arc");
-
-  assertEquals(arcCalls, [["arc", 120, 20, 3, 0, Math.PI * 2]]);
+  assertEquals(
+    context.calls.filter(([name]) => name === "strokeStyle"),
+    [["strokeStyle", "#16a34a"]],
+  );
+  assertEquals(
+    context.calls.filter(([name]) => name === "lineWidth"),
+    [["lineWidth", 3]],
+  );
 });
+
+Deno.test(
+  "CanvasInspectionRenderer inherits missing style properties from default style",
+  () => {
+    const context = new RecordingCanvasContext();
+    const transform = new ViewportTransform(200, 100, 10);
+    const renderer = new CanvasInspectionRenderer(context, transform);
+
+    renderer.render(
+      [
+        createBodySnapshot(
+          7,
+          new Vector2(2, 1),
+          new Vector2(0, 0),
+          new Body({ shape: new Circle(1) }),
+          Math.PI / 2,
+        ),
+      ],
+      inspectionOptions({
+        defaultStyle: { color: "#d97706", lineWidth: 2 },
+        orientation: {
+          visible: true,
+          style: {
+            color: "#dc2626",
+          },
+        },
+      }),
+    );
+
+    assertEquals(
+      context.calls.filter(([name]) => name === "strokeStyle"),
+      [["strokeStyle", "#dc2626"]],
+    );
+    assertEquals(
+      context.calls.filter(([name]) => name === "lineWidth"),
+      [["lineWidth", 2]],
+    );
+  },
+);
+
+Deno.test("CanvasInspectionRenderer applies independent styles to different indicators", () => {
+  const context = new RecordingCanvasContext();
+  const transform = new ViewportTransform(200, 100, 10);
+  const renderer = new CanvasInspectionRenderer(context, transform);
+
+  renderer.render(
+    [
+      createBodySnapshot(
+        7,
+        new Vector2(0, 0),
+        new Vector2(2, 0),
+        new Body({ shape: new Circle(1) }),
+        Math.PI / 4,
+      ),
+    ],
+    inspectionOptions({
+      orientation: {
+        visible: true,
+        style: { color: "#dc2626" },
+      },
+      velocity: {
+        visible: true,
+        style: { color: "#16a34a", lineWidth: 2 },
+      },
+    }),
+  );
+
+  assertEquals(
+    context.calls.filter(([name]) => name === "strokeStyle"),
+    [
+      ["strokeStyle", "#dc2626"],
+      ["strokeStyle", "#16a34a"],
+    ],
+  );
+
+  assertEquals(
+    context.calls.filter(([name]) => name === "lineWidth"),
+    [
+      ["lineWidth", 1.5],
+      ["lineWidth", 2],
+    ],
+  );
+});
+
+Deno.test(
+  "CanvasInspectionRenderer marks the Body origin using configured display radius",
+  () => {
+    const context = new RecordingCanvasContext();
+    const transform = new ViewportTransform(200, 100, 10);
+    const renderer = new CanvasInspectionRenderer(context, transform);
+
+    renderer.render(
+      [createBodySnapshot(7, new Vector2(2, 3))],
+      inspectionOptions({ bodyOrigin: { visible: true, radius: 5 } }),
+    );
+
+    const arcCalls = context.calls.filter(([name]) => name === "arc");
+
+    assertEquals(arcCalls, [["arc", 120, 20, 5, 0, Math.PI * 2]]);
+  },
+);
 
 Deno.test("CanvasInspectionRenderer does not draw orientation for a shapeless Body", () => {
   const context = new RecordingCanvasContext();
@@ -120,7 +307,7 @@ Deno.test("CanvasInspectionRenderer does not draw orientation for a shapeless Bo
 
   renderer.render(
     [createBodySnapshot(7, new Vector2(2, 1), new Vector2(0, 0), new Body(), Math.PI / 2)],
-    inspectionOptions({ showOrientation: true }),
+    inspectionOptions({ orientation: { visible: true } }),
   );
 
   const moveToCalls = context.calls.filter(([name]) => name === "moveTo");
@@ -132,34 +319,37 @@ Deno.test("CanvasInspectionRenderer does not draw orientation for a shapeless Bo
   assertEquals(rotateCalls, []);
 });
 
-Deno.test("CanvasInspectionRenderer draws orientation along Body-local positive X", () => {
-  const context = new RecordingCanvasContext();
-  const transform = new ViewportTransform(200, 100, 10);
-  const renderer = new CanvasInspectionRenderer(context, transform);
+Deno.test(
+  "CanvasInspectionRenderer draws configured orientation along Body-local positive X",
+  () => {
+    const context = new RecordingCanvasContext();
+    const transform = new ViewportTransform(200, 100, 10);
+    const renderer = new CanvasInspectionRenderer(context, transform);
 
-  renderer.render(
-    [
-      createBodySnapshot(
-        7,
-        new Vector2(2, 1),
-        new Vector2(0, 0),
-        new Body({ shape: new Circle(1) }),
-        Math.PI / 2,
-      ),
-    ],
-    inspectionOptions({ showOrientation: true }),
-  );
+    renderer.render(
+      [
+        createBodySnapshot(
+          7,
+          new Vector2(2, 1),
+          new Vector2(0, 0),
+          new Body({ shape: new Circle(1) }),
+          Math.PI / 2,
+        ),
+      ],
+      inspectionOptions({ orientation: { visible: true, length: 24 } }),
+    );
 
-  const translateCalls = context.calls.filter(([name]) => name === "translate");
-  const rotateCalls = context.calls.filter(([name]) => name === "rotate");
-  const moveToCalls = context.calls.filter(([name]) => name === "moveTo");
-  const lineToCalls = context.calls.filter(([name]) => name === "lineTo");
+    const translateCalls = context.calls.filter(([name]) => name === "translate");
+    const rotateCalls = context.calls.filter(([name]) => name === "rotate");
+    const moveToCalls = context.calls.filter(([name]) => name === "moveTo");
+    const lineToCalls = context.calls.filter(([name]) => name === "lineTo");
 
-  assertEquals(translateCalls, [["translate", 120, 40]]);
-  assertEquals(rotateCalls, [["rotate", -Math.PI / 2]]);
-  assertEquals(moveToCalls, [["moveTo", 0, 0]]);
-  assertEquals(lineToCalls, [["lineTo", 18, 0]]);
-});
+    assertEquals(translateCalls, [["translate", 120, 40]]);
+    assertEquals(rotateCalls, [["rotate", -Math.PI / 2]]);
+    assertEquals(moveToCalls, [["moveTo", 0, 0]]);
+    assertEquals(lineToCalls, [["lineTo", 24, 0]]);
+  },
+);
 
 Deno.test("CanvasInspectionRenderer contours Circle geometry at viewport scale", () => {
   const context = new RecordingCanvasContext();
@@ -175,7 +365,7 @@ Deno.test("CanvasInspectionRenderer contours Circle geometry at viewport scale",
         new Body({ shape: new Circle(1.5) }),
       ),
     ],
-    inspectionOptions({ showGeometryContour: true }),
+    inspectionOptions({ geometryContour: { visible: true } }),
   );
 
   const arcCalls = context.calls.filter(([name]) => name === "arc");
@@ -198,7 +388,7 @@ Deno.test("CanvasInspectionRenderer contours oriented Rectangle geometry", () =>
         Math.PI / 2,
       ),
     ],
-    inspectionOptions({ showGeometryContour: true }),
+    inspectionOptions({ geometryContour: { visible: true } }),
   );
 
   const translateCalls = context.calls.filter(([name]) => name === "translate");
@@ -219,7 +409,7 @@ Deno.test(
 
     renderer.render(
       [createBodySnapshot(7, new Vector2(2, 3))],
-      inspectionOptions({ showGeometryContour: true }),
+      inspectionOptions({ geometryContour: { visible: true } }),
     );
 
     const arcCalls = context.calls.filter(([name]) => name === "arc");
@@ -231,7 +421,7 @@ Deno.test(
 );
 
 Deno.test(
-  "CanvasInspectionRenderer draws velocity proportional to world speed with a fixed arrowhead",
+  "CanvasInspectionRenderer uses configured velocity projection and arrowhead size",
   () => {
     const context = new RecordingCanvasContext();
     const transform = new ViewportTransform(200, 100, 10);
@@ -239,7 +429,14 @@ Deno.test(
 
     renderer.render(
       [createBodySnapshot(7, new Vector2(2, 1), new Vector2(2, 0))],
-      inspectionOptions({ showVelocity: true }),
+      inspectionOptions({
+        velocity: {
+          visible: true,
+          projectionTime: 0.5,
+          arrowheadSize: 4,
+          minimumVisibleLength: 1,
+        },
+      }),
     );
 
     const moveToCalls = context.calls.filter(([name]) => name === "moveTo");
@@ -247,14 +444,14 @@ Deno.test(
 
     assertEquals(moveToCalls, [
       ["moveTo", 120, 40],
-      ["moveTo", 140, 40],
-      ["moveTo", 140, 40],
+      ["moveTo", 130, 40],
+      ["moveTo", 130, 40],
     ]);
 
     assertEquals(lineToCalls, [
-      ["lineTo", 140, 40],
-      ["lineTo", 134, 43],
-      ["lineTo", 134, 37],
+      ["lineTo", 130, 40],
+      ["lineTo", 126, 42],
+      ["lineTo", 126, 38],
     ]);
   },
 );
@@ -266,7 +463,7 @@ Deno.test("CanvasInspectionRenderer maps positive world Y velocity upward on dis
 
   renderer.render(
     [createBodySnapshot(7, new Vector2(0, 0), new Vector2(0, 2))],
-    inspectionOptions({ showVelocity: true }),
+    inspectionOptions({ velocity: { visible: true, minimumVisibleLength: 1 } }),
   );
 
   const lineToCalls = context.calls.filter(([name]) => name === "lineTo");
@@ -274,24 +471,25 @@ Deno.test("CanvasInspectionRenderer maps positive world Y velocity upward on dis
   assertEquals(lineToCalls[0], ["lineTo", 100, 30]);
 });
 
-Deno.test(
-  "CanvasInspectionRenderer hides velocity vectors that are too small at the current viewport scale",
-  () => {
-    const context = new RecordingCanvasContext();
-    const transform = new ViewportTransform(200, 100, 10);
-    const renderer = new CanvasInspectionRenderer(context, transform);
-    const snapshots = [createBodySnapshot(7, new Vector2(0, 0), new Vector2(0.5, 0))];
+Deno.test("CanvasInspectionRenderer uses display-space velocity visibility threshold", () => {
+  const context = new RecordingCanvasContext();
+  const transform = new ViewportTransform(200, 100, 10);
+  const renderer = new CanvasInspectionRenderer(context, transform);
+  const snapshots = [createBodySnapshot(7, new Vector2(0, 0), new Vector2(0.5, 0))];
 
-    renderer.render(snapshots, inspectionOptions({ showVelocity: true }));
+  const options = inspectionOptions({
+    velocity: { visible: true, minimumVisibleLength: 8 },
+  });
 
-    assertEquals(
-      context.calls.filter(([name]) => name === "moveTo"),
-      [],
-    );
+  renderer.render(snapshots, options);
 
-    transform.setPixelsPerUnit(20);
-    renderer.render(snapshots, inspectionOptions({ showVelocity: true }));
+  assertEquals(
+    context.calls.filter(([name]) => name === "moveTo"),
+    [],
+  );
 
-    assertEquals(context.calls.filter(([name]) => name === "moveTo").length > 0, true);
-  },
-);
+  transform.setPixelsPerUnit(20);
+  renderer.render(snapshots, options);
+
+  assertEquals(context.calls.filter(([name]) => name === "moveTo").length > 0, true);
+});
