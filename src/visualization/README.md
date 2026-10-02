@@ -107,33 +107,67 @@ Candidate ranking is:
 
 ### Inspection
 
-`InspectionOptions` describes renderer-neutral diagnostic visibility:
+`InspectionOptions` is renderer-neutral plain configuration data. It describes both which diagnostics are visible and the presentation values needed to render them:
 
 ```ts
 interface InspectionOptions {
-  readonly showGeometryContour: boolean;
-  readonly showBodyOrigin: boolean;
-  readonly showOrientation: boolean;
+  readonly defaultStyle: InspectionStyle;
+
+  readonly geometryContour: {
+    readonly visible: boolean;
+    readonly style?: Partial<InspectionStyle>;
+  };
+
+  readonly bodyOrigin: {
+    readonly visible: boolean;
+    readonly radius: number;
+    readonly style?: Partial<InspectionStyle>;
+  };
+
+  readonly orientation: {
+    readonly visible: boolean;
+    readonly length: number;
+    readonly style?: Partial<InspectionStyle>;
+  };
+
+  readonly velocity: {
+    readonly visible: boolean;
+    readonly projectionTime: number;
+    readonly arrowheadSize: number;
+    readonly minimumVisibleLength: number;
+    readonly style?: Partial<InspectionStyle>;
+  };
 }
 ```
 
-These options describe **what diagnostic information should be visible**, not how a particular output technology draws it.
+`InspectionStyle` currently contains `color` and `lineWidth`. Each indicator may partially override the default style; any omitted property inherits from `defaultStyle`.
+
+The options are deliberately behavior-free and serializable. The Canvas renderer receives them on each render call and does not own persistent configuration state. This leaves room for future launch-time presets, runtime controls, and validated persistence without coupling those concerns to drawing.
 
 `CanvasInspectionRenderer` is the first concrete consumer. It draws diagnostic overlays after normal Canvas rendering and deliberately does not clear the drawing surface.
 
 Current indicators are:
 
-| Indicator        | Meaning                                                | Units / behavior                          |
-| ---------------- | ------------------------------------------------------ | ----------------------------------------- |
-| geometry contour | intrinsic Circle/Rectangle boundary                    | follows world geometry and viewport scale |
-| body origin      | `BodyState.position`, i.e. local origin in world space | fixed display-space marker                |
-| orientation      | local `+X` / `0°` direction from body origin           | fixed display-space line                  |
+| Indicator        | Meaning                                                   | Units / behavior                                           |
+| ---------------- | --------------------------------------------------------- | ---------------------------------------------------------- |
+| geometry contour | intrinsic Circle/Rectangle boundary                       | follows world geometry and viewport scale                  |
+| body origin      | `BodyState.position`, i.e. local origin in world space    | configurable fixed display-space marker                    |
+| orientation      | local `+X` / `0°` direction from body origin              | configurable fixed display-space line                      |
+| velocity         | current world-space velocity from body origin             | projected world displacement + fixed display arrowhead     |
 
-A shapeless Body has no domain geometry, so it has no geometry contour. Its body origin remains meaningful. Orientation is stored in `BodyState`, but the current inspection renderer suppresses the orientation glyph for shapeless Bodies because no concrete geometry provides a useful local frame to inspect.
+The velocity shaft endpoint is:
+
+```text
+position + velocity × projectionTime
+```
+
+so shaft length scales with speed and viewport scale. Its arrowhead remains a configured display-space size. If the resulting shaft is shorter than `minimumVisibleLength` in display space, the indicator is omitted because it would not communicate useful visual information; the underlying physical velocity remains unchanged.
+
+A shapeless Body has no domain geometry, so it has no geometry contour. Its body origin and velocity remain meaningful. Orientation is stored in `BodyState`, but the current inspection renderer suppresses the orientation glyph for shapeless Bodies because no concrete geometry provides a useful local frame to inspect.
 
 The term **body origin** is deliberate. With today's centered Circle and Rectangle definitions it coincides with their geometric center, but it must not be redefined as a future centroid or center of mass.
 
-The orientation indicator is a plain line rather than an arrow. This leaves arrow semantics available for a future velocity-vector indicator, where direction and magnitude have different meaning.
+The orientation indicator remains a plain line while velocity uses an arrow, keeping the two diagnostic meanings visually distinct.
 
 ## Observation model
 
@@ -191,7 +225,7 @@ inspection geometry
 
 A shapeless body's visible marker is presentation-only. The marker does not become physical geometry because it can be rendered or picked.
 
-Likewise, the fixed display size of body-origin and orientation diagnostics does not become a domain length.
+Likewise, display-space inspection sizes such as the body-origin radius, orientation-line length, and velocity arrowhead size do not become domain lengths.
 
 ## Coordinate systems and orientation
 
@@ -223,7 +257,7 @@ The inspection orientation line is especially simple inside that local frame:
 
 ```ts
 context.moveTo(0, 0);
-context.lineTo(ORIENTATION_LINE_LENGTH, 0);
+context.lineTo(options.orientation.length, 0);
 ```
 
 It literally represents Body-local `+X`, or local `0°`.
@@ -298,7 +332,7 @@ No generic application or interaction framework has been introduced.
 
 ## SVG and renderer-neutral inspection intent
 
-`InspectionOptions` is deliberately not named `CanvasInspectionOptions`: geometry contour, body origin, and orientation are semantic diagnostics that can also be represented by SVG or another future output target.
+`InspectionOptions` is deliberately not named `CanvasInspectionOptions`: geometry contour, body origin, orientation, velocity, and their styling/configuration semantics can also be represented by SVG or another future output target.
 
 SVG inspection has not yet been implemented. `SvgKinematicRenderer` currently returns a complete SVG document and owns its `ViewportTransform` internally, so forcing a parallel `SvgInspectionRenderer` before deciding how static-document composition should work would be premature.
 
@@ -320,8 +354,8 @@ Interaction feedback
     hover / selection / picking tolerance
 
 Inspection diagnostics
-    optional contour / body origin / orientation
-    future velocity / bounds / contacts / IDs
+    optional contour / body origin / orientation / velocity
+    future bounds / contacts / IDs
 ```
 
 A future “render shapes as contour only” mode is therefore an appearance/rendering choice, not the same thing as the current optional geometry-contour diagnostic overlay.

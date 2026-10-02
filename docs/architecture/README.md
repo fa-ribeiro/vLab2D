@@ -68,10 +68,16 @@ src/
 │   └── browser/
 │       └── simulation-runtime.ts
 └── visualization/
-    ├── body-picker.ts
-    ├── canvas-kinematic-renderer.ts
-    ├── svg-kinematic-renderer.ts
-    ├── viewport-transform.ts
+    ├── inspection/
+    │   ├── canvas-inspection-renderer.ts
+    │   └── inspection-options.ts
+    ├── interaction/
+    │   └── body-picker.ts
+    ├── rendering/
+    │   ├── canvas-kinematic-renderer.ts
+    │   └── svg-kinematic-renderer.ts
+    ├── viewport/
+    │   └── viewport-transform.ts
     └── README.md
 
 examples/
@@ -92,7 +98,7 @@ The responsibilities are:
 | `src/engine/world/`      | body runtime ownership and World behavior                             |
 | `src/simulation/`        | deterministic multi-World orchestration                               |
 | `src/runtime/browser/`   | browser wall-clock execution and fixed-step scheduling                |
-| `src/visualization/`     | viewport geometry, rendering, and visual hit testing                  |
+| `src/visualization/`     | viewport, rendering, interaction, and inspection responsibilities     |
 | `examples/`              | concrete composition plus example-specific browser/application policy |
 
 These directories are not intended as permanent framework layers simply because they exist. They reflect responsibilities demonstrated by the current implementation.
@@ -513,6 +519,8 @@ ViewportTransform
 CanvasKinematicRenderer
 SvgKinematicRenderer
 BodyPicker
+CanvasInspectionRenderer
+InspectionOptions / InspectionStyle
 ```
 
 They consume engine observations but do not advance physics or mutate World state.
@@ -581,18 +589,22 @@ flowchart LR
     V["ViewportTransform"]
     R["CanvasKinematicRenderer"]
     P["BodyPicker"]
+    I["CanvasInspectionRenderer"]
     H["CanvasExampleHost"]
 
     MAIN --> V
     MAIN --> R
     MAIN --> P
+    MAIN --> I
     MAIN --> H
 
     V --> R
     V --> P
+    V --> I
     V --> H
     P --> H
     R --> H
+    I --> H
 ```
 
 The same mutable viewport state is observed by all Canvas collaborators that need it.
@@ -618,6 +630,19 @@ Owns visual hit testing against detached observations.
 
 It receives the same transform as the renderer so the geometry used for picking cannot drift from the current pan/zoom state.
 
+### CanvasInspectionRenderer
+
+Owns optional diagnostic drawing:
+
+```text
+geometry contour
+body origin
+orientation
+velocity
+```
+
+It receives the shared `ViewportTransform` and renderer-neutral `InspectionOptions`. It does not clear the surface or own normal body appearance.
+
 ### CanvasExampleHost
 
 Owns concrete browser/application policy:
@@ -634,9 +659,9 @@ DOM inspection formatting
 frame presentation orchestration
 ```
 
-It directly mutates/queries `ViewportTransform`, delegates hit testing to `BodyPicker`, and delegates drawing to `CanvasKinematicRenderer`.
+It directly mutates/queries `ViewportTransform`, delegates hit testing to `BodyPicker`, delegates normal drawing to `CanvasKinematicRenderer`, and composes `CanvasInspectionRenderer` afterward as an optional diagnostic overlay.
 
-This keeps the renderer from becoming a façade for every operation that happens to involve a viewport.
+This keeps normal rendering, inspection, and interaction policy from collapsing into one façade.
 
 ---
 
@@ -855,28 +880,33 @@ Shared concepts should be common because responsibilities genuinely match, not b
 
 ---
 
-## 19. Normal rendering, appearance, and diagnostics are distinct
+## 19. Normal rendering, appearance, interaction feedback, and diagnostics are distinct
 
-The current architecture keeps three visual ideas separate:
+The current architecture keeps four visual ideas separate:
 
 ```text
 1. Physical/domain representation
    Body / Shape / BodyState
 
 2. Normal appearance
+   current basic body rendering
    future material / fill / texture / sprite decisions
 
-3. Diagnostic / inspection visualization
-   future axes / velocity arrows / bounds / contacts / labels
+3. Interaction feedback
+   hover / selection / picking tolerance
+
+4. Diagnostic / inspection visualization
+   geometry contour / body origin / orientation / velocity
+   future bounds / contacts / labels
 ```
 
-Hover and selection rings are interaction feedback and currently belong to normal Canvas interaction presentation.
+`CanvasInspectionRenderer` is now a concrete diagnostic layer rather than a future possibility. It observes detached state and draws after normal Canvas rendering without changing Body geometry or appearance semantics.
 
-A future orientation-axis diagnostic would reveal otherwise invisible Circle orientation without changing Circle geometry or normal rendering.
+`InspectionOptions` is renderer-neutral plain configuration data. It provides a default inspection style plus optional partial per-indicator overrides, together with the implemented visibility and sizing/projection parameters.
 
-A future sprite/material system would describe how a body normally looks, not how physics behaves.
+The velocity diagnostic has deliberately mixed units: its shaft represents projected world displacement and therefore scales with the viewport, while its arrowhead and minimum useful visibility threshold are display-space presentation values.
 
-No appearance or diagnostic framework exists yet.
+A future sprite/material system would describe how a body normally looks, not how physics behaves. No generic appearance framework or diagnostic plug-in framework exists yet.
 
 ---
 
@@ -962,13 +992,15 @@ sequenceDiagram
     participant Host as CanvasExampleHost
     participant Picker as BodyPicker
     participant Renderer as CanvasKinematicRenderer
+    participant Inspection as CanvasInspectionRenderer
 
     Main->>World: create + add Bodies
     Main->>Simulation: create([World])
     Main->>Main: create shared ViewportTransform
     Main->>Renderer: create(context, viewport, radius)
-    Main->>Picker: create(viewport, radius)
-    Main->>Host: create(canvas, World, viewport, Picker, Renderer)
+    Main->>Inspection: create(context, viewport)
+    Main->>Picker: create(viewport, radius, tolerance)
+    Main->>Host: create(canvas, World, viewport, Picker, Renderer, Inspection, options)
     Main->>Runtime: create(Simulation, onFrame)
     Main->>Runtime: run()
 
@@ -981,6 +1013,7 @@ sequenceDiagram
         Host->>Picker: refresh hover hit
         Picker-->>Host: BodyId or none
         Host->>Renderer: render(snapshots, hover, selection)
+        Host->>Inspection: render(snapshots, options)
     end
 ```
 
@@ -1000,7 +1033,7 @@ The following are future possibilities rather than implemented structure:
 - editable body controls;
 - multiple synchronized visual views;
 - comparison overlays;
-- configurable diagnostic layers;
+- runtime-editable or persisted diagnostic configuration;
 - richer logger/console observers;
 - pinch/multi-pointer gesture handling.
 
@@ -1030,11 +1063,21 @@ Picking
     display-space pick tolerance
     nearest-geometry ranking + center tie-breaker
 
+Inspection
+    geometry contour
+    body origin
+    orientation
+    velocity
+    renderer-neutral configuration
+    default + per-indicator styles
+
 Responsibility refinement
     shared Canvas ViewportTransform
-    renderer ≠ picker ≠ host policy
+    renderer ≠ inspection ≠ picker ≠ host policy
 ```
 
-The next planned implementation discussion returns to the optional **visual inspection layer**, starting from the clean rendering/picking boundary. An orientation/local-axis indicator is a strong first candidate because it can make otherwise invisible pose information visible without changing normal body appearance.
+The next planned implementation discussion returns to the **Engine / Domain** and makes orientation dynamic.
 
-That inspection work should also provide the next real evidence for whether repeated local/world coordinate-frame operations have finally earned `Vector2.rotate()`, `Transform2D`, or another shared transform helper.
+The first rotational pass should determine the smallest coherent runtime-state and integration change needed to represent angular velocity and advance orientation through time. Torque, angular acceleration, moment of inertia, mass distribution, and collision-driven rotation remain later concerns unless the design discussion demonstrates that one of them is required immediately.
+
+The existing visualization already provides a useful observation surface for that work: oriented Rectangle geometry and the orientation inspection line will make rotational state evolution directly visible.

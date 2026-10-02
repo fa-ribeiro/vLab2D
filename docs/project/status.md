@@ -36,9 +36,9 @@ World snapshots
 Visualization
 ```
 
-Phase 2 currently supports shapeless, Circle, and Rectangle body definitions; finite-radian World-owned orientation; geometry-aware Canvas/SVG rendering; orientation-aware Canvas hover/selection feedback; geometry/orientation-aware Canvas picking; and the first optional Canvas inspection overlays.
+Phase 2 currently supports shapeless, Circle, and Rectangle body definitions; finite-radian World-owned orientation; geometry-aware Canvas/SVG rendering; orientation-aware Canvas hover/selection feedback; geometry/orientation-aware Canvas picking; and optional Canvas inspection overlays for geometry contour, body origin, orientation, and velocity.
 
-The latest architecture refinement separates viewport geometry, normal rendering, visual interaction queries, and inspection diagnostics into explicit Visualization responsibilities while keeping Canvas collaborators synchronized through one shared viewport transform.
+The latest Visualization refinement makes inspection configuration explicit plain data: each indicator owns its visibility and presentation parameters, a renderer-neutral default style supplies shared color/line width, and indicators may partially override that style. The Canvas renderer still receives the current configuration per render call and owns no persistent user settings.
 
 ### Simulation engine
 
@@ -158,12 +158,15 @@ flowchart LR
     V["ViewportTransform"]
     P["BodyPicker"]
     R["CanvasKinematicRenderer"]
+    I["CanvasInspectionRenderer"]
 
     H --> V
     H --> P
     H --> R
+    H --> I
     V --> P
     V --> R
+    V --> I
 ```
 
 This prevents drawing, hit testing, panning, zooming, and coordinate inspection from drifting apart.
@@ -277,21 +280,47 @@ Selection stores identity rather than a snapshot. The host resolves the selected
 
 `CanvasInspectionRenderer` is a separate diagnostic renderer. It observes the same detached `BodySnapshot[]` values and the same shared `ViewportTransform` as normal Canvas rendering, but it does not clear the surface or own normal appearance.
 
-Renderer-neutral `InspectionOptions` currently controls three indicators:
+Renderer-neutral `InspectionOptions` is plain serializable configuration data. It currently contains:
 
 ```text
-showGeometryContour
-showBodyOrigin
-showOrientation
+defaultStyle
+    color
+    lineWidth
+
+geometryContour
+    visible
+    style?
+
+bodyOrigin
+    visible
+    radius
+    style?
+
+orientation
+    visible
+    length
+    style?
+
+velocity
+    visible
+    projectionTime
+    arrowheadSize
+    minimumVisibleLength
+    style?
 ```
 
-Current semantics are:
+An indicator without a style override inherits `defaultStyle`. An indicator may override only selected style properties; omitted properties continue to inherit from the default. This keeps inspection configuration renderer-neutral and leaves a clean future path for launch-time presets, runtime editing, and validated persistence without putting configuration ownership into the renderer.
+
+Current indicator semantics are:
 
 - geometry contour — Circle/Rectangle domain boundary, scaled through the viewport;
 - body origin — fixed display-space marker at `BodyState.position`;
-- orientation — fixed display-space line along Body-local `+X` / `0°`.
+- orientation — fixed display-space line along Body-local `+X` / `0°`;
+- velocity — arrow from the Body origin in the current velocity direction, with shaft length representing `velocity × projectionTime`.
 
-A shapeless Body has no geometry contour. Its body origin remains meaningful. The current inspection renderer suppresses its orientation glyph because there is no concrete geometry providing a useful local frame to inspect.
+Velocity shaft length therefore scales with world velocity and viewport scale. Its arrowhead uses a configured fixed display-space size. A velocity vector shorter than `minimumVisibleLength` in display space is omitted as a visualization decision; the Body may still be physically moving.
+
+A shapeless Body has no geometry contour. Its body origin and velocity remain meaningful. The current inspection renderer suppresses its orientation glyph because there is no concrete geometry providing a useful local frame to inspect.
 
 “Body origin” is intentionally not defined as centroid or center of mass. Those concepts may diverge if future geometry, mass distribution, or compound bodies require them.
 
@@ -349,7 +378,7 @@ Current implementation pressure still does not justify:
 - collision detection or response;
 - forces beyond current World gravity input;
 - mass or material properties;
-- angular velocity or rotational dynamics;
+- rotational dynamics beyond the currently stored static orientation;
 - compound geometry attachments;
 - a generic Shape interface/base hierarchy;
 - `Transform2D`;
@@ -359,7 +388,6 @@ Current implementation pressure still does not justify:
 - editable body-state UI;
 - a materials/textures/sprites appearance system;
 - a diagnostic-overlay plug-in framework;
-- configurable inspection colors/styles;
 - SVG inspection composition;
 - pinch zoom or generalized gesture handling.
 
@@ -367,8 +395,8 @@ Normal rendering, future appearance, interaction feedback, and optional diagnost
 
 ## Next step
 
-The first inspection slice is now established with optional geometry contour, body-origin, and orientation indicators in Canvas.
+The first useful inspection set is now established: geometry contour, body origin, orientation, and velocity, with renderer-neutral configuration and per-indicator style overrides.
 
-The next discussion should decide which diagnostic adds the most learning value without turning inspection into a framework. A velocity vector is a natural candidate because it introduces direction **and magnitude** semantics distinct from the plain orientation line.
+The next planned work returns to the **Engine / Domain** and makes orientation dynamic. The rotation discussion should define the smallest coherent rotational-motion capability before implementation, including the role of angular velocity, how orientation advances through time, how existing translational integrators should preserve or participate in rotational state evolution, and which concepts remain deliberately deferred.
 
-Continue watching for genuine repetition in local/world transform mathematics before introducing `Vector2.rotate()`, `Transform2D`, or another shared transform helper.
+Likely later rotational/rigid-body concerns include angular acceleration, torque, moment of inertia, mass distribution, and collision response. They should not be introduced automatically with the first angular-velocity step.

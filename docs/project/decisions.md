@@ -1,6 +1,6 @@
 # Decisions and Architectural Intentions
 
-Last updated: 2026-09-30
+Last updated: 2026-10-02
 
 This file records decisions that should survive chat boundaries. Some entries are architectural intentions rather than implementation commitments; those are labeled accordingly.
 
@@ -1333,3 +1333,107 @@ The public package facade in `src/mod.ts` continues exporting established concep
 This is a structural organization decision, not a behavioral abstraction. It does not introduce additional barrel modules, renderer base classes, picker interfaces, a shared-services layer, or technology-specific `canvas/` and `svg/` subtrees.
 
 The directory structure should continue to evolve only when concrete responsibilities create enough pressure to justify another grouping.
+
+
+## D-080 — Velocity inspection represents projected displacement and uses a display-space visibility threshold
+
+**Status:** Accepted and implemented
+
+Velocity is visualized as an inspection diagnostic rather than as normal appearance or domain geometry.
+
+The indicator begins at `BodyState.position` and points in the direction of `BodyState.velocity`. Its shaft endpoint is derived from a configurable projection interval:
+
+```text
+endpoint = position + velocity × projectionTime
+```
+
+This gives the shaft a physical interpretation: it represents the displacement implied by the current velocity over the configured time interval if that velocity remained unchanged.
+
+The shaft therefore scales with velocity magnitude, `projectionTime`, and viewport scale. Faster bodies produce longer arrows and zoom changes their displayed length naturally.
+
+The arrowhead is different: it is a presentation glyph and remains a configured fixed size in display units so it stays readable independently from zoom.
+
+Very small displayed vectors are omitted using a configurable `minimumVisibleLength` measured in display units. This threshold is intentionally **not** a physics definition of “stationary”:
+
+```text
+BodyState.velocity
+    authoritative physical state
+
+displayed velocity shaft
+    optional diagnostic representation
+
+shaft shorter than minimumVisibleLength
+    diagnostic omitted
+    physical velocity unchanged
+```
+
+Velocity inspection applies to shapeless, Circle, and Rectangle Bodies because velocity is meaningful runtime state independently from geometry.
+
+The velocity arrow uses world-space velocity and `ViewportTransform`; it does not introduce body-local transformation pressure and therefore does not by itself justify `Vector2.rotate()` or `Transform2D`.
+
+This decision evolves D-078 by adding a fourth concrete inspection diagnostic. It does not introduce acceleration vectors, force vectors, collision contacts, path trails, or a generic vector-overlay framework.
+
+## D-081 — Inspection configuration is plain serializable data with default and per-indicator styles
+
+**Status:** Accepted and implemented
+
+Inspection configuration has grown beyond simple visibility toggles. Real implemented settings now include indicator visibility, display dimensions, velocity projection/visibility parameters, and styling.
+
+`InspectionOptions` is therefore modeled as plain renderer-neutral configuration data rather than renderer-owned constants.
+
+The current shape is conceptually:
+
+```text
+InspectionOptions
+├── defaultStyle
+│   ├── color
+│   └── lineWidth
+├── geometryContour
+│   ├── visible
+│   └── style?
+├── bodyOrigin
+│   ├── visible
+│   ├── radius
+│   └── style?
+├── orientation
+│   ├── visible
+│   ├── length
+│   └── style?
+└── velocity
+    ├── visible
+    ├── projectionTime
+    ├── arrowheadSize
+    ├── minimumVisibleLength
+    └── style?
+```
+
+`InspectionStyle` currently contains `color` and `lineWidth`.
+
+Each indicator may provide a partial style override. Effective styling is resolved per property:
+
+```text
+defaultStyle
+    ↓
+indicator.style overrides supplied properties only
+    ↓
+effective indicator style
+```
+
+For example, an orientation indicator may override only its color while inheriting the default line width. A velocity indicator may use an entirely different color and line width.
+
+The top-level default avoids repeating common style values while per-indicator overrides support semantically useful distinctions such as velocity arrows and orientation lines using different colors.
+
+The options contain only plain values such as booleans, numbers, strings, and nested readonly records. They deliberately contain no Canvas/SVG objects, functions, renderer instances, persistence behavior, or mutable settings manager.
+
+`CanvasInspectionRenderer` receives the current `InspectionOptions` on every render call and owns no persistent user configuration. This preserves a clean future path for:
+
+```text
+launch-time configuration
+runtime replacement/editing
+JSON or other persisted representation
+validation + defaults + version migration at an external-data boundary
+```
+
+Those future capabilities are not implemented by this decision. In particular, no options UI, persistence format, parser, migration framework, or runtime settings service is introduced yet.
+
+This decision evolves the styling/configuration clauses of D-078 while preserving its separation between renderer-neutral inspection intent and Canvas-specific drawing.
