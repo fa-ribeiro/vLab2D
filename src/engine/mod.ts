@@ -14,6 +14,7 @@ export type { BodyShape } from "./geometry/body-shape.ts";
 
 export { Circle } from "./geometry/circle.ts";
 export { Rectangle } from "./geometry/rectangle.ts";
+export { RegularPolygon } from "./geometry/regular-polygon.ts";
 
 export type { KinematicIntegrator } from "./kinematics/kinematic-integrator.ts";
 

@@ -7,6 +7,7 @@ import {
   type BodyState,
   Circle,
   Rectangle,
+  RegularPolygon,
   Vector2,
 } from "../../engine/mod.ts";
 import { SvgKinematicRenderer } from "./svg-kinematic-renderer.ts";
@@ -317,4 +318,21 @@ Deno.test("SvgKinematicRenderer scales Rectangle dimensions with the viewport", 
     svg,
     '<rect data-body-id="7" x="60" y="30" width="80" height="40" transform="rotate(0 100 50)" />',
   );
+});
+
+Deno.test("SvgKinematicRenderer renders RegularPolygon vertices and orientation", () => {
+  const renderer = new SvgKinematicRenderer(200, 100, 10, 3);
+
+  const svg = renderer.render([
+    createBodySnapshot(
+      7,
+      new Vector2(2, 1),
+      new Vector2(0, 0),
+      new Body({ shape: new RegularPolygon(4, 2) }),
+      Math.PI / 2,
+    ),
+  ]);
+
+  assertStringIncludes(svg, '<polygon data-body-id="7" points="140,40 ');
+  assertStringIncludes(svg, 'transform="rotate(-90 120 40)" />');
 });

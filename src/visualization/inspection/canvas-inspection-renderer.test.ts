@@ -7,6 +7,7 @@ import {
   type BodyState,
   Circle,
   Rectangle,
+  RegularPolygon,
   Vector2,
 } from "../../engine/mod.ts";
 import { CanvasInspectionRenderer } from "./canvas-inspection-renderer.ts";
@@ -96,6 +97,10 @@ class RecordingCanvasContext {
 
   beginPath(): void {
     this.calls.push(["beginPath"]);
+  }
+
+  closePath(): void {
+    this.calls.push(["closePath"]);
   }
 
   moveTo(x: number, y: number): void {
@@ -492,4 +497,33 @@ Deno.test("CanvasInspectionRenderer uses display-space velocity visibility thres
   renderer.render(snapshots, options);
 
   assertEquals(context.calls.filter(([name]) => name === "moveTo").length > 0, true);
+});
+
+Deno.test("CanvasInspectionRenderer contours oriented RegularPolygon geometry", () => {
+  const context = new RecordingCanvasContext();
+  const transform = new ViewportTransform(200, 100, 10);
+  const renderer = new CanvasInspectionRenderer(context, transform);
+
+  renderer.render(
+    [
+      createBodySnapshot(
+        7,
+        new Vector2(2, 1),
+        new Vector2(0, 0),
+        new Body({ shape: new RegularPolygon(4, 2) }),
+        Math.PI / 2,
+      ),
+    ],
+    inspectionOptions({ geometryContour: { visible: true } }),
+  );
+
+  const translateCalls = context.calls.filter(([name]) => name === "translate");
+  const rotateCalls = context.calls.filter(([name]) => name === "rotate");
+  const moveToCalls = context.calls.filter(([name]) => name === "moveTo");
+  const closePathCalls = context.calls.filter(([name]) => name === "closePath");
+
+  assertEquals(translateCalls, [["translate", 120, 40]]);
+  assertEquals(rotateCalls, [["rotate", -Math.PI / 2]]);
+  assertEquals(moveToCalls, [["moveTo", 20, 0]]);
+  assertEquals(closePathCalls, [["closePath"]]);
 });

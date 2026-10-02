@@ -7,6 +7,7 @@ import {
   Circle,
   type InspectionOptions,
   Rectangle,
+  RegularPolygon,
   SemiImplicitEulerIntegrator,
   Simulation,
   Vector2,
@@ -47,7 +48,7 @@ const INSPECTION_OPTIONS: InspectionOptions = {
     visible: true,
     projectionTime: 1,
     arrowheadSize: 6,
-    minimumVisibleLength: 8,
+    minimumVisibleLength: 4,
     style: {
       color: "#dc2626",
     },
@@ -91,6 +92,19 @@ world.addBody(rectangle, {
   position: new Vector2(-5, 4),
   orientation: Math.PI / 3,
   angularVelocity: -Math.PI / 6,
+});
+
+const triangle = new Body({ shape: new RegularPolygon(3, 1) });
+const hexagon = new Body({ shape: new RegularPolygon(6, 1) });
+
+world.addBody(triangle, {
+  position: new Vector2(-2, 1),
+  angularVelocity: Math.PI / 3,
+});
+world.addBody(hexagon, {
+  position: new Vector2(3, 0),
+  orientation: Math.PI / 6,
+  angularVelocity: -Math.PI / 4,
 });
 
 const simulation = new Simulation([world]);

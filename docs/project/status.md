@@ -36,7 +36,7 @@ World snapshots
 Visualization
 ```
 
-Phase 2 currently supports shapeless, Circle, and Rectangle body definitions; World-owned orientation and angular velocity; constant-angular-velocity rotational kinematics; geometry-aware Canvas/SVG rendering; orientation-aware Canvas hover/selection feedback; geometry/orientation-aware Canvas picking; and optional Canvas inspection overlays for geometry contour, body origin, orientation, and velocity.
+Phase 2 currently supports shapeless, Circle, Rectangle, and RegularPolygon body definitions; World-owned orientation and angular velocity; constant-angular-velocity rotational kinematics; geometry-aware Canvas/SVG rendering; orientation-aware Canvas hover/selection feedback; geometry/orientation-aware Canvas picking; and optional Canvas inspection overlays for geometry contour, body origin, orientation, and velocity.
 
 The latest Visualization refinement makes inspection configuration explicit plain data: each indicator owns its visibility and presentation parameters, a renderer-neutral default style supplies shared color/line width, and indicators may partially override that style. The Canvas renderer still receives the current configuration per render call and owns no persistent user settings.
 
@@ -48,8 +48,9 @@ The public engine currently provides:
 - scalar numeric validation helpers under engine math;
 - `Circle`, immutable geometry with a positive finite radius in world units;
 - `Rectangle`, immutable centered geometry with positive finite width and height in world units;
+- `RegularPolygon`, immutable centered regular-polygon geometry with an integer vertex count of at least `3`, a positive finite circumradius, and precomputed local vertices;
 - `Body`, an immutable reusable definition with optional geometry;
-- `BodyShape`, currently the concrete union `Circle | Rectangle`;
+- `BodyShape`, currently the concrete union `Circle | Rectangle | RegularPolygon`;
 - `BodyInitialConditions`, optional world-specific position, velocity, orientation, and angular velocity;
 - `BodyState`, readonly runtime data containing position, velocity, orientation, and angular velocity;
 - `KinematicIntegrator`, the narrow integration strategy used by World;
@@ -61,7 +62,7 @@ The public engine currently provides:
 The ownership model is:
 
 ```text
-Body / Circle / Rectangle
+Body / Circle / Rectangle / RegularPolygon
     immutable reusable definition data
 
 BodyInitialConditions
@@ -197,6 +198,7 @@ It renders:
 - shapeless fallback markers;
 - Circle geometry;
 - Rectangle geometry;
+- RegularPolygon geometry;
 - hover presentation;
 - selection presentation.
 
@@ -215,6 +217,13 @@ Circle
 Rectangle
     centered local width/height in world units
     scaled through pixelsPerUnit
+    rotated by BodyState.orientation
+
+RegularPolygon
+    centered local convex regular polygon
+    circumradius in world units
+    vertex 0 on local +X
+    local vertices ordered counter-clockwise
     rotated by BodyState.orientation
 ```
 
@@ -247,7 +256,8 @@ Picking behavior currently measures display-space distance to visible/pick geome
 
 - shapeless Body → fixed circular presentation marker;
 - Circle → world-scaled circular geometry;
-- Rectangle → world-scaled Rectangle geometry with current orientation.
+- Rectangle → world-scaled Rectangle geometry with current orientation;
+- RegularPolygon → exact world-scaled polygon geometry with current orientation.
 
 The Canvas example supplies a small display-space `pickTolerance`, allowing thin or small geometry to remain easy to acquire without changing its domain dimensions.
 
@@ -321,7 +331,7 @@ An indicator without a style override inherits `defaultStyle`. An indicator may 
 
 Current indicator semantics are:
 
-- geometry contour — Circle/Rectangle domain boundary, scaled through the viewport;
+- geometry contour — Circle/Rectangle/RegularPolygon domain boundary, scaled through the viewport;
 - body origin — fixed display-space marker at `BodyState.position`;
 - orientation — fixed display-space line along Body-local `+X` / `0°`;
 - velocity — arrow from the Body origin in the current velocity direction, with shaft length representing `velocity × projectionTime`.
@@ -353,6 +363,7 @@ It renders the same current geometry semantics as Canvas:
 - fixed fallback marker for shapeless Bodies;
 - world-scaled Circle geometry;
 - world-scaled Rectangle geometry;
+- world-scaled RegularPolygon geometry;
 - orientation expressed through SVG rotation.
 
 It remains useful for deterministic snapshots, debugging captures, exports, and documentation images.
@@ -403,8 +414,8 @@ Normal rendering, future appearance, interaction feedback, and optional diagnost
 
 ## Next step
 
-The first rotational-kinematics capability is now established: angular velocity is World-owned runtime state and the current kinematic integrators advance orientation from it while preserving constant angular velocity.
+The RegularPolygon capability is now established across the Engine and Visualization layers. The shape stores immutable local geometry, rendering and inspection follow its oriented polygon boundary, and BodyPicker uses exact polygon geometry rather than its circumcircle.
 
-The Canvas example exercises the capability directly with Rectangle instances rotating in opposite directions, while the existing normal rendering, picking, and orientation inspection continue to observe the evolving World-owned orientation.
+The next planned work is **narrow-phase collision detection only**. Collision response remains explicitly out of scope for the first collision passes.
 
-The next engine capability should be chosen deliberately after reviewing this checkpoint. Angular acceleration, torque, moment of inertia, mass distribution, damping, and collision-driven rotation remain later concerns rather than automatic extensions of the angular-velocity pass.
+The initial collision design should support the geometry that now actually exists—Circle, Rectangle, and RegularPolygon—while preserving the distinction that a shapeless Body has no collision geometry. The design should also observe the new pressure around local/world transforms and convex polygon operations before introducing abstractions such as `Transform2D` or a generic convex-shape interface.

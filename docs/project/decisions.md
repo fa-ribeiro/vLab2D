@@ -1496,3 +1496,66 @@ This decision introduces **rotational kinematics**, not full rotational dynamics
 Those capabilities should be introduced only when their concrete physics and architecture requirements are understood.
 
 This decision evolves D-074's original checkpoint clauses that the current integrators preserved orientation unchanged and that angular velocity remained deferred. D-074's ownership, units, sign convention, and non-normalization decisions remain in force.
+
+## D-083 — RegularPolygon uses immutable local vertices, and BodyShape dispatch remains explicit and exhaustively checked
+
+**Status:** Accepted and implemented
+
+`RegularPolygon` is the third concrete Body geometry.
+
+Its intrinsic geometry is centered on the Body-local origin and is defined by:
+
+```text
+vertexCount
+    finite integer
+    >= 3
+
+radius
+    positive finite circumradius
+    local origin → each vertex
+
+vertices
+    immutable precomputed local-space values
+    vertex 0 on local +X
+    subsequent vertices counter-clockwise
+```
+
+The regular polygon owns no world position or orientation. Runtime pose remains exclusively World-owned through `BodyState`.
+
+`BodyShape` therefore remains a concrete union:
+
+```text
+Circle | Rectangle | RegularPolygon
+```
+
+The addition of a third shape creates real branching pressure in rendering, inspection, and picking, but it still does not establish a useful general `Shape` interface or class hierarchy. Current consumers ask materially different questions of geometry, and narrow-phase collision detection is expected to provide stronger evidence about which geometry operations actually deserve reuse.
+
+Visualization no longer relies on two-shape fall-through assumptions such as “non-Rectangle means Circle.” Physical geometries are dispatched explicitly. A shapeless Body is also handled explicitly as `undefined`; its circular marker remains presentation-only and is not promoted into domain geometry.
+
+Exhaustive `BodyShape` dispatch sites use a final TypeScript exhaustiveness check:
+
+```ts
+shape satisfies never;
+```
+
+or, for value-returning methods:
+
+```ts
+return shape satisfies never;
+```
+
+This preserves simple concrete dispatch while ensuring that adding a future member to `BodyShape` creates compile-time pressure to update every exhaustive consumer rather than silently treating the new shape as an existing one or as shapeless.
+
+RegularPolygon visualization uses its exact polygon boundary:
+
+- Canvas and SVG render its local vertices under the current Body orientation;
+- geometry-contour inspection follows the same domain boundary;
+- BodyPicker tests the convex polygon itself rather than its circumcircle;
+- points inside the polygon have zero geometry distance;
+- points outside use shortest distance to polygon edges;
+- the existing display-space `pickTolerance` remains interaction policy only.
+
+Hover and selection outlines for RegularPolygon are expanded by edge-normal distance. The expansion uses the regular polygon apothem relationship so a configured display-space padding moves polygon edges outward by the requested amount instead of merely increasing circumradius by that amount.
+
+This decision does not introduce arbitrary polygons, concave polygons, a generic convex-polygon interface, `Transform2D`, collision detection, or collision response. Narrow-phase collision detection is the next planned geometry consumer and should determine whether any of those smaller reusable geometry abstractions have now earned their place.
+

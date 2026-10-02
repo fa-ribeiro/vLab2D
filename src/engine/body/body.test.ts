@@ -3,6 +3,7 @@ import { assertEquals, assertStrictEquals } from "@std/assert";
 import { Body } from "./body.ts";
 import { Circle } from "../geometry/circle.ts";
 import { Rectangle } from "../geometry/rectangle.ts";
+import { RegularPolygon } from "../geometry/regular-polygon.ts";
 
 Deno.test("Body is shapeless by default", () => {
   const body = new Body();
@@ -44,4 +45,22 @@ Deno.test("Rectangle geometry can be reused by multiple Body definitions", () =>
 
   assertStrictEquals(firstBody.shape, rectangle);
   assertStrictEquals(secondBody.shape, rectangle);
+});
+
+Deno.test("Body retains supplied RegularPolygon geometry", () => {
+  const polygon = new RegularPolygon(5, 2);
+
+  const body = new Body({ shape: polygon });
+
+  assertStrictEquals(body.shape, polygon);
+});
+
+Deno.test("RegularPolygon geometry can be reused by multiple Body definitions", () => {
+  const polygon = new RegularPolygon(6, 2);
+
+  const firstBody = new Body({ shape: polygon });
+  const secondBody = new Body({ shape: polygon });
+
+  assertStrictEquals(firstBody.shape, polygon);
+  assertStrictEquals(secondBody.shape, polygon);
 });

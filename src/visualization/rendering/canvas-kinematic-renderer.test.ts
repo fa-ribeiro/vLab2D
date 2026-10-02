@@ -1,4 +1,4 @@
-import { assertEquals, assertThrows } from "@std/assert";
+import { assertAlmostEquals, assertEquals, assertThrows } from "@std/assert";
 
 import {
   Body,
@@ -7,6 +7,7 @@ import {
   type BodyState,
   Circle,
   Rectangle,
+  RegularPolygon,
   Vector2,
 } from "../../engine/mod.ts";
 import { CanvasKinematicRenderer } from "../rendering/canvas-kinematic-renderer.ts";
@@ -41,6 +42,10 @@ class RecordingCanvasContext {
 
   beginPath(): void {
     this.calls.push(["beginPath"]);
+  }
+
+  closePath(): void {
+    this.calls.push(["closePath"]);
   }
 
   moveTo(x: number, y: number): void {
@@ -487,3 +492,65 @@ Deno.test("CanvasKinematicRenderer applies Rectangle orientation to interaction 
     ["strokeRect", -28, -18, 56, 36],
   ]);
 });
+
+Deno.test(
+  "CanvasKinematicRenderer renders RegularPolygon local vertices and orientation",
+  () => {
+    const context = new RecordingCanvasContext();
+    const transform = new ViewportTransform(200, 100, 10);
+    const renderer = new CanvasKinematicRenderer(context, transform, 3);
+
+    renderer.render([
+      createBodySnapshot(
+        7,
+        new Vector2(2, 1),
+        new Vector2(0, 0),
+        new Body({ shape: new RegularPolygon(4, 2) }),
+        Math.PI / 2,
+      ),
+    ]);
+
+    const translateCalls = context.calls.filter(([name]) => name === "translate");
+    const rotateCalls = context.calls.filter(([name]) => name === "rotate");
+    const moveToCalls = context.calls.filter(([name]) => name === "moveTo");
+    const closePathCalls = context.calls.filter(([name]) => name === "closePath");
+
+    assertEquals(translateCalls, [["translate", 120, 40]]);
+    assertEquals(rotateCalls, [["rotate", -Math.PI / 2]]);
+    assertEquals(moveToCalls[moveToCalls.length - 1], ["moveTo", 20, 0]);
+    assertEquals(closePathCalls, [["closePath"]]);
+  },
+);
+
+Deno.test(
+  "CanvasKinematicRenderer offsets RegularPolygon interaction outlines by edge distance",
+  () => {
+    const context = new RecordingCanvasContext();
+    const transform = new ViewportTransform(200, 100, 10);
+    const renderer = new CanvasKinematicRenderer(context, transform, 3);
+    const polygon = new RegularPolygon(4, 2);
+
+    renderer.render(
+      [
+        createBodySnapshot(
+          7,
+          new Vector2(0, 0),
+          new Vector2(0, 0),
+          new Body({ shape: polygon }),
+        ),
+      ],
+      7,
+      7,
+    );
+
+    const moveToCalls = context.calls.filter(([name]) => name === "moveTo");
+    const polygonMoveToCalls = moveToCalls.slice(-3);
+
+    const baseRadius = 20;
+    const apothemFactor = Math.cos(Math.PI / polygon.vertexCount);
+
+    assertEquals(polygonMoveToCalls[0], ["moveTo", baseRadius, 0]);
+    assertAlmostEquals(polygonMoveToCalls[1][1] as number, baseRadius + 4 / apothemFactor);
+    assertAlmostEquals(polygonMoveToCalls[2][1] as number, baseRadius + 8 / apothemFactor);
+  },
+);

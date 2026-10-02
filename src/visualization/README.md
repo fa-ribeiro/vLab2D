@@ -63,6 +63,7 @@ It knows nothing about Canvas, SVG, DOM events, bodies, snapshots, or physics.
 - shapeless presentation markers;
 - Circle geometry;
 - Rectangle geometry;
+- RegularPolygon geometry;
 - hover feedback;
 - selection feedback.
 
@@ -73,6 +74,8 @@ Normal rendering answers:
 > What should the observed scene normally look like?
 
 It is distinct from both interaction hit testing and optional diagnostic overlays.
+
+Concrete `BodyShape` dispatch remains explicit in Visualization. Circle, Rectangle, and RegularPolygon are handled as distinct physical geometries; `undefined` is handled explicitly as a shapeless presentation case. Exhaustive sites end with `shape satisfies never` (or `return shape satisfies never`), so adding a future shape fails compilation until every exhaustive consumer is updated.
 
 ### Interaction
 
@@ -91,6 +94,10 @@ Circle
 
 Rectangle
     world width/height × pixelsPerUnit
+    with current BodyState.orientation
+
+RegularPolygon
+    exact local polygon boundary × pixelsPerUnit
     with current BodyState.orientation
 ```
 
@@ -150,7 +157,7 @@ Current indicators are:
 
 | Indicator        | Meaning                                                | Units / behavior                                       |
 | ---------------- | ------------------------------------------------------ | ------------------------------------------------------ |
-| geometry contour | intrinsic Circle/Rectangle boundary                    | follows world geometry and viewport scale              |
+| geometry contour | intrinsic Circle/Rectangle/RegularPolygon boundary     | follows world geometry and viewport scale              |
 | body origin      | `BodyState.position`, i.e. local origin in world space | configurable fixed display-space marker                |
 | orientation      | local `+X` / `0°` direction from body origin           | configurable fixed display-space line                  |
 | velocity         | current world-space velocity from body origin          | projected world displacement + fixed display arrowhead |
@@ -165,7 +172,7 @@ so shaft length scales with speed and viewport scale. Its arrowhead remains a co
 
 A shapeless Body has no domain geometry, so it has no geometry contour. Its body origin and velocity remain meaningful. Orientation is stored in `BodyState`, but the current inspection renderer suppresses the orientation glyph for shapeless Bodies because no concrete geometry provides a useful local frame to inspect.
 
-The term **body origin** is deliberate. With today's centered Circle and Rectangle definitions it coincides with their geometric center, but it must not be redefined as a future centroid or center of mass.
+The term **body origin** is deliberate. With today's centered Circle, Rectangle, and RegularPolygon definitions it coincides with their geometric center, but it must not be redefined as a future centroid or center of mass.
 
 The orientation indicator remains a plain line while velocity uses an arrow, keeping the two diagnostic meanings visually distinct.
 
@@ -185,7 +192,7 @@ Ownership remains:
 ```text
 definition
     shared immutable Body definition
-    optional Circle or Rectangle geometry
+    optional Circle, Rectangle, or RegularPolygon geometry
 
 state
     detached copy of World-owned runtime state
@@ -204,7 +211,8 @@ The current Body definition may be shapeless or carry one concrete shape:
 Body
 ├── no shape
 ├── Circle(radius)
-└── Rectangle(width, height)
+├── Rectangle(width, height)
+└── RegularPolygon(vertexCount, radius)
 ```
 
 The distinction is important:
@@ -375,7 +383,9 @@ Current implementation evidence still does not justify:
 - a collision system;
 - a materials/appearance framework.
 
-Canvas normal rendering and Canvas inspection both use native local-frame transforms naturally. Rectangle picking remains the main project-owned explicit inverse-rotation calculation, so reusable body-transform mathematics are still not sufficiently repeated to determine the right abstraction.
+Canvas normal rendering and Canvas inspection both use native local-frame transforms naturally. Rectangle and RegularPolygon picking now both use project-owned inverse body rotation, so reusable local/world transform pressure is real.
+
+Narrow-phase collision detection is the next planned geometry consumer. The project intentionally waits for that concrete physics use before deciding whether the right extraction is `Transform2D`, `Vector2.rotate()`, free geometry helpers, or another smaller abstraction.
 
 ## Architecture evolution rule
 

@@ -1,4 +1,4 @@
-import { type BodySnapshot, Rectangle } from "../../engine/mod.ts";
+import { type BodySnapshot, Circle, Rectangle, RegularPolygon } from "../../engine/mod.ts";
 import { ViewportTransform } from "../viewport/viewport-transform.ts";
 
 const ORIGIN_MARKER_HALF_SIZE = 5;
@@ -8,24 +8,6 @@ const AXIS_OPACITY = 0.45;
 /**
  * Renders detached body snapshots and spatial reference information into an
  * SVG document.
- *
- * The renderer operates only on detached engine observations. It does not own,
- * advance, or mutate simulation state.
- *
- * Mathematical world coordinates are mapped to SVG display coordinates with
- * the world origin at the center of the viewport:
- *
- * - positive world X maps right;
- * - positive world Y maps up;
- * - positive SVG Y maps down.
- *
- * Positive body orientation is counter-clockwise in world space. SVG display
- * coordinates point downward on Y, so the renderer negates the world angle
- * when expressing the equivalent display-space rotation.
- *
- * A low-opacity grid marks integer world coordinates. The world X and Y axes
- * span the visible viewport, and the world origin is rendered as a small
- * crosshair at its mapped display position.
  */
 export class SvgKinematicRenderer {
   readonly #transform: ViewportTransform;
@@ -36,15 +18,14 @@ export class SvgKinematicRenderer {
    *
    * @param width The SVG viewport width in display units.
    * @param height The SVG viewport height in display units.
-   * @param pixelsPerUnit The number of display units representing one world
-   * unit.
+   * @param pixelsPerUnit The positive finite number of display units
+   * representing one world unit.
    * @param bodyRadius The fixed display-space radius used for shapeless body
    * markers.
    * @throws {RangeError} If any supplied value is not positive and finite.
    */
   public constructor(width: number, height: number, pixelsPerUnit: number, bodyRadius = 4) {
     const transform = new ViewportTransform(width, height, pixelsPerUnit);
-
     assertPositiveFinite(bodyRadius, "Body radius");
 
     this.#transform = transform;
@@ -64,9 +45,6 @@ export class SvgKinematicRenderer {
 
   /**
    * Changes the viewport display scale.
-   *
-   * Increasing the scale zooms in while preserving the current
-   * world-space viewport center.
    *
    * @param pixelsPerUnit The positive finite number of SVG display units
    * representing one world unit.
@@ -103,35 +81,75 @@ export class SvgKinematicRenderer {
   #renderBody(snapshot: BodySnapshot): string {
     const x = this.#transform.worldToDisplayX(snapshot.state.position.x);
     const y = this.#transform.worldToDisplayY(snapshot.state.position.y);
-
     const shape = snapshot.definition.shape;
 
-    if (shape instanceof Rectangle) {
-      const width = shape.width * this.#transform.pixelsPerUnit;
-      const height = shape.height * this.#transform.pixelsPerUnit;
-      const rotation = this.#bodyRotationTransform(snapshot.state.orientation, x, y);
-
-      return `  <rect data-body-id="${snapshot.id}" x="${x - width / 2}" y="${
-        y - height / 2
-      }" width="${width}" height="${height}" transform="${rotation}" />`;
+    if (shape instanceof Circle) {
+      return this.#renderCircleBody(snapshot, shape.radius, x, y);
     }
 
-    const radius = shape === undefined
-      ? this.#bodyRadius
-      : shape.radius * this.#transform.pixelsPerUnit;
+    if (shape instanceof Rectangle) {
+      return this.#renderRectangleBody(snapshot, shape.width, shape.height, x, y);
+    }
+
+    if (shape instanceof RegularPolygon) {
+      return this.#renderRegularPolygonBody(snapshot, shape, x, y);
+    }
 
     if (shape === undefined) {
-      return `  <circle data-body-id="${snapshot.id}" cx="${x}" cy="${y}" r="${radius}" />`;
+      return this.#renderShapelessBody(snapshot, x, y);
     }
 
+    return shape satisfies never;
+  }
+
+  #renderShapelessBody(snapshot: BodySnapshot, x: number, y: number): string {
+    return `  <circle data-body-id="${snapshot.id}" cx="${x}" cy="${y}" r="${this.#bodyRadius}" />`;
+  }
+
+  #renderCircleBody(snapshot: BodySnapshot, worldRadius: number, x: number, y: number): string {
+    const radius = worldRadius * this.#transform.pixelsPerUnit;
     const rotation = this.#bodyRotationTransform(snapshot.state.orientation, x, y);
 
     return `  <circle data-body-id="${snapshot.id}" cx="${x}" cy="${y}" r="${radius}" transform="${rotation}" />`;
   }
 
+  #renderRectangleBody(
+    snapshot: BodySnapshot,
+    worldWidth: number,
+    worldHeight: number,
+    x: number,
+    y: number,
+  ): string {
+    const width = worldWidth * this.#transform.pixelsPerUnit;
+    const height = worldHeight * this.#transform.pixelsPerUnit;
+    const rotation = this.#bodyRotationTransform(snapshot.state.orientation, x, y);
+
+    return `  <rect data-body-id="${snapshot.id}" x="${x - width / 2}" y="${
+      y - height / 2
+    }" width="${width}" height="${height}" transform="${rotation}" />`;
+  }
+
+  #renderRegularPolygonBody(
+    snapshot: BodySnapshot,
+    shape: RegularPolygon,
+    x: number,
+    y: number,
+  ): string {
+    const points = shape.vertices
+      .map((vertex) => {
+        const pointX = x + vertex.x * this.#transform.pixelsPerUnit;
+        const pointY = y - vertex.y * this.#transform.pixelsPerUnit;
+        return `${pointX},${pointY}`;
+      })
+      .join(" ");
+
+    const rotation = this.#bodyRotationTransform(snapshot.state.orientation, x, y);
+
+    return `  <polygon data-body-id="${snapshot.id}" points="${points}" transform="${rotation}" />`;
+  }
+
   #bodyRotationTransform(orientation: number, x: number, y: number): string {
     const displayAngleDegrees = -(orientation * 180) / Math.PI;
-
     return `rotate(${displayAngleDegrees} ${x} ${y})`;
   }
 
@@ -163,30 +181,20 @@ export class SvgKinematicRenderer {
 
   #renderGrid(): string {
     const lines: string[] = [];
-
     const minWorldX = Math.ceil(this.#transform.minWorldX);
     const maxWorldX = Math.floor(this.#transform.maxWorldX);
-
     const minWorldY = Math.ceil(this.#transform.minWorldY);
     const maxWorldY = Math.floor(this.#transform.maxWorldY);
 
     for (let worldX = minWorldX; worldX <= maxWorldX; worldX++) {
-      if (worldX === 0) {
-        continue;
-      }
-
+      if (worldX === 0) continue;
       const x = this.#transform.worldToDisplayX(worldX);
-
       lines.push(`    <line x1="${x}" y1="0" x2="${x}" y2="${this.#transform.height}" />`);
     }
 
     for (let worldY = minWorldY; worldY <= maxWorldY; worldY++) {
-      if (worldY === 0) {
-        continue;
-      }
-
+      if (worldY === 0) continue;
       const y = this.#transform.worldToDisplayY(worldY);
-
       lines.push(`    <line x1="0" y1="${y}" x2="${this.#transform.width}" y2="${y}" />`);
     }
 

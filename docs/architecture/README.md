@@ -192,12 +192,13 @@ The current definition can be shapeless or carry one concrete geometry value:
 new Body();
 new Body({ shape: new Circle(0.5) });
 new Body({ shape: new Rectangle(2, 1) });
+new Body({ shape: new RegularPolygon(5, 1) });
 ```
 
 The current type is a concrete union rather than a class hierarchy:
 
 ```text
-BodyShape = Circle | Rectangle
+BodyShape = Circle | Rectangle | RegularPolygon
 ```
 
 No generic `Shape` interface or abstract base class is required yet.
@@ -213,7 +214,20 @@ x ∈ [-width / 2, +width / 2]
 y ∈ [-height / 2, +height / 2]
 ```
 
-Neither geometry object owns world position, orientation, or angular velocity.
+`RegularPolygon` owns an integer vertex count of at least `3` and a positive finite circumradius. It precomputes immutable local-space vertices around `(0, 0)`:
+
+```text
+vertex 0
+    lies on local +X
+
+remaining vertices
+    equally spaced
+    counter-clockwise in mathematical local coordinates
+```
+
+The circumradius is the distance from the local origin to every vertex.
+
+None of these geometry objects owns world position, orientation, or angular velocity.
 
 A shapeless Body remains valid and has no domain spatial extent. Visualization may still give it a fixed presentation marker so it can be seen and interacted with.
 
@@ -823,6 +837,7 @@ Current picking geometry is:
 | shapeless | fixed circular display marker                               |
 | Circle    | world radius scaled by current viewport                     |
 | Rectangle | world width/height scaled by viewport + current orientation |
+| RegularPolygon | exact polygon boundary scaled by viewport + current orientation |
 
 The picker adds a non-negative `pickTolerance` measured in display units. This is interaction policy rather than domain geometry: a thin Rectangle or small Circle can remain easy to acquire when zoomed out without changing its physical/world dimensions.
 
@@ -973,9 +988,9 @@ local direction → world direction
 world direction → local direction
 ```
 
-Rectangle picking is the first such coordinate-frame calculation, but one concrete use is not yet enough to determine the best reusable abstraction.
+Rectangle and RegularPolygon picking now both require explicit conversion into a body-local display frame. This is real repeated pressure, but narrow-phase collision detection is about to become another geometry consumer and will provide better evidence about the right reusable abstraction.
 
-The next passes should observe whether that math repeats before extracting it.
+The project therefore still defers `Transform2D`, `Vector2.rotate()`, or another local/world helper until collision requirements show which operations genuinely repeat across physics and visualization.
 
 ---
 
@@ -1002,7 +1017,8 @@ Examples already visible in the project:
 - `ViewportTransform` was initially renderer-owned because no other consumer needed it;
 - `BodyPicker` later became a second Canvas viewport consumer, so the Canvas path evolved to explicit shared composition;
 - Circle alone did not justify a generic Shape abstraction;
-- Rectangle became the second concrete geometry, yet a simple concrete union still expresses the current behavior without requiring inheritance;
+- Rectangle became the second concrete geometry, and RegularPolygon is now the third; the concrete `BodyShape` union plus exhaustive dispatch still expresses current behavior without requiring inheritance;
+- Visualization dispatch sites use explicit concrete cases plus `satisfies never`, so adding a future `BodyShape` produces compile-time pressure to update every exhaustive consumer;
 - native Canvas/SVG transforms currently handle normal body orientation, so `Transform2D` remains deferred.
 
 Architecture is therefore allowed to change when evidence changes. The aim is disciplined evolution, not early prediction.
@@ -1077,7 +1093,7 @@ The current Phase 2 sequence has established:
 
 ```text
 Body geometry
-    Circle + Rectangle
+    Circle + Rectangle + RegularPolygon
 
 World-owned motion state
     position + velocity + orientation + angularVelocity
@@ -1110,6 +1126,8 @@ The first rotational-kinematics pass is now implemented.
 
 `BodyState` carries angular velocity, `BodyInitialConditions` can supply it, and both current kinematic integrators advance orientation from constant angular velocity. World validation, atomic stepping, and detached observation semantics extend to the new runtime value.
 
-The Canvas example now gives Rectangle instances opposite angular velocities, making the evolving orientation immediately visible through normal geometry rendering and the existing orientation inspection line.
+The Canvas example now gives Rectangle and RegularPolygon instances visible rotational motion, making World-owned orientation and angular velocity directly observable.
 
-Angular acceleration, torque, moment of inertia, mass distribution, damping, and collision-driven rotation remain future engine capabilities. They should be designed from their own concrete requirements rather than being inferred automatically from the constant-angular-velocity implementation.
+RegularPolygon also establishes a second project-owned local-coordinate geometry consumer through exact polygon picking. The next planned architecture discussion is narrow-phase collision detection. That work should determine whether Rectangle and RegularPolygon now earn shared convex-polygon operations, local/world transform helpers, or another smaller abstraction.
+
+Collision response, angular acceleration, torque, moment of inertia, mass distribution, damping, and collision-driven rotation remain future capabilities.

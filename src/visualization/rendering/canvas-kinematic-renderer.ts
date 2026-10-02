@@ -1,4 +1,10 @@
-import { type BodyId, type BodySnapshot, Rectangle } from "../../engine/mod.ts";
+import {
+  type BodyId,
+  type BodySnapshot,
+  Circle,
+  Rectangle,
+  RegularPolygon,
+} from "../../engine/mod.ts";
 import { ViewportTransform } from "../viewport/viewport-transform.ts";
 
 const ORIGIN_MARKER_HALF_SIZE = 5;
@@ -16,6 +22,8 @@ interface CanvasDrawingContext {
   clearRect(x: number, y: number, width: number, height: number): void;
 
   beginPath(): void;
+
+  closePath(): void;
 
   moveTo(x: number, y: number): void;
 
@@ -58,6 +66,9 @@ interface CanvasDrawingContext {
  * Shape geometry is rendered around each body's local origin. Positive body
  * orientation is counter-clockwise in world space; the renderer negates that
  * angle when applying Canvas rotation because Canvas display Y points down.
+ *
+ * A shapeless Body is not treated as Circle geometry. It receives only the
+ * fixed circular presentation marker configured for this renderer.
  */
 export class CanvasKinematicRenderer {
   readonly #context: CanvasDrawingContext;
@@ -109,89 +120,196 @@ export class CanvasKinematicRenderer {
   #renderBody(snapshot: BodySnapshot, hovered: boolean, selected: boolean): void {
     const x = this.#transform.worldToDisplayX(snapshot.state.position.x);
     const y = this.#transform.worldToDisplayY(snapshot.state.position.y);
-
     const shape = snapshot.definition.shape;
 
-    if (shape instanceof Rectangle) {
-      const width = shape.width * this.#transform.pixelsPerUnit;
-      const height = shape.height * this.#transform.pixelsPerUnit;
-
-      this.#context.save();
-      this.#context.translate(x, y);
-      this.#context.rotate(-snapshot.state.orientation);
-      this.#context.fillRect(-width / 2, -height / 2, width, height);
-
-      if (hovered) {
-        this.#context.save();
-        this.#context.globalAlpha = HOVER_RING_OPACITY;
-
-        this.#context.strokeRect(
-          -width / 2 - HOVER_RING_PADDING,
-          -height / 2 - HOVER_RING_PADDING,
-          width + HOVER_RING_PADDING * 2,
-          height + HOVER_RING_PADDING * 2,
-        );
-
-        this.#context.restore();
-      }
-
-      if (selected) {
-        this.#context.save();
-        this.#context.globalAlpha = SELECTION_RING_OPACITY;
-
-        this.#context.strokeRect(
-          -width / 2 - SELECTION_RING_PADDING,
-          -height / 2 - SELECTION_RING_PADDING,
-          width + SELECTION_RING_PADDING * 2,
-          height + SELECTION_RING_PADDING * 2,
-        );
-
-        this.#context.restore();
-      }
-
-      this.#context.restore();
+    if (shape instanceof Circle) {
+      this.#renderCircleBody(snapshot, shape.radius, x, y, hovered, selected);
       return;
     }
 
-    const radius = shape === undefined
-      ? this.#shapelessBodyRadius
-      : shape.radius * this.#transform.pixelsPerUnit;
+    if (shape instanceof Rectangle) {
+      this.#renderRectangleBody(snapshot, shape.width, shape.height, x, y, hovered, selected);
+      return;
+    }
+
+    if (shape instanceof RegularPolygon) {
+      this.#renderRegularPolygonBody(snapshot, shape, x, y, hovered, selected);
+      return;
+    }
 
     if (shape === undefined) {
-      this.#context.beginPath();
-      this.#context.arc(x, y, radius, 0, Math.PI * 2);
-      this.#context.fill();
-    } else {
-      this.#context.save();
-      this.#context.translate(x, y);
-      this.#context.rotate(-snapshot.state.orientation);
-      this.#context.beginPath();
-      this.#context.arc(0, 0, radius, 0, Math.PI * 2);
-      this.#context.fill();
-      this.#context.restore();
+      this.#renderShapelessBody(x, y, hovered, selected);
+      return;
     }
+
+    shape satisfies never;
+  }
+
+  #renderShapelessBody(x: number, y: number, hovered: boolean, selected: boolean): void {
+    this.#context.beginPath();
+    this.#context.arc(x, y, this.#shapelessBodyRadius, 0, Math.PI * 2);
+    this.#context.fill();
+
+    this.#renderCircularInteraction(x, y, this.#shapelessBodyRadius, hovered, selected);
+  }
+
+  #renderCircleBody(
+    snapshot: BodySnapshot,
+    worldRadius: number,
+    x: number,
+    y: number,
+    hovered: boolean,
+    selected: boolean,
+  ): void {
+    const radius = worldRadius * this.#transform.pixelsPerUnit;
+
+    this.#context.save();
+    this.#context.translate(x, y);
+    this.#context.rotate(-snapshot.state.orientation);
+    this.#context.beginPath();
+    this.#context.arc(0, 0, radius, 0, Math.PI * 2);
+    this.#context.fill();
+    this.#context.restore();
+
+    this.#renderCircularInteraction(x, y, radius, hovered, selected);
+  }
+
+  #renderRectangleBody(
+    snapshot: BodySnapshot,
+    worldWidth: number,
+    worldHeight: number,
+    x: number,
+    y: number,
+    hovered: boolean,
+    selected: boolean,
+  ): void {
+    const width = worldWidth * this.#transform.pixelsPerUnit;
+    const height = worldHeight * this.#transform.pixelsPerUnit;
+
+    this.#context.save();
+    this.#context.translate(x, y);
+    this.#context.rotate(-snapshot.state.orientation);
+    this.#context.fillRect(-width / 2, -height / 2, width, height);
 
     if (hovered) {
       this.#context.save();
       this.#context.globalAlpha = HOVER_RING_OPACITY;
-
-      this.#context.beginPath();
-      this.#context.arc(x, y, radius + HOVER_RING_PADDING, 0, Math.PI * 2);
-      this.#context.stroke();
-
+      this.#context.strokeRect(
+        -width / 2 - HOVER_RING_PADDING,
+        -height / 2 - HOVER_RING_PADDING,
+        width + HOVER_RING_PADDING * 2,
+        height + HOVER_RING_PADDING * 2,
+      );
       this.#context.restore();
     }
 
     if (selected) {
       this.#context.save();
       this.#context.globalAlpha = SELECTION_RING_OPACITY;
+      this.#context.strokeRect(
+        -width / 2 - SELECTION_RING_PADDING,
+        -height / 2 - SELECTION_RING_PADDING,
+        width + SELECTION_RING_PADDING * 2,
+        height + SELECTION_RING_PADDING * 2,
+      );
+      this.#context.restore();
+    }
 
+    this.#context.restore();
+  }
+
+  #renderRegularPolygonBody(
+    snapshot: BodySnapshot,
+    shape: RegularPolygon,
+    x: number,
+    y: number,
+    hovered: boolean,
+    selected: boolean,
+  ): void {
+    const radius = shape.radius * this.#transform.pixelsPerUnit;
+
+    this.#context.save();
+    this.#context.translate(x, y);
+    this.#context.rotate(-snapshot.state.orientation);
+
+    this.#traceRegularPolygon(shape, radius);
+    this.#context.fill();
+
+    if (hovered) {
+      this.#context.save();
+      this.#context.globalAlpha = HOVER_RING_OPACITY;
+      this.#traceRegularPolygon(
+        shape,
+        this.#expandedRegularPolygonRadius(shape, radius, HOVER_RING_PADDING),
+      );
+      this.#context.stroke();
+      this.#context.restore();
+    }
+
+    if (selected) {
+      this.#context.save();
+      this.#context.globalAlpha = SELECTION_RING_OPACITY;
+      this.#traceRegularPolygon(
+        shape,
+        this.#expandedRegularPolygonRadius(shape, radius, SELECTION_RING_PADDING),
+      );
+      this.#context.stroke();
+      this.#context.restore();
+    }
+
+    this.#context.restore();
+  }
+
+  #renderCircularInteraction(
+    x: number,
+    y: number,
+    radius: number,
+    hovered: boolean,
+    selected: boolean,
+  ): void {
+    if (hovered) {
+      this.#context.save();
+      this.#context.globalAlpha = HOVER_RING_OPACITY;
+      this.#context.beginPath();
+      this.#context.arc(x, y, radius + HOVER_RING_PADDING, 0, Math.PI * 2);
+      this.#context.stroke();
+      this.#context.restore();
+    }
+
+    if (selected) {
+      this.#context.save();
+      this.#context.globalAlpha = SELECTION_RING_OPACITY;
       this.#context.beginPath();
       this.#context.arc(x, y, radius + SELECTION_RING_PADDING, 0, Math.PI * 2);
       this.#context.stroke();
-
       this.#context.restore();
     }
+  }
+
+  #traceRegularPolygon(shape: RegularPolygon, displayRadius: number): void {
+    const scale = displayRadius / shape.radius;
+    const first = shape.vertices[0];
+
+    this.#context.beginPath();
+    this.#context.moveTo(first.x * scale, -first.y * scale);
+
+    for (let index = 1; index < shape.vertices.length; index++) {
+      const vertex = shape.vertices[index];
+      this.#context.lineTo(vertex.x * scale, -vertex.y * scale);
+    }
+
+    this.#context.closePath();
+  }
+
+  #expandedRegularPolygonRadius(
+    shape: RegularPolygon,
+    displayRadius: number,
+    edgePadding: number,
+  ): number {
+    // A regular polygon's apothem is R * cos(pi / n). Increasing the
+    // circumradius by padding / cos(pi / n) therefore moves every edge outward
+    // by exactly the requested display-space padding.
+    return displayRadius + edgePadding / Math.cos(Math.PI / shape.vertexCount);
   }
 
   #renderOrigin(): void {

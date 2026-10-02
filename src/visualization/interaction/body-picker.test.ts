@@ -7,6 +7,7 @@ import {
   type BodyState,
   Circle,
   Rectangle,
+  RegularPolygon,
   Vector2,
 } from "../../engine/mod.ts";
 import { BodyPicker } from "./body-picker.ts";
@@ -246,4 +247,57 @@ Deno.test("BodyPicker Rectangle picking follows shared viewport scale", () => {
   transform.setPixelsPerUnit(20);
 
   assertEquals(picker.findBodyAtDisplayPoint(snapshots, 115, 50), 7);
+});
+
+Deno.test("BodyPicker uses RegularPolygon geometry rather than its circumcircle", () => {
+  const transform = new ViewportTransform(200, 100, 10);
+  const picker = new BodyPicker(transform, 6);
+
+  const snapshots: readonly BodySnapshot[] = [
+    createBodySnapshot(
+      7,
+      new Vector2(0, 0),
+      new Vector2(0, 0),
+      new Body({ shape: new RegularPolygon(4, 2) }),
+    ),
+  ];
+
+  assertEquals(picker.findBodyAtDisplayPoint(snapshots, 110, 55), 7);
+  assertEquals(picker.findBodyAtDisplayPoint(snapshots, 114, 64), undefined);
+});
+
+Deno.test("BodyPicker follows RegularPolygon orientation", () => {
+  const transform = new ViewportTransform(200, 100, 10);
+  const picker = new BodyPicker(transform, 6);
+
+  const snapshots: readonly BodySnapshot[] = [
+    createBodySnapshot(
+      7,
+      new Vector2(0, 0),
+      new Vector2(0, 0),
+      new Body({ shape: new RegularPolygon(4, 2) }),
+      Math.PI / 4,
+    ),
+  ];
+
+  assertEquals(picker.findBodyAtDisplayPoint(snapshots, 113, 63), 7);
+});
+
+Deno.test("BodyPicker applies display-space pick tolerance around RegularPolygon edges", () => {
+  const transform = new ViewportTransform(200, 100, 10);
+
+  const snapshots: readonly BodySnapshot[] = [
+    createBodySnapshot(
+      7,
+      new Vector2(0, 0),
+      new Vector2(0, 0),
+      new Body({ shape: new RegularPolygon(4, 2) }),
+    ),
+  ];
+
+  assertEquals(
+    new BodyPicker(transform, 6, 1).findBodyAtDisplayPoint(snapshots, 116, 56),
+    undefined,
+  );
+  assertEquals(new BodyPicker(transform, 6, 2).findBodyAtDisplayPoint(snapshots, 116, 56), 7);
 });
