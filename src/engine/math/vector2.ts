@@ -51,6 +51,13 @@ export class Vector2 {
   }
 
   /**
+   * Returns the dot product of this vector and another vector.
+   */
+  public dot(other: Vector2): number {
+    return this.x * other.x + this.y * other.y;
+  }
+
+  /**
    * Returns this vector rotated around the origin by the given angle.
    *
    * Positive angles rotate counter-clockwise in mathematical coordinates.

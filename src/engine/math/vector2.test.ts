@@ -78,6 +78,13 @@ Deno.test("Vector2.scale does not modify the original vector", () => {
   assertVector(vector, 3, -4);
 });
 
+Deno.test("Vector2.dot returns the scalar dot product", () => {
+  const left = new Vector2(3, 4);
+  const right = new Vector2(2, -1);
+
+  assertEquals(left.dot(right), 2);
+});
+
 Deno.test("Vector2.rotate uses positive counter-clockwise angles", () => {
   const result = new Vector2(2, 0).rotate(Math.PI / 2);
 
