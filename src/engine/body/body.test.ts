@@ -74,6 +74,47 @@ Deno.test("Body rejects non-finite inverse mass", () => {
   );
 });
 
+Deno.test("Body uses zero restitution by default", () => {
+  const body = new Body();
+
+  assertEquals(body.restitution, 0);
+});
+
+Deno.test("Body retains supplied restitution", () => {
+  const body = new Body({ restitution: 0.75 });
+
+  assertEquals(body.restitution, 0.75);
+});
+
+Deno.test("Body accepts the restitution boundaries", () => {
+  assertEquals(new Body({ restitution: 0 }).restitution, 0);
+  assertEquals(new Body({ restitution: 1 }).restitution, 1);
+});
+
+Deno.test("Body rejects restitution below zero", () => {
+  assertThrows(
+    () => new Body({ restitution: -0.1 }),
+    RangeError,
+    "Body restitution must be between 0 and 1.",
+  );
+});
+
+Deno.test("Body rejects restitution above one", () => {
+  assertThrows(
+    () => new Body({ restitution: 1.1 }),
+    RangeError,
+    "Body restitution must be between 0 and 1.",
+  );
+});
+
+Deno.test("Body rejects non-finite restitution", () => {
+  assertThrows(
+    () => new Body({ restitution: Number.POSITIVE_INFINITY }),
+    RangeError,
+    "Body restitution must be finite.",
+  );
+});
+
 Deno.test("Body retains supplied Circle geometry", () => {
   const circle = new Circle(2);
 

@@ -86,6 +86,49 @@ Deno.test("computeCollisionNormalImpulse supports static A against dynamic B", (
   assertEquals(response.bodyBVelocityChange, new Vector2(3, 0));
 });
 
+Deno.test("computeCollisionNormalImpulse applies partial restitution", () => {
+  const collision: Collision = {
+    normal: new Vector2(1, 0),
+    penetrationDepth: 1,
+  };
+
+  const response = computeCollisionNormalImpulse(
+    collision,
+    new Vector2(2, 1),
+    new Vector2(-2, -3),
+    1,
+    1,
+    0.5,
+  );
+
+  assertEquals(response.impulse, new Vector2(3, 0));
+  assertEquals(response.bodyAVelocityChange, new Vector2(-3, 0));
+  assertEquals(response.bodyBVelocityChange, new Vector2(3, 0));
+});
+
+Deno.test(
+  "computeCollisionNormalImpulse fully reflects normal speed at restitution one",
+  () => {
+    const collision: Collision = {
+      normal: new Vector2(1, 0),
+      penetrationDepth: 1,
+    };
+
+    const response = computeCollisionNormalImpulse(
+      collision,
+      new Vector2(2, 5),
+      new Vector2(-2, -7),
+      1,
+      1,
+      1,
+    );
+
+    assertEquals(response.impulse, new Vector2(4, 0));
+    assertEquals(response.bodyAVelocityChange, new Vector2(-4, 0));
+    assertEquals(response.bodyBVelocityChange, new Vector2(4, 0));
+  },
+);
+
 Deno.test("computeCollisionNormalImpulse leaves separating Bodies unchanged", () => {
   const collision: Collision = {
     normal: new Vector2(1, 0),
@@ -96,6 +139,7 @@ Deno.test("computeCollisionNormalImpulse leaves separating Bodies unchanged", ()
     collision,
     new Vector2(-1, 0),
     new Vector2(1, 0),
+    1,
     1,
     1,
   );
@@ -115,6 +159,7 @@ Deno.test("computeCollisionNormalImpulse leaves tangential relative velocity unc
     collision,
     new Vector2(0, 2),
     new Vector2(0, -3),
+    1,
     1,
     1,
   );
@@ -138,6 +183,7 @@ Deno.test(
       new Vector2(0, 0),
       0,
       0,
+      1,
     );
 
     assertEquals(response.impulse, new Vector2(0, 0));
@@ -176,5 +222,68 @@ Deno.test("computeCollisionNormalImpulse rejects non-finite inverse mass", () =>
       ),
     RangeError,
     "Body B inverse mass must be finite.",
+  );
+});
+
+Deno.test("computeCollisionNormalImpulse rejects restitution below zero", () => {
+  const collision: Collision = {
+    normal: new Vector2(1, 0),
+    penetrationDepth: 1,
+  };
+
+  assertThrows(
+    () =>
+      computeCollisionNormalImpulse(
+        collision,
+        new Vector2(1, 0),
+        new Vector2(-1, 0),
+        1,
+        1,
+        -0.1,
+      ),
+    RangeError,
+    "Restitution must be between 0 and 1.",
+  );
+});
+
+Deno.test("computeCollisionNormalImpulse rejects restitution above one", () => {
+  const collision: Collision = {
+    normal: new Vector2(1, 0),
+    penetrationDepth: 1,
+  };
+
+  assertThrows(
+    () =>
+      computeCollisionNormalImpulse(
+        collision,
+        new Vector2(1, 0),
+        new Vector2(-1, 0),
+        1,
+        1,
+        1.1,
+      ),
+    RangeError,
+    "Restitution must be between 0 and 1.",
+  );
+});
+
+Deno.test("computeCollisionNormalImpulse rejects non-finite restitution", () => {
+  const collision: Collision = {
+    normal: new Vector2(1, 0),
+    penetrationDepth: 1,
+  };
+
+  assertThrows(
+    () =>
+      computeCollisionNormalImpulse(
+        collision,
+        new Vector2(1, 0),
+        new Vector2(-1, 0),
+        1,
+        1,
+        Number.POSITIVE_INFINITY,
+      ),
+    RangeError,
+    "Restitution must be finite.",
   );
 });

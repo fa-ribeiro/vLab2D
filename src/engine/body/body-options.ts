@@ -34,4 +34,16 @@ export interface BodyOptions {
    * while also having zero inverse mass.
    */
   readonly inverseMass?: number;
+
+  /**
+   * Coefficient of restitution used by normal collision impulse response.
+   *
+   * `0` means no bounce and `1` means the relative closing speed along the
+   * collision normal is fully reflected. Values between them produce partial
+   * bounce. Defaults to `0`.
+   *
+   * When two Bodies collide, World combines their restitution values before
+   * solving the normal impulse.
+   */
+  readonly restitution?: number;
 }

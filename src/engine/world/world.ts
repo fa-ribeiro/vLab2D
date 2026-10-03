@@ -32,7 +32,7 @@ interface WorldBody {
  * Dynamic body instances share the same world gravity and numerical
  * integration strategy. Static body instances remain fixed. Shaped bodies
  * participate in inverse-mass-weighted positional collision response and
- * zero-restitution normal impulse response after dynamic integration.
+ * restitution-aware normal impulse response after dynamic integration.
  */
 export class World {
   #nextBodyId: BodyId = 1;
@@ -182,7 +182,7 @@ export class World {
    * 2. **Collision detection** — observe the complete integrated candidate
    *    configuration and find colliding Body pairs.
    * 3. **Collision response** — for every detected collision, compute and
-   *    accumulate positional corrections and zero-restitution normal-impulse
+   *    accumulate positional corrections and restitution-aware normal-impulse
    *    velocity changes.
    * 4. **State resolution and validation** — apply all accumulated response
    *    changes to the integrated candidate states and validate the results.
@@ -194,12 +194,16 @@ export class World {
    * receives the full positional correction and the full normal velocity
    * response. Two overlapping static Bodies remain unchanged.
    *
-   * This first impulse response changes linear velocity only. Tangential
-   * velocity and angular state are left untouched: restitution, friction,
-   * contact-point angular effects, and iterative contact solving remain later
-   * capabilities. Because one batch is calculated from the same candidate
-   * state, configurations with several simultaneous contacts may still need
-   * later solver iterations for fully coupled contact behavior.
+   * Restitution is mixed per colliding pair using the larger Body value. This
+   * lets a bouncy Body remain bouncy against a non-bouncy surface. The impulse
+   * response changes linear velocity only; tangential velocity and angular
+   * state remain untouched. Friction, contact-point angular effects,
+   * restitution thresholds, and iterative contact solving remain later
+   * capabilities.
+   *
+   * Because one batch is calculated from the same candidate state,
+   * configurations with several simultaneous contacts may still need later
+   * solver iterations for fully coupled contact behavior.
    *
    * If integration or response produces an invalid state, the entire world step
    * is rejected and all current body states remain unchanged.
@@ -273,14 +277,18 @@ export class World {
       accumulateVector(accumulatedPositionCorrections, bodyAId, positionCorrections.bodyA);
       accumulateVector(accumulatedPositionCorrections, bodyBId, positionCorrections.bodyB);
 
-      // Step 3b — Velocity response: remove closing velocity along the collision
-      // normal. Tangential velocity is deliberately untouched in this pass.
+      // Step 3b — Velocity response: remove/reflect closing normal velocity
+      // according to the pair's effective restitution. Tangential velocity is
+      // deliberately untouched in this pass.
+      const restitution = Math.max(bodyA.definition.restitution, bodyB.definition.restitution);
+
       const impulseResponse = computeCollisionNormalImpulse(
         collision,
         stateA.velocity,
         stateB.velocity,
         bodyA.definition.inverseMass,
         bodyB.definition.inverseMass,
+        restitution,
       );
 
       accumulateVector(

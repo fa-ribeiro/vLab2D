@@ -137,6 +137,12 @@ world.addBody(hexagon, {
   angularVelocity: -Math.PI / 4,
 });
 
+// A dedicated bouncy Body makes restitution visible without changing the
+// default inelastic behavior of the other example Bodies.
+const bouncyBall = new Body({ shape: new Circle(0.6), restitution: 0.85 });
+
+world.addBody(bouncyBall, { position: new Vector2(8, -1), velocity: new Vector2(0, -1) });
+
 // Static geometry participates in collision detection/response but is not
 // advanced by gravity or the World's kinematic integrator.
 const floor = new Body({

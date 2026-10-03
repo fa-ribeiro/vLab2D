@@ -31,20 +31,31 @@ export class Body {
    * Reciprocal of this Body's mass for response calculations.
    *
    * Dynamic Bodies have positive inverse mass. Static Bodies have zero inverse
-   * mass so positional response and future impulse response leave them fixed.
+   * mass so positional and impulse response leave them fixed.
    */
   public readonly inverseMass: number;
+
+  /**
+   * Coefficient controlling how strongly normal collision velocity bounces.
+   *
+   * `0` is inelastic along the collision normal, while `1` fully reflects the
+   * relative normal closing speed. World combines the two colliding Bodies'
+   * values before solving their normal impulse.
+   */
+  public readonly restitution: number;
 
   /**
    * Creates a reusable body definition.
    *
    * @param options Optional intrinsic Body configuration.
    * @throws {RangeError} If the configured inverse mass contradicts the Body
-   * type or is not finite.
+   * type or is not finite, or if restitution is outside the finite range
+   * `[0, 1]`.
    */
   public constructor(options: BodyOptions = {}) {
     const bodyType = options.type ?? "dynamic";
     const inverseMass = options.inverseMass ?? (bodyType === "static" ? 0 : 1);
+    const restitution = options.restitution ?? 0;
 
     assertFiniteNumber(inverseMass, "Body inverse mass");
 
@@ -64,8 +75,15 @@ export class Body {
         throw new RangeError(`Unsupported Body type: ${String(bodyType)}.`);
     }
 
+    assertFiniteNumber(restitution, "Body restitution");
+
+    if (restitution < 0 || restitution > 1) {
+      throw new RangeError("Body restitution must be between 0 and 1.");
+    }
+
     this.type = bodyType;
     this.shape = options.shape;
     this.inverseMass = inverseMass;
+    this.restitution = restitution;
   }
 }
