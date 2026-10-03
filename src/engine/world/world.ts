@@ -7,6 +7,7 @@ import {
   assertValidTimestep,
 } from "../kinematics/validation.ts";
 import { Vector2 } from "../math/vector2.ts";
+import { computeCollisionNormalImpulse } from "../response/collision-normal-impulse.ts";
 import { computeCollisionPositionCorrections } from "../response/collision-position-correction.ts";
 import type { BodyId } from "./body-id.ts";
 import type { BodyInitialConditions } from "./body-initial-conditions.ts";
@@ -30,8 +31,8 @@ interface WorldBody {
  *
  * Dynamic body instances share the same world gravity and numerical
  * integration strategy. Static body instances remain fixed. Shaped bodies
- * participate in inverse-mass-weighted positional collision response after
- * dynamic integration.
+ * participate in inverse-mass-weighted positional collision response and
+ * zero-restitution normal impulse response after dynamic integration.
  */
 export class World {
   #nextBodyId: BodyId = 1;
@@ -173,21 +174,32 @@ export class World {
   /**
    * Advances every body in the world by one timestep.
    *
-   * Candidate states are first established for every body. Dynamic Bodies are
-   * advanced through the injected integrator, while static Bodies retain their
-   * existing state. The shaped candidate states are then collision-tested, and
-   * one batch of inverse-mass-weighted positional corrections is accumulated
-   * from that same candidate configuration before any authoritative state is
-   * replaced.
+   * A World step is deliberately organized as a small physics pipeline:
    *
-   * A static Body has zero inverse mass, so collision response never translates
-   * it. A dynamic Body colliding with a static Body therefore receives the full
-   * positional correction. Two overlapping static Bodies remain unchanged.
+   * 1. **Integration** — build candidate states for every Body. Dynamic Bodies
+   *    are advanced through the injected integrator; static Bodies keep their
+   *    current state.
+   * 2. **Collision detection** — observe the complete integrated candidate
+   *    configuration and find colliding Body pairs.
+   * 3. **Collision response** — for every detected collision, compute and
+   *    accumulate positional corrections and zero-restitution normal-impulse
+   *    velocity changes.
+   * 4. **State resolution and validation** — apply all accumulated response
+   *    changes to the integrated candidate states and validate the results.
+   * 5. **Atomic commit** — only after every candidate is valid are the resolved
+   *    states installed as authoritative World state.
    *
-   * This response stage changes positions only. Velocity and angular state are
-   * left untouched, and the response is not yet an iterative contact solver, so
-   * configurations with several simultaneous contacts may retain some
-   * penetration for a later step to correct.
+   * A static Body has zero inverse mass, so response never translates it or
+   * changes its velocity. A dynamic Body colliding with a static Body therefore
+   * receives the full positional correction and the full normal velocity
+   * response. Two overlapping static Bodies remain unchanged.
+   *
+   * This first impulse response changes linear velocity only. Tangential
+   * velocity and angular state are left untouched: restitution, friction,
+   * contact-point angular effects, and iterative contact solving remain later
+   * capabilities. Because one batch is calculated from the same candidate
+   * state, configurations with several simultaneous contacts may still need
+   * later solver iterations for fully coupled contact behavior.
    *
    * If integration or response produces an invalid state, the entire world step
    * is rejected and all current body states remain unchanged.
@@ -197,8 +209,12 @@ export class World {
    * integration/response result contains a non-finite value.
    */
   public step(dt: number): void {
+    // Precondition — reject an invalid timestep before the physics pipeline
+    // touches any candidate or authoritative body state.
     assertValidTimestep(dt);
 
+    // Step 1 — Integration: build a complete candidate state set without
+    // changing authoritative World state yet.
     const integratedStates = new Map<BodyId, BodyState>();
 
     for (const [bodyId, worldBody] of this.#bodies) {
@@ -222,34 +238,79 @@ export class World {
       integratedStates.set(bodyId, nextState);
     }
 
+    // Step 2 — Collision detection: observe the integrated candidate states and
+    // identify which shaped Body pairs are actually colliding.
     const integratedSnapshots = this.#createSnapshots(integratedStates);
-    const accumulatedCorrections = new Map<BodyId, Vector2>();
+    const collisions = detectBodyCollisions(integratedSnapshots);
 
-    for (const { bodyAId, bodyBId, collision } of detectBodyCollisions(integratedSnapshots)) {
+    // Step 3 — Collision response: accumulate the changes requested by every
+    // detected contact. These maps still describe candidate changes only.
+    const accumulatedPositionCorrections = new Map<BodyId, Vector2>();
+    const accumulatedVelocityChanges = new Map<BodyId, Vector2>();
+
+    for (const { bodyAId, bodyBId, collision } of collisions) {
       const bodyA = this.#bodies.get(bodyAId);
       const bodyB = this.#bodies.get(bodyBId);
+      const stateA = integratedStates.get(bodyAId);
+      const stateB = integratedStates.get(bodyBId);
 
-      if (bodyA === undefined || bodyB === undefined) {
+      if (
+        bodyA === undefined ||
+        bodyB === undefined ||
+        stateA === undefined ||
+        stateB === undefined
+      ) {
         throw new Error("A colliding body disappeared during an atomic world step.");
       }
 
-      const corrections = computeCollisionPositionCorrections(
+      // Step 3a — Positional response: remove geometric penetration.
+      const positionCorrections = computeCollisionPositionCorrections(
         collision,
         bodyA.definition.inverseMass,
         bodyB.definition.inverseMass,
       );
 
-      accumulateCorrection(accumulatedCorrections, bodyAId, corrections.bodyA);
-      accumulateCorrection(accumulatedCorrections, bodyBId, corrections.bodyB);
+      accumulateVector(accumulatedPositionCorrections, bodyAId, positionCorrections.bodyA);
+      accumulateVector(accumulatedPositionCorrections, bodyBId, positionCorrections.bodyB);
+
+      // Step 3b — Velocity response: remove closing velocity along the collision
+      // normal. Tangential velocity is deliberately untouched in this pass.
+      const impulseResponse = computeCollisionNormalImpulse(
+        collision,
+        stateA.velocity,
+        stateB.velocity,
+        bodyA.definition.inverseMass,
+        bodyB.definition.inverseMass,
+      );
+
+      accumulateVector(
+        accumulatedVelocityChanges,
+        bodyAId,
+        impulseResponse.bodyAVelocityChange,
+      );
+      accumulateVector(
+        accumulatedVelocityChanges,
+        bodyBId,
+        impulseResponse.bodyBVelocityChange,
+      );
     }
 
+    // Step 4 — State resolution and validation: combine integration output with
+    // all accumulated collision-response changes, still without committing.
     const resolvedStates = new Map<BodyId, BodyState>();
 
     for (const [bodyId, integratedState] of integratedStates) {
-      const correction = accumulatedCorrections.get(bodyId);
-      const resolvedState = correction === undefined ? integratedState : {
+      const positionCorrection = accumulatedPositionCorrections.get(bodyId);
+      const velocityChange = accumulatedVelocityChanges.get(bodyId);
+
+      const resolvedState: BodyState = {
         ...integratedState,
-        position: integratedState.position.add(correction),
+        position: positionCorrection === undefined
+          ? integratedState.position
+          : integratedState.position.add(positionCorrection),
+        velocity: velocityChange === undefined
+          ? integratedState.velocity
+          : integratedState.velocity.add(velocityChange),
       };
 
       assertFiniteBodyState(resolvedState, `Collision response result for body ${bodyId}`);
@@ -257,6 +318,8 @@ export class World {
       resolvedStates.set(bodyId, resolvedState);
     }
 
+    // Step 5 — Atomic commit: every resolved state is now known to be valid, so
+    // the complete candidate set can become authoritative World state.
     for (const [bodyId, resolvedState] of resolvedStates) {
       const worldBody = this.#bodies.get(bodyId);
 
@@ -311,14 +374,14 @@ function assertBodyTypeInitialState(body: Body, state: BodyState): void {
   }
 }
 
-function accumulateCorrection(
-  corrections: Map<BodyId, Vector2>,
+function accumulateVector(
+  vectors: Map<BodyId, Vector2>,
   bodyId: BodyId,
-  correction: Vector2,
+  vector: Vector2,
 ): void {
-  const accumulated = corrections.get(bodyId);
+  const accumulated = vectors.get(bodyId);
 
-  corrections.set(bodyId, accumulated === undefined ? correction : accumulated.add(correction));
+  vectors.set(bodyId, accumulated === undefined ? vector : accumulated.add(vector));
 }
 
 function copyState(state: BodyState): BodyState {

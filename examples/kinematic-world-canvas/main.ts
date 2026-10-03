@@ -124,7 +124,7 @@ world.addBody(rectangle, {
 });
 
 const triangle = new Body({ shape: new RegularPolygon(3, 1) });
-const hexagon = new Body({ shape: new RegularPolygon(6, 1) });
+const hexagon = new Body({ shape: new RegularPolygon(6, 1), inverseMass: 1 / 100 });
 
 world.addBody(triangle, {
   position: new Vector2(-2, 1),
@@ -133,7 +133,7 @@ world.addBody(triangle, {
 world.addBody(hexagon, {
   position: new Vector2(3, 0),
   orientation: Math.PI / 6,
-  velocity: new Vector2(0, 0.2),
+  velocity: new Vector2(0, 0.5),
   angularVelocity: -Math.PI / 4,
 });
 

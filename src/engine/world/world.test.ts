@@ -335,7 +335,7 @@ Deno.test("World preserves static Body state without invoking the integrator", (
   assertEquals(integrator.calls, []);
 });
 
-Deno.test("World applies positional collision response after integration", () => {
+Deno.test("World applies positional and normal impulse response after integration", () => {
   const integrator = new StubIntegrator((state) => {
     if (state.position.x < 0) {
       return { ...state, position: new Vector2(0, 0) };
@@ -367,9 +367,10 @@ Deno.test("World applies positional collision response after integration", () =>
   assertVector(bodyAState.position, -0.5, 0);
   assertVector(bodyBState.position, 1.5, 0);
 
-  // This pass separates position only; impulse response is deliberately later.
-  assertVector(bodyAState.velocity, 3, 4);
-  assertVector(bodyBState.velocity, -5, 6);
+  // Equal inverse masses receive equal/opposite impulse changes. Only the
+  // closing x component is equalized; tangential y velocity is untouched.
+  assertVector(bodyAState.velocity, -1, 4);
+  assertVector(bodyBState.velocity, -1, 6);
 });
 
 Deno.test("World weights positional collision response by Body inverse mass", () => {
@@ -393,13 +394,16 @@ Deno.test("World weights positional collision response by Body inverse mass", ()
   assertVector(lighterState.position, 1.75, 0);
 });
 
-Deno.test("World gives a dynamic Body the full correction against a static Body", () => {
+Deno.test("World gives a dynamic Body full response against a static Body", () => {
   const world = new World(new Vector2(0, 0), new StubIntegrator((state) => state));
 
   const dynamicCircle = new Body({ shape: new Circle(1) });
   const staticCircle = new Body({ type: "static", shape: new Circle(1) });
 
-  const dynamicId = world.addBody(dynamicCircle, { position: new Vector2(0, 0) });
+  const dynamicId = world.addBody(dynamicCircle, {
+    position: new Vector2(0, 0),
+    velocity: new Vector2(3, 2),
+  });
   const staticId = world.addBody(staticCircle, { position: new Vector2(1, 0) });
 
   world.step(0);
@@ -412,6 +416,10 @@ Deno.test("World gives a dynamic Body the full correction against a static Body"
 
   assertVector(dynamicState.position, -1, 0);
   assertVector(staticState.position, 1, 0);
+
+  // The normal x velocity is removed, while the tangential y velocity remains.
+  assertVector(dynamicState.velocity, 0, 2);
+  assertVector(staticState.velocity, 0, 0);
 });
 
 Deno.test("World leaves overlapping static Bodies unchanged", () => {
@@ -434,6 +442,8 @@ Deno.test("World leaves overlapping static Bodies unchanged", () => {
 
   assertVector(firstState.position, 0, 0);
   assertVector(secondState.position, 1, 0);
+  assertVector(firstState.velocity, 0, 0);
+  assertVector(secondState.velocity, 0, 0);
   assertEquals(integrator.calls, []);
 });
 
