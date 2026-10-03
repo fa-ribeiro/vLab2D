@@ -200,6 +200,38 @@ Deno.test("World rejects invalid body initial conditions", () => {
   assertEquals(world.getBodySnapshots(), []);
 });
 
+Deno.test("World rejects non-zero initial velocity for a static Body", () => {
+  const world = new World(new Vector2(0, -10), new StubIntegrator((state) => state));
+  const staticBody = new Body({ type: "static" });
+
+  assertThrows(
+    () =>
+      world.addBody(staticBody, {
+        velocity: new Vector2(1, 0),
+      }),
+    RangeError,
+    "Static Body initial velocity must be zero.",
+  );
+
+  assertEquals(world.getBodySnapshots(), []);
+});
+
+Deno.test("World rejects non-zero initial angular velocity for a static Body", () => {
+  const world = new World(new Vector2(0, -10), new StubIntegrator((state) => state));
+  const staticBody = new Body({ type: "static" });
+
+  assertThrows(
+    () =>
+      world.addBody(staticBody, {
+        angularVelocity: Math.PI / 4,
+      }),
+    RangeError,
+    "Static Body initial angular velocity must be zero.",
+  );
+
+  assertEquals(world.getBodySnapshots(), []);
+});
+
 Deno.test("World advances every body using the injected integrator", () => {
   const gravity = new Vector2(0, -10);
 
@@ -279,6 +311,30 @@ Deno.test("World advances every body using the injected integrator", () => {
   }
 });
 
+Deno.test("World preserves static Body state without invoking the integrator", () => {
+  const integrator = new StubIntegrator(() => {
+    throw new Error("Static Bodies must not be integrated.");
+  });
+  const world = new World(new Vector2(0, -10), integrator);
+  const staticBody = new Body({ type: "static", shape: new Circle(1) });
+
+  const bodyId = world.addBody(staticBody, {
+    position: new Vector2(3, 4),
+    orientation: Math.PI / 3,
+  });
+
+  world.step(1);
+
+  const state = world.getBodyState(bodyId);
+
+  assert(state !== undefined);
+  assertVector(state.position, 3, 4);
+  assertVector(state.velocity, 0, 0);
+  assertEquals(state.orientation, Math.PI / 3);
+  assertEquals(state.angularVelocity, 0);
+  assertEquals(integrator.calls, []);
+});
+
 Deno.test("World applies positional collision response after integration", () => {
   const integrator = new StubIntegrator((state) => {
     if (state.position.x < 0) {
@@ -335,6 +391,50 @@ Deno.test("World weights positional collision response by Body inverse mass", ()
 
   assertVector(heavierState.position, -0.25, 0);
   assertVector(lighterState.position, 1.75, 0);
+});
+
+Deno.test("World gives a dynamic Body the full correction against a static Body", () => {
+  const world = new World(new Vector2(0, 0), new StubIntegrator((state) => state));
+
+  const dynamicCircle = new Body({ shape: new Circle(1) });
+  const staticCircle = new Body({ type: "static", shape: new Circle(1) });
+
+  const dynamicId = world.addBody(dynamicCircle, { position: new Vector2(0, 0) });
+  const staticId = world.addBody(staticCircle, { position: new Vector2(1, 0) });
+
+  world.step(0);
+
+  const dynamicState = world.getBodyState(dynamicId);
+  const staticState = world.getBodyState(staticId);
+
+  assert(dynamicState !== undefined);
+  assert(staticState !== undefined);
+
+  assertVector(dynamicState.position, -1, 0);
+  assertVector(staticState.position, 1, 0);
+});
+
+Deno.test("World leaves overlapping static Bodies unchanged", () => {
+  const integrator = new StubIntegrator(() => {
+    throw new Error("Static Bodies must not be integrated.");
+  });
+  const world = new World(new Vector2(0, -10), integrator);
+  const staticCircle = new Body({ type: "static", shape: new Circle(1) });
+
+  const firstId = world.addBody(staticCircle, { position: new Vector2(0, 0) });
+  const secondId = world.addBody(staticCircle, { position: new Vector2(1, 0) });
+
+  world.step(1);
+
+  const firstState = world.getBodyState(firstId);
+  const secondState = world.getBodyState(secondId);
+
+  assert(firstState !== undefined);
+  assert(secondState !== undefined);
+
+  assertVector(firstState.position, 0, 0);
+  assertVector(secondState.position, 1, 0);
+  assertEquals(integrator.calls, []);
 });
 
 Deno.test("World uses updated gravity on subsequent steps", () => {

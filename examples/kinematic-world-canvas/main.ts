@@ -137,6 +137,15 @@ world.addBody(hexagon, {
   angularVelocity: -Math.PI / 4,
 });
 
+// Static geometry participates in collision detection/response but is not
+// advanced by gravity or the World's kinematic integrator.
+const floor = new Body({
+  type: "static",
+  shape: new Rectangle(20, 1),
+});
+
+world.addBody(floor, { position: new Vector2(2, -4.5), orientation: -Math.PI / 48 });
+
 const simulation = new Simulation([world]);
 
 // Canvas rendering, picking, and inspection observe the same mutable viewport state.

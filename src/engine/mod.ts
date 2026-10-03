@@ -9,6 +9,7 @@
 
 export { Body } from "./body/body.ts";
 export type { BodyOptions } from "./body/body-options.ts";
+export type { BodyType } from "./body/body-type.ts";
 
 export type { Aabb } from "./collision/aabb.ts";
 export { aabbsOverlap, computeShapeAabb } from "./collision/aabb.ts";

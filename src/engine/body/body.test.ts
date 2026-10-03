@@ -5,37 +5,64 @@ import { Circle } from "../geometry/circle.ts";
 import { Rectangle } from "../geometry/rectangle.ts";
 import { RegularPolygon } from "../geometry/regular-polygon.ts";
 
+Deno.test("Body is dynamic by default", () => {
+  const body = new Body();
+
+  assertEquals(body.type, "dynamic");
+});
+
 Deno.test("Body is shapeless by default", () => {
   const body = new Body();
 
   assertEquals(body.shape, undefined);
 });
 
-Deno.test("Body uses unit inverse mass by default", () => {
+Deno.test("dynamic Body uses unit inverse mass by default", () => {
   const body = new Body();
 
   assertEquals(body.inverseMass, 1);
 });
 
-Deno.test("Body retains supplied inverse mass", () => {
+Deno.test("dynamic Body retains supplied inverse mass", () => {
   const body = new Body({ inverseMass: 0.25 });
 
   assertEquals(body.inverseMass, 0.25);
 });
 
-Deno.test("Body rejects zero inverse mass while only dynamic Bodies are supported", () => {
+Deno.test("static Body uses zero inverse mass by default", () => {
+  const body = new Body({ type: "static" });
+
+  assertEquals(body.type, "static");
+  assertEquals(body.inverseMass, 0);
+});
+
+Deno.test("static Body accepts explicit zero inverse mass", () => {
+  const body = new Body({ type: "static", inverseMass: 0 });
+
+  assertEquals(body.inverseMass, 0);
+});
+
+Deno.test("dynamic Body rejects zero inverse mass", () => {
   assertThrows(
-    () => new Body({ inverseMass: 0 }),
+    () => new Body({ type: "dynamic", inverseMass: 0 }),
     RangeError,
-    "Body inverse mass must be positive.",
+    "Dynamic Body inverse mass must be positive.",
   );
 });
 
-Deno.test("Body rejects negative inverse mass", () => {
+Deno.test("dynamic Body rejects negative inverse mass", () => {
   assertThrows(
     () => new Body({ inverseMass: -1 }),
     RangeError,
-    "Body inverse mass must be positive.",
+    "Dynamic Body inverse mass must be positive.",
+  );
+});
+
+Deno.test("static Body rejects non-zero inverse mass", () => {
+  assertThrows(
+    () => new Body({ type: "static", inverseMass: 0.5 }),
+    RangeError,
+    "Static Body inverse mass must be zero.",
   );
 });
 

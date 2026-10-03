@@ -28,9 +28,10 @@ interface WorldBody {
  * values into authoritative runtime state that remains private and may be
  * observed through detached snapshots.
  *
- * All body instances currently share the same world gravity and numerical
- * integration strategy. Shaped dynamic bodies also receive one batch of
- * inverse-mass-weighted positional collision correction after integration.
+ * Dynamic body instances share the same world gravity and numerical
+ * integration strategy. Static body instances remain fixed. Shaped bodies
+ * participate in inverse-mass-weighted positional collision response after
+ * dynamic integration.
  */
 export class World {
   #nextBodyId: BodyId = 1;
@@ -43,10 +44,10 @@ export class World {
   /**
    * Creates a world.
    *
-   * @param gravity The gravitational acceleration applied to every body,
+   * @param gravity The gravitational acceleration applied to every dynamic body,
    * expressed in world units per second squared.
-   * @param integrator The numerical integration strategy used to advance body
-   * states.
+   * @param integrator The numerical integration strategy used to advance dynamic
+   * body states.
    * @throws {RangeError} If the gravity vector contains a non-finite component.
    */
   public constructor(gravity: Vector2, integrator: KinematicIntegrator) {
@@ -57,8 +58,8 @@ export class World {
   }
 
   /**
-   * The gravitational acceleration currently applied to every body in the
-   * world, expressed in world units per second squared.
+   * The gravitational acceleration currently applied to every dynamic body in
+   * the world, expressed in world units per second squared.
    */
   public get gravity(): Vector2 {
     return this.#gravity;
@@ -90,6 +91,11 @@ export class World {
    * radians per second. Positive values rotate counter-clockwise in the
    * mathematical world coordinate system.
    *
+   * Static Bodies must enter the World with zero velocity and zero angular
+   * velocity. Their position and orientation may still be configured freely.
+   * This preserves a clear distinction from future kinematic Bodies, which may
+   * have prescribed motion despite also having zero inverse mass.
+   *
    * The same body definition may be added more than once, including to
    * different worlds. Each addition receives its own world-local identifier
    * and independent runtime state.
@@ -98,7 +104,8 @@ export class World {
    * @param initialConditions Optional initial position, velocity, orientation,
    * and angular velocity.
    * @returns The world-local identifier assigned to the new body instance.
-   * @throws {RangeError} If an initial condition contains a non-finite value.
+   * @throws {RangeError} If an initial condition contains a non-finite value, or
+   * if a static Body is given non-zero velocity or angular velocity.
    */
   public addBody(body: Body, initialConditions: BodyInitialConditions = {}): BodyId {
     const position = initialConditions.position ?? new Vector2(0, 0);
@@ -114,6 +121,7 @@ export class World {
     };
 
     assertFiniteBodyState(initialState, "Initial body state");
+    assertBodyTypeInitialState(body, initialState);
 
     const bodyId = this.#nextBodyId++;
 
@@ -155,28 +163,31 @@ export class World {
    * @returns A snapshot for every body currently in the world.
    */
   public getBodySnapshots(): readonly BodySnapshot[] {
-    return Array.from(
-      this.#bodies,
-      ([id, worldBody]): BodySnapshot => ({
-        id,
-        definition: worldBody.definition,
-        state: copyState(worldBody.state),
-      }),
-    );
+    return Array.from(this.#bodies, ([id, worldBody]): BodySnapshot => ({
+      id,
+      definition: worldBody.definition,
+      state: copyState(worldBody.state),
+    }));
   }
 
   /**
    * Advances every body in the world by one timestep.
    *
-   * Candidate states are first calculated and validated for every body. The
-   * shaped candidate states are then collision-tested, and one batch of
-   * inverse-mass-weighted positional corrections is accumulated from that same
-   * candidate configuration before any authoritative state is replaced.
+   * Candidate states are first established for every body. Dynamic Bodies are
+   * advanced through the injected integrator, while static Bodies retain their
+   * existing state. The shaped candidate states are then collision-tested, and
+   * one batch of inverse-mass-weighted positional corrections is accumulated
+   * from that same candidate configuration before any authoritative state is
+   * replaced.
    *
-   * This first response pass changes positions only. Velocity and angular state
-   * are left untouched, and the response is not yet an iterative contact
-   * solver, so configurations with several simultaneous contacts may retain
-   * some penetration for a later step to correct.
+   * A static Body has zero inverse mass, so collision response never translates
+   * it. A dynamic Body colliding with a static Body therefore receives the full
+   * positional correction. Two overlapping static Bodies remain unchanged.
+   *
+   * This response stage changes positions only. Velocity and angular state are
+   * left untouched, and the response is not yet an iterative contact solver, so
+   * configurations with several simultaneous contacts may retain some
+   * penetration for a later step to correct.
    *
    * If integration or response produces an invalid state, the entire world step
    * is rejected and all current body states remain unchanged.
@@ -191,9 +202,22 @@ export class World {
     const integratedStates = new Map<BodyId, BodyState>();
 
     for (const [bodyId, worldBody] of this.#bodies) {
-      const nextState = this.#integrator.integrate(worldBody.state, this.#gravity, dt);
+      let nextState: BodyState;
 
-      assertFiniteBodyState(nextState, `Integrator result for body ${bodyId}`);
+      switch (worldBody.definition.type) {
+        case "dynamic":
+          nextState = this.#integrator.integrate(worldBody.state, this.#gravity, dt);
+          assertFiniteBodyState(nextState, `Integrator result for body ${bodyId}`);
+          break;
+
+        case "static":
+          nextState = copyState(worldBody.state);
+          break;
+
+        default:
+          worldBody.definition.type satisfies never;
+          throw new Error(`Unsupported Body type for body ${bodyId}.`);
+      }
 
       integratedStates.set(bodyId, nextState);
     }
@@ -223,13 +247,10 @@ export class World {
 
     for (const [bodyId, integratedState] of integratedStates) {
       const correction = accumulatedCorrections.get(bodyId);
-      const resolvedState =
-        correction === undefined
-          ? integratedState
-          : {
-              ...integratedState,
-              position: integratedState.position.add(correction),
-            };
+      const resolvedState = correction === undefined ? integratedState : {
+        ...integratedState,
+        position: integratedState.position.add(correction),
+      };
 
       assertFiniteBodyState(resolvedState, `Collision response result for body ${bodyId}`);
 
@@ -266,6 +287,27 @@ export class World {
 
       return { id, definition: worldBody.definition, state: copyState(state) };
     });
+  }
+}
+
+function assertBodyTypeInitialState(body: Body, state: BodyState): void {
+  switch (body.type) {
+    case "dynamic":
+      return;
+
+    case "static":
+      if (state.velocity.x !== 0 || state.velocity.y !== 0) {
+        throw new RangeError("Static Body initial velocity must be zero.");
+      }
+
+      if (state.angularVelocity !== 0) {
+        throw new RangeError("Static Body initial angular velocity must be zero.");
+      }
+      return;
+
+    default:
+      body.type satisfies never;
+      throw new Error("Unsupported Body type while validating initial state.");
   }
 }
 

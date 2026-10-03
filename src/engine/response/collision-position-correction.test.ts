@@ -28,6 +28,42 @@ Deno.test("computeCollisionPositionCorrections weights movement by inverse mass"
   assertEquals(corrections.bodyB, new Vector2(0, 1));
 });
 
+Deno.test("computeCollisionPositionCorrections moves only dynamic A against static B", () => {
+  const collision: Collision = {
+    normal: new Vector2(1, 0),
+    penetrationDepth: 2,
+  };
+
+  const corrections = computeCollisionPositionCorrections(collision, 1, 0);
+
+  assertEquals(corrections.bodyA, new Vector2(-2, 0));
+  assertEquals(corrections.bodyB, new Vector2(0, 0));
+});
+
+Deno.test("computeCollisionPositionCorrections moves only dynamic B against static A", () => {
+  const collision: Collision = {
+    normal: new Vector2(1, 0),
+    penetrationDepth: 2,
+  };
+
+  const corrections = computeCollisionPositionCorrections(collision, 0, 1);
+
+  assertEquals(corrections.bodyA, new Vector2(0, 0));
+  assertEquals(corrections.bodyB, new Vector2(2, 0));
+});
+
+Deno.test("computeCollisionPositionCorrections returns zero for two immovable Bodies", () => {
+  const collision: Collision = {
+    normal: new Vector2(0, 1),
+    penetrationDepth: 3,
+  };
+
+  const corrections = computeCollisionPositionCorrections(collision, 0, 0);
+
+  assertEquals(corrections.bodyA, new Vector2(0, 0));
+  assertEquals(corrections.bodyB, new Vector2(0, 0));
+});
+
 Deno.test("computeCollisionPositionCorrections preserves an arbitrary collision normal", () => {
   const collision: Collision = {
     normal: new Vector2(0.6, 0.8),
@@ -52,16 +88,16 @@ Deno.test("computeCollisionPositionCorrections returns zero translations for tou
   assertEquals(corrections.bodyB, new Vector2(0, 0));
 });
 
-Deno.test("computeCollisionPositionCorrections rejects zero inverse mass for now", () => {
+Deno.test("computeCollisionPositionCorrections rejects negative inverse mass", () => {
   const collision: Collision = {
     normal: new Vector2(1, 0),
     penetrationDepth: 1,
   };
 
   assertThrows(
-    () => computeCollisionPositionCorrections(collision, 0, 1),
+    () => computeCollisionPositionCorrections(collision, -1, 1),
     RangeError,
-    "Body A inverse mass must be positive.",
+    "Body A inverse mass must not be negative.",
   );
 });
 
