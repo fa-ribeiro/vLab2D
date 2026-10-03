@@ -1,10 +1,10 @@
 import { assert, assertEquals } from "@std/assert";
 
-import { Body } from "../body/body.ts";
-import { Circle } from "../geometry/circle.ts";
-import { SemiImplicitEulerIntegrator } from "../kinematics/semi-implicit-euler-integrator.ts";
-import { Vector2 } from "../math/vector2.ts";
-import { World } from "./world.ts";
+import { Body } from "../../src/engine/body/body.ts";
+import { Circle } from "../../src/engine/geometry/circle.ts";
+import { SemiImplicitEulerIntegrator } from "../../src/engine/kinematics/semi-implicit-euler-integrator.ts";
+import { Vector2 } from "../../src/engine/math/vector2.ts";
+import { World } from "../../src/engine/world/world.ts";
 
 function createThreeTouchingCircles(): {
   readonly world: World;

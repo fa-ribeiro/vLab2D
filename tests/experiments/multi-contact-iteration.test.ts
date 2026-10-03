@@ -1,8 +1,8 @@
 import { assertEquals } from "@std/assert";
 
-import type { Collision } from "../collision/collision.ts";
-import { Vector2 } from "../math/vector2.ts";
-import { computeCollisionNormalImpulse } from "../response/collision-normal-impulse.ts";
+import type { Collision } from "../../src/engine/collision/collision.ts";
+import { Vector2 } from "../../src/engine/math/vector2.ts";
+import { computeCollisionNormalImpulse } from "../../src/engine/response/collision-normal-impulse.ts";
 
 type Contact = readonly [bodyAIndex: number, bodyBIndex: number];
 
@@ -122,8 +122,10 @@ Deno.test("multi-contact experiment compares batch and sequential momentum propa
     iterations,
     batch: xComponents(repeatPass(initial, iterations, applyBatchPass)),
     sequentialLeftToRight: xComponents(
-      repeatPass(initial, iterations, (velocities) =>
-        applySequentialPass(velocities, LEFT_TO_RIGHT_CONTACTS),
+      repeatPass(
+        initial,
+        iterations,
+        (velocities) => applySequentialPass(velocities, LEFT_TO_RIGHT_CONTACTS),
       ),
     ),
   }));
@@ -161,13 +163,17 @@ Deno.test(
       iterations,
       batch: xComponents(repeatPass(initial, iterations, applyBatchPass)),
       sequentialLeftToRight: xComponents(
-        repeatPass(initial, iterations, (velocities) =>
-          applySequentialPass(velocities, LEFT_TO_RIGHT_CONTACTS),
+        repeatPass(
+          initial,
+          iterations,
+          (velocities) => applySequentialPass(velocities, LEFT_TO_RIGHT_CONTACTS),
         ),
       ),
       sequentialRightToLeft: xComponents(
-        repeatPass(initial, iterations, (velocities) =>
-          applySequentialPass(velocities, RIGHT_TO_LEFT_CONTACTS),
+        repeatPass(
+          initial,
+          iterations,
+          (velocities) => applySequentialPass(velocities, RIGHT_TO_LEFT_CONTACTS),
         ),
       ),
     }));
