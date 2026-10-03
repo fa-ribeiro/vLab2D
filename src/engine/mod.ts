@@ -35,6 +35,9 @@ export { SemiImplicitEulerIntegrator } from "./kinematics/semi-implicit-euler-in
 
 export { Vector2 } from "./math/vector2.ts";
 
+export type { CollisionPositionCorrections } from "./response/collision-position-correction.ts";
+export { computeCollisionPositionCorrections } from "./response/collision-position-correction.ts";
+
 export type { BodyId } from "./world/body-id.ts";
 export type { BodyInitialConditions } from "./world/body-initial-conditions.ts";
 export type { BodySnapshot } from "./world/body-snapshot.ts";

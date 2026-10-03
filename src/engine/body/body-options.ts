@@ -11,4 +11,15 @@ export interface BodyOptions {
    * particle-like entity.
    */
   readonly shape?: BodyShape;
+
+  /**
+   * Reciprocal of the Body's mass used by dynamic response calculations.
+   *
+   * The current engine supports dynamic Bodies only, so inverse mass must be a
+   * positive finite number. It defaults to `1`, corresponding to unit mass.
+   *
+   * A future static-body pass will deliberately extend the contract so
+   * `inverseMass === 0` represents an immovable Body.
+   */
+  readonly inverseMass?: number;
 }

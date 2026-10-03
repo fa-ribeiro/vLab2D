@@ -1,4 +1,4 @@
-import { assertEquals, assertStrictEquals } from "@std/assert";
+import { assertEquals, assertStrictEquals, assertThrows } from "@std/assert";
 
 import { Body } from "./body.ts";
 import { Circle } from "../geometry/circle.ts";
@@ -9,6 +9,42 @@ Deno.test("Body is shapeless by default", () => {
   const body = new Body();
 
   assertEquals(body.shape, undefined);
+});
+
+Deno.test("Body uses unit inverse mass by default", () => {
+  const body = new Body();
+
+  assertEquals(body.inverseMass, 1);
+});
+
+Deno.test("Body retains supplied inverse mass", () => {
+  const body = new Body({ inverseMass: 0.25 });
+
+  assertEquals(body.inverseMass, 0.25);
+});
+
+Deno.test("Body rejects zero inverse mass while only dynamic Bodies are supported", () => {
+  assertThrows(
+    () => new Body({ inverseMass: 0 }),
+    RangeError,
+    "Body inverse mass must be positive.",
+  );
+});
+
+Deno.test("Body rejects negative inverse mass", () => {
+  assertThrows(
+    () => new Body({ inverseMass: -1 }),
+    RangeError,
+    "Body inverse mass must be positive.",
+  );
+});
+
+Deno.test("Body rejects non-finite inverse mass", () => {
+  assertThrows(
+    () => new Body({ inverseMass: Number.POSITIVE_INFINITY }),
+    RangeError,
+    "Body inverse mass must be finite.",
+  );
 });
 
 Deno.test("Body retains supplied Circle geometry", () => {
