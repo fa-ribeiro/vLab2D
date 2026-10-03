@@ -46,7 +46,10 @@ class FakeAnimationFrameScheduler {
 }
 
 function createSimulation(integrator: KinematicIntegrator): Simulation {
-  const world = new World(new Vector2(0, -9.81), integrator);
+  const world = new World({
+    gravity: new Vector2(0, -9.81),
+    integrator,
+  });
 
   world.addBody(new Body());
 

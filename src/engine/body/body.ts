@@ -4,7 +4,7 @@ import {
   assertNonNegativeNumber,
   assertPositiveNumber,
 } from "../math/validation.ts";
-import type { BodyOptions } from "./body-options.ts";
+import { BODY_DEFAULTS, type BodyConfig } from "./body-config.ts";
 import type { BodyType } from "./body-type.ts";
 
 /**
@@ -18,9 +18,7 @@ import type { BodyType } from "./body-type.ts";
  * require identity and motion state but no spatial extent.
  */
 export class Body {
-  /**
-   * Behavioral category controlling how Worlds advance this Body.
-   */
+  /** Behavioral category controlling how Worlds advance this Body. */
   public readonly type: BodyType;
 
   /**
@@ -43,8 +41,7 @@ export class Body {
    * Coefficient controlling how strongly normal collision velocity bounces.
    *
    * `0` is inelastic along the collision normal, while `1` fully reflects the
-   * relative normal closing speed. World combines the two colliding Bodies'
-   * values before solving their normal impulse.
+   * relative normal closing speed.
    *
    * This placement is provisional: a future physical Material definition may
    * become the source of restitution.
@@ -65,16 +62,19 @@ export class Body {
   /**
    * Creates a reusable body definition.
    *
-   * @param options Optional intrinsic Body configuration.
-   * @throws {RangeError} If the configured inverse mass contradicts the Body
-   * type or is not finite, restitution is outside `[0, 1]`, or friction is
-   * negative/non-finite.
+   * Omitted optional values resolve through {@link BODY_DEFAULTS}. Inverse mass
+   * is deliberately type-dependent: dynamic and static Bodies have different
+   * semantic defaults.
+   *
+   * @param config Optional intrinsic Body configuration.
+   * @throws {RangeError} If inverse mass contradicts the Body type or is not
+   * finite, restitution is outside `[0, 1]`, or friction is negative/non-finite.
    */
-  public constructor(options: BodyOptions = {}) {
-    const bodyType = options.type ?? "dynamic";
-    const inverseMass = options.inverseMass ?? (bodyType === "static" ? 0 : 1);
-    const restitution = options.restitution ?? 0;
-    const friction = options.friction ?? 0;
+  public constructor(config: BodyConfig = {}) {
+    const bodyType = config.type ?? BODY_DEFAULTS.type;
+    const inverseMass = config.inverseMass ?? BODY_DEFAULTS.inverseMass[bodyType];
+    const restitution = config.restitution ?? BODY_DEFAULTS.restitution;
+    const friction = config.friction ?? BODY_DEFAULTS.friction;
 
     assertFiniteNumber(inverseMass, "Body inverse mass");
 
@@ -104,7 +104,7 @@ export class Body {
     assertNonNegativeNumber(friction, "Body friction");
 
     this.type = bodyType;
-    this.shape = options.shape;
+    this.shape = config.shape;
     this.inverseMass = inverseMass;
     this.restitution = restitution;
     this.friction = friction;

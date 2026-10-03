@@ -8,7 +8,8 @@
  */
 
 export { Body } from "./body/body.ts";
-export type { BodyOptions } from "./body/body-options.ts";
+export { BODY_DEFAULTS } from "./body/body-config.ts";
+export type { BodyConfig } from "./body/body-config.ts";
 export type { BodyType } from "./body/body-type.ts";
 
 export type { Aabb } from "./collision/aabb.ts";
@@ -47,5 +48,7 @@ export type { BodyId } from "./world/body-id.ts";
 export type { BodyInitialConditions } from "./world/body-initial-conditions.ts";
 export type { BodySnapshot } from "./world/body-snapshot.ts";
 export type { BodyState } from "./world/body-state.ts";
+export { WORLD_DEFAULTS } from "./world/world-config.ts";
+export type { WorldConfig } from "./world/world-config.ts";
 
 export { World } from "./world/world.ts";

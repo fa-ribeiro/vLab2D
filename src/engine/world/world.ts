@@ -6,6 +6,7 @@ import {
   assertFiniteVector,
   assertValidTimestep,
 } from "../kinematics/validation.ts";
+import { assertFiniteNumber, assertNonNegativeNumber } from "../math/validation.ts";
 import { Vector2 } from "../math/vector2.ts";
 import { computeCollisionFrictionImpulse } from "../response/collision-friction-impulse.ts";
 import { computeCollisionNormalImpulse } from "../response/collision-normal-impulse.ts";
@@ -14,6 +15,7 @@ import type { BodyId } from "./body-id.ts";
 import type { BodyInitialConditions } from "./body-initial-conditions.ts";
 import type { BodySnapshot } from "./body-snapshot.ts";
 import type { BodyState } from "./body-state.ts";
+import { WORLD_DEFAULTS, type WorldConfig } from "./world-config.ts";
 
 interface WorldBody {
   readonly definition: Body;
@@ -33,31 +35,38 @@ interface WorldBody {
  * Dynamic body instances share the same world gravity and numerical
  * integration strategy. Static body instances remain fixed. Shaped bodies
  * participate in inverse-mass-weighted positional collision response,
- * restitution-aware normal impulse response, and tangential friction response
- * after dynamic integration.
+ * thresholded restitution-aware normal impulse response, and tangential
+ * friction response after dynamic integration.
  */
 export class World {
   #nextBodyId: BodyId = 1;
 
   readonly #bodies = new Map<BodyId, WorldBody>();
   readonly #integrator: KinematicIntegrator;
+  readonly #restitutionThreshold: number;
 
   #gravity: Vector2;
 
   /**
-   * Creates a world.
+   * Creates a world from explicit experiment configuration and optional solver
+   * policy.
    *
-   * @param gravity The gravitational acceleration applied to every dynamic body,
-   * expressed in world units per second squared.
-   * @param integrator The numerical integration strategy used to advance dynamic
-   * body states.
-   * @throws {RangeError} If the gravity vector contains a non-finite component.
+   * @param config Complete World configuration.
+   * @throws {RangeError} If gravity contains a non-finite component or the
+   * restitution threshold is negative/non-finite.
    */
-  public constructor(gravity: Vector2, integrator: KinematicIntegrator) {
-    assertFiniteVector(gravity, "Gravity");
+  public constructor(config: WorldConfig) {
+    assertFiniteVector(config.gravity, "Gravity");
 
-    this.#gravity = gravity;
-    this.#integrator = integrator;
+    const restitutionThreshold = config.restitutionThreshold ??
+      WORLD_DEFAULTS.restitutionThreshold;
+
+    assertFiniteNumber(restitutionThreshold, "Restitution threshold");
+    assertNonNegativeNumber(restitutionThreshold, "Restitution threshold");
+
+    this.#gravity = config.gravity;
+    this.#integrator = config.integrator;
+    this.#restitutionThreshold = restitutionThreshold;
   }
 
   /**
@@ -66,6 +75,16 @@ export class World {
    */
   public get gravity(): Vector2 {
     return this.#gravity;
+  }
+
+  /**
+   * The minimum relative normal closing speed required for restitution.
+   *
+   * Impacts at or below this speed are solved inelastically. Units are
+   * world-distance units per second.
+   */
+  public get restitutionThreshold(): number {
+    return this.#restitutionThreshold;
   }
 
   /**
@@ -184,8 +203,8 @@ export class World {
    * 2. **Collision detection** — observe the complete integrated candidate
    *    configuration and find colliding Body pairs.
    * 3. **Collision response** — for every detected collision, compute and
-   *    accumulate positional corrections, restitution-aware normal impulses,
-   *    and Coulomb-limited tangential friction impulses.
+   *    accumulate positional corrections, thresholded restitution-aware normal
+   *    impulses, and Coulomb-limited tangential friction impulses.
    * 4. **State resolution and validation** — apply all accumulated response
    *    changes to the integrated candidate states and validate the results.
    * 5. **Atomic commit** — only after every candidate is valid are the resolved
@@ -201,10 +220,14 @@ export class World {
    * coefficients, so their eventual migration to a physical Material model
    * does not require the collision equations to know where material data lives.
    *
-   * Friction in this pass changes linear tangential velocity only. Without
-   * contact points and rotational inertia, friction cannot yet create or change
-   * angular velocity. Restitution thresholds, contact-point angular effects,
-   * and iterative contact solving remain later capabilities.
+   * Restitution threshold is different: it is a World-level solver policy.
+   * Low-speed impacts still receive a normal impulse, but restitution is
+   * suppressed so tiny contacts do not keep bouncing.
+   *
+   * Friction changes linear tangential velocity only. Without contact points
+   * and rotational inertia, friction cannot yet create or change angular
+   * velocity. Contact-point angular effects and iterative contact solving remain
+   * later capabilities.
    *
    * Because one batch is calculated from the same candidate state,
    * configurations with several simultaneous contacts may still need later
@@ -283,7 +306,8 @@ export class World {
       accumulateVector(accumulatedPositionCorrections, bodyBId, positionCorrections.bodyB);
 
       // Step 3b — Normal velocity response: remove/reflect closing velocity
-      // according to the pair's effective restitution.
+      // according to the pair's effective restitution and the World's minimum
+      // bounce-speed policy.
       const restitution = Math.max(bodyA.definition.restitution, bodyB.definition.restitution);
 
       const normalImpulseResponse = computeCollisionNormalImpulse(
@@ -293,6 +317,7 @@ export class World {
         bodyA.definition.inverseMass,
         bodyB.definition.inverseMass,
         restitution,
+        this.#restitutionThreshold,
       );
 
       accumulateVector(
@@ -307,8 +332,8 @@ export class World {
       );
 
       // Step 3c — Tangential friction response: the geometric mean combines the
-      // temporary Body-level coefficients. The normal impulse from Step 3b sets
-      // the Coulomb limit for the strongest permitted tangent impulse.
+      // temporary Body-level coefficients. The actual normal impulse from Step
+      // 3b—including any threshold effect—sets the Coulomb friction limit.
       const friction = Math.sqrt(bodyA.definition.friction * bodyB.definition.friction);
 
       const frictionImpulseResponse = computeCollisionFrictionImpulse(

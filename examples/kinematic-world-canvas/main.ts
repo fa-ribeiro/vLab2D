@@ -92,7 +92,13 @@ if (context === null) {
 }
 
 // Build and populate the simulated World independently from browser presentation.
-const world = new World(new Vector2(0, -0.1), new SemiImplicitEulerIntegrator());
+// Restitution is suppressed for impacts at or below 0.15 world units/second,
+// preventing the bouncy-ball example from continuing with tiny rebounds.
+const world = new World({
+  gravity: new Vector2(0, -0.1),
+  integrator: new SemiImplicitEulerIntegrator(),
+  restitutionThreshold: 0.15,
+});
 
 const particle = new Body();
 
@@ -137,9 +143,9 @@ world.addBody(hexagon, {
   angularVelocity: -Math.PI / 4,
 });
 
-// The bouncy ball now also carries friction so its oblique impact demonstrates
-// both response components: normal velocity bounces while tangential velocity
-// is reduced by Coulomb friction.
+// The bouncy ball also carries friction so its oblique impact demonstrates both
+// response components: normal velocity bounces while tangential velocity is
+// reduced by Coulomb friction.
 const bouncyBall = new Body({
   shape: new Circle(0.6),
   restitution: 0.85,

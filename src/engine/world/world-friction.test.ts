@@ -7,7 +7,10 @@ import { Vector2 } from "../math/vector2.ts";
 import { World } from "./world.ts";
 
 Deno.test("World mixes Body friction using the geometric mean", () => {
-  const world = new World(new Vector2(0, 0), new SemiImplicitEulerIntegrator());
+  const world = new World({
+    gravity: new Vector2(0, 0),
+    integrator: new SemiImplicitEulerIntegrator(),
+  });
 
   const dynamicCircle = new Body({
     shape: new Circle(1),
@@ -44,7 +47,10 @@ Deno.test("World mixes Body friction using the geometric mean", () => {
 });
 
 Deno.test("World contact is frictionless when either Body friction is zero", () => {
-  const world = new World(new Vector2(0, 0), new SemiImplicitEulerIntegrator());
+  const world = new World({
+    gravity: new Vector2(0, 0),
+    integrator: new SemiImplicitEulerIntegrator(),
+  });
 
   const dynamicCircle = new Body({
     shape: new Circle(1),

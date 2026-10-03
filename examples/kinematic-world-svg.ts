@@ -7,7 +7,10 @@ import {
   World,
 } from "../src/mod.ts";
 
-const world = new World(new Vector2(0, -9.81), new SemiImplicitEulerIntegrator());
+const world = new World({
+  gravity: new Vector2(0, -9.81),
+  integrator: new SemiImplicitEulerIntegrator(),
+});
 
 const particle = new Body();
 

@@ -52,7 +52,10 @@ class StubIntegrator implements KinematicIntegrator {
 Deno.test("World adds a body and exposes its initial runtime state", () => {
   const integrator = new StubIntegrator((state) => state);
 
-  const world = new World(new Vector2(0, -10), integrator);
+  const world = new World({
+    gravity: new Vector2(0, -10),
+    integrator,
+  });
 
   const bodyId = world.addBody(new Body(), {
     position: new Vector2(3, 4),
@@ -72,7 +75,10 @@ Deno.test("World adds a body and exposes its initial runtime state", () => {
 });
 
 Deno.test("World uses zero-valued body initial-condition defaults", () => {
-  const world = new World(new Vector2(0, -10), new StubIntegrator((state) => state));
+  const world = new World({
+    gravity: new Vector2(0, -10),
+    integrator: new StubIntegrator((state) => state),
+  });
 
   const bodyId = world.addBody(new Body());
 
@@ -89,7 +95,10 @@ Deno.test("World uses zero-valued body initial-condition defaults", () => {
 Deno.test("World assigns different identifiers to different body instances", () => {
   const integrator = new StubIntegrator((state) => state);
 
-  const world = new World(new Vector2(0, -10), integrator);
+  const world = new World({
+    gravity: new Vector2(0, -10),
+    integrator,
+  });
 
   const body = new Body();
 
@@ -102,7 +111,10 @@ Deno.test("World assigns different identifiers to different body instances", () 
 Deno.test("World can reuse one Body definition with independent runtime states", () => {
   const integrator = new StubIntegrator((state) => state);
 
-  const world = new World(new Vector2(0, -10), integrator);
+  const world = new World({
+    gravity: new Vector2(0, -10),
+    integrator,
+  });
 
   const body = new Body();
 
@@ -138,7 +150,10 @@ Deno.test("World can reuse one Body definition with independent runtime states",
 });
 
 Deno.test("World copies body initial conditions into runtime state", () => {
-  const world = new World(new Vector2(0, -10), new StubIntegrator((state) => state));
+  const world = new World({
+    gravity: new Vector2(0, -10),
+    integrator: new StubIntegrator((state) => state),
+  });
 
   const position = new Vector2(1, 2);
   const velocity = new Vector2(3, 4);
@@ -168,7 +183,10 @@ Deno.test("World copies body initial conditions into runtime state", () => {
 Deno.test("World rejects invalid body initial conditions", () => {
   const integrator = new StubIntegrator((state) => state);
 
-  const world = new World(new Vector2(0, -10), integrator);
+  const world = new World({
+    gravity: new Vector2(0, -10),
+    integrator,
+  });
 
   assertThrows(
     () =>
@@ -201,7 +219,10 @@ Deno.test("World rejects invalid body initial conditions", () => {
 });
 
 Deno.test("World rejects non-zero initial velocity for a static Body", () => {
-  const world = new World(new Vector2(0, -10), new StubIntegrator((state) => state));
+  const world = new World({
+    gravity: new Vector2(0, -10),
+    integrator: new StubIntegrator((state) => state),
+  });
   const staticBody = new Body({ type: "static" });
 
   assertThrows(
@@ -217,7 +238,10 @@ Deno.test("World rejects non-zero initial velocity for a static Body", () => {
 });
 
 Deno.test("World rejects non-zero initial angular velocity for a static Body", () => {
-  const world = new World(new Vector2(0, -10), new StubIntegrator((state) => state));
+  const world = new World({
+    gravity: new Vector2(0, -10),
+    integrator: new StubIntegrator((state) => state),
+  });
   const staticBody = new Body({ type: "static" });
 
   assertThrows(
@@ -261,7 +285,10 @@ Deno.test("World advances every body using the injected integrator", () => {
     throw new Error("Unexpected state.");
   });
 
-  const world = new World(gravity, integrator);
+  const world = new World({
+    gravity,
+    integrator,
+  });
 
   const body = new Body();
 
@@ -315,7 +342,10 @@ Deno.test("World preserves static Body state without invoking the integrator", (
   const integrator = new StubIntegrator(() => {
     throw new Error("Static Bodies must not be integrated.");
   });
-  const world = new World(new Vector2(0, -10), integrator);
+  const world = new World({
+    gravity: new Vector2(0, -10),
+    integrator,
+  });
   const staticBody = new Body({ type: "static", shape: new Circle(1) });
 
   const bodyId = world.addBody(staticBody, {
@@ -344,7 +374,10 @@ Deno.test("World applies positional and normal impulse response after integratio
     return { ...state, position: new Vector2(1, 0) };
   });
 
-  const world = new World(new Vector2(0, 0), integrator);
+  const world = new World({
+    gravity: new Vector2(0, 0),
+    integrator,
+  });
   const circle = new Body({ shape: new Circle(1) });
 
   const bodyAId = world.addBody(circle, {
@@ -374,7 +407,10 @@ Deno.test("World applies positional and normal impulse response after integratio
 });
 
 Deno.test("World weights positional collision response by Body inverse mass", () => {
-  const world = new World(new Vector2(0, 0), new StubIntegrator((state) => state));
+  const world = new World({
+    gravity: new Vector2(0, 0),
+    integrator: new StubIntegrator((state) => state),
+  });
 
   const heavierCircle = new Body({ shape: new Circle(1), inverseMass: 0.25 });
   const lighterCircle = new Body({ shape: new Circle(1), inverseMass: 0.75 });
@@ -395,7 +431,10 @@ Deno.test("World weights positional collision response by Body inverse mass", ()
 });
 
 Deno.test("World gives a dynamic Body full response against a static Body", () => {
-  const world = new World(new Vector2(0, 0), new StubIntegrator((state) => state));
+  const world = new World({
+    gravity: new Vector2(0, 0),
+    integrator: new StubIntegrator((state) => state),
+  });
 
   const dynamicCircle = new Body({ shape: new Circle(1) });
   const staticCircle = new Body({ type: "static", shape: new Circle(1) });
@@ -426,7 +465,10 @@ Deno.test("World leaves overlapping static Bodies unchanged", () => {
   const integrator = new StubIntegrator(() => {
     throw new Error("Static Bodies must not be integrated.");
   });
-  const world = new World(new Vector2(0, -10), integrator);
+  const world = new World({
+    gravity: new Vector2(0, -10),
+    integrator,
+  });
   const staticCircle = new Body({ type: "static", shape: new Circle(1) });
 
   const firstId = world.addBody(staticCircle, { position: new Vector2(0, 0) });
@@ -450,7 +492,10 @@ Deno.test("World leaves overlapping static Bodies unchanged", () => {
 Deno.test("World uses updated gravity on subsequent steps", () => {
   const integrator = new StubIntegrator((state) => state);
 
-  const world = new World(new Vector2(0, -10), integrator);
+  const world = new World({
+    gravity: new Vector2(0, -10),
+    integrator,
+  });
 
   world.addBody(new Body());
 
@@ -466,7 +511,10 @@ Deno.test("World uses updated gravity on subsequent steps", () => {
 Deno.test("World rejects invalid gravity without replacing the current value", () => {
   const gravity = new Vector2(0, -10);
 
-  const world = new World(gravity, new StubIntegrator((state) => state));
+  const world = new World({
+    gravity,
+    integrator: new StubIntegrator((state) => state),
+  });
 
   assertThrows(
     () => world.setGravity(new Vector2(Number.NaN, 0)),
@@ -480,7 +528,10 @@ Deno.test("World rejects invalid gravity without replacing the current value", (
 Deno.test("World rejects an invalid timestep before integrating bodies", () => {
   const integrator = new StubIntegrator((state) => state);
 
-  const world = new World(new Vector2(0, -10), integrator);
+  const world = new World({
+    gravity: new Vector2(0, -10),
+    integrator,
+  });
 
   const bodyId = world.addBody(new Body(), {
     position: new Vector2(1, 2),
@@ -525,7 +576,10 @@ Deno.test("World preserves all body states when any integration result is invali
     throw new Error("Unexpected state.");
   });
 
-  const world = new World(new Vector2(0, -10), integrator);
+  const world = new World({
+    gravity: new Vector2(0, -10),
+    integrator,
+  });
 
   const body = new Body();
 
@@ -592,7 +646,10 @@ Deno.test("World rejects a non-finite integrator orientation atomically", () => 
     throw new Error("Unexpected state.");
   });
 
-  const world = new World(new Vector2(0, -10), integrator);
+  const world = new World({
+    gravity: new Vector2(0, -10),
+    integrator,
+  });
   const body = new Body();
 
   const firstBodyId = world.addBody(body, {
@@ -651,7 +708,10 @@ Deno.test("World rejects a non-finite integrator angular velocity atomically", (
     throw new Error("Unexpected state.");
   });
 
-  const world = new World(new Vector2(0, -10), integrator);
+  const world = new World({
+    gravity: new Vector2(0, -10),
+    integrator,
+  });
   const body = new Body();
 
   const firstBodyId = world.addBody(body, {
@@ -682,14 +742,20 @@ Deno.test("World rejects a non-finite integrator angular velocity atomically", (
 Deno.test("World rejects invalid initial gravity", () => {
   assertThrows(
     () =>
-      new World(new Vector2(0, Number.POSITIVE_INFINITY), new StubIntegrator((state) => state)),
+      new World({
+        gravity: new Vector2(0, Number.POSITIVE_INFINITY),
+        integrator: new StubIntegrator((state) => state),
+      }),
     RangeError,
     "Gravity must contain finite components.",
   );
 });
 
 Deno.test("World exposes snapshots of all bodies", () => {
-  const world = new World(new Vector2(0, -10), new StubIntegrator((state) => state));
+  const world = new World({
+    gravity: new Vector2(0, -10),
+    integrator: new StubIntegrator((state) => state),
+  });
 
   const body = new Body();
 
@@ -731,7 +797,10 @@ Deno.test("World exposes snapshots of all bodies", () => {
 });
 
 Deno.test("World snapshots expose Circle geometry through the Body definition", () => {
-  const world = new World(new Vector2(0, -10), new StubIntegrator((state) => state));
+  const world = new World({
+    gravity: new Vector2(0, -10),
+    integrator: new StubIntegrator((state) => state),
+  });
 
   const circle = new Circle(2);
   const body = new Body({ shape: circle });
@@ -751,13 +820,19 @@ Deno.test("World snapshots expose Circle geometry through the Body definition", 
 });
 
 Deno.test("World exposes an empty body snapshot collection when empty", () => {
-  const world = new World(new Vector2(0, -10), new StubIntegrator((state) => state));
+  const world = new World({
+    gravity: new Vector2(0, -10),
+    integrator: new StubIntegrator((state) => state),
+  });
 
   assertEquals(world.getBodySnapshots(), []);
 });
 
 Deno.test("World body snapshots detach runtime state from authoritative world state", () => {
-  const world = new World(new Vector2(0, -10), new StubIntegrator((state) => state));
+  const world = new World({
+    gravity: new Vector2(0, -10),
+    integrator: new StubIntegrator((state) => state),
+  });
 
   const bodyId = world.addBody(new Body(), {
     position: new Vector2(1, 2),
@@ -785,7 +860,10 @@ Deno.test("World body snapshots detach runtime state from authoritative world st
 });
 
 Deno.test("World getBodyState returns detached state", () => {
-  const world = new World(new Vector2(0, -10), new StubIntegrator((state) => state));
+  const world = new World({
+    gravity: new Vector2(0, -10),
+    integrator: new StubIntegrator((state) => state),
+  });
 
   const bodyId = world.addBody(new Body(), {
     position: new Vector2(1, 2),

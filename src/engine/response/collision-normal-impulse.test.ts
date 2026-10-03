@@ -129,6 +129,76 @@ Deno.test(
   },
 );
 
+Deno.test(
+  "computeCollisionNormalImpulse suppresses restitution below the speed threshold",
+  () => {
+    const collision: Collision = {
+      normal: new Vector2(1, 0),
+      penetrationDepth: 1,
+    };
+
+    const response = computeCollisionNormalImpulse(
+      collision,
+      new Vector2(0.4, 2),
+      new Vector2(0, -3),
+      1,
+      0,
+      1,
+      0.5,
+    );
+
+    // Closing speed 0.4 is below the threshold, so the normal response is
+    // inelastic even though the configured restitution is perfectly elastic.
+    assertEquals(response.impulse, new Vector2(0.4, 0));
+    assertEquals(response.bodyAVelocityChange, new Vector2(-0.4, 0));
+    assertEquals(response.bodyBVelocityChange, new Vector2(0, 0));
+  },
+);
+
+Deno.test("computeCollisionNormalImpulse applies restitution above the speed threshold", () => {
+  const collision: Collision = {
+    normal: new Vector2(1, 0),
+    penetrationDepth: 1,
+  };
+
+  const response = computeCollisionNormalImpulse(
+    collision,
+    new Vector2(0.6, 2),
+    new Vector2(0, -3),
+    1,
+    0,
+    1,
+    0.5,
+  );
+
+  assertEquals(response.impulse, new Vector2(1.2, 0));
+  assertEquals(response.bodyAVelocityChange, new Vector2(-1.2, 0));
+  assertEquals(response.bodyBVelocityChange, new Vector2(0, 0));
+});
+
+Deno.test(
+  "computeCollisionNormalImpulse suppresses restitution exactly at the speed threshold",
+  () => {
+    const collision: Collision = {
+      normal: new Vector2(1, 0),
+      penetrationDepth: 1,
+    };
+
+    const response = computeCollisionNormalImpulse(
+      collision,
+      new Vector2(0.5, 0),
+      new Vector2(0, 0),
+      1,
+      0,
+      1,
+      0.5,
+    );
+
+    assertEquals(response.impulse, new Vector2(0.5, 0));
+    assertEquals(response.bodyAVelocityChange, new Vector2(-0.5, 0));
+  },
+);
+
 Deno.test("computeCollisionNormalImpulse leaves separating Bodies unchanged", () => {
   const collision: Collision = {
     normal: new Vector2(1, 0),
@@ -285,5 +355,49 @@ Deno.test("computeCollisionNormalImpulse rejects non-finite restitution", () => 
       ),
     RangeError,
     "Restitution must be finite.",
+  );
+});
+
+Deno.test("computeCollisionNormalImpulse rejects negative restitution threshold", () => {
+  const collision: Collision = {
+    normal: new Vector2(1, 0),
+    penetrationDepth: 1,
+  };
+
+  assertThrows(
+    () =>
+      computeCollisionNormalImpulse(
+        collision,
+        new Vector2(1, 0),
+        new Vector2(0, 0),
+        1,
+        0,
+        1,
+        -0.1,
+      ),
+    RangeError,
+    "Restitution threshold must not be negative.",
+  );
+});
+
+Deno.test("computeCollisionNormalImpulse rejects non-finite restitution threshold", () => {
+  const collision: Collision = {
+    normal: new Vector2(1, 0),
+    penetrationDepth: 1,
+  };
+
+  assertThrows(
+    () =>
+      computeCollisionNormalImpulse(
+        collision,
+        new Vector2(1, 0),
+        new Vector2(0, 0),
+        1,
+        0,
+        1,
+        Number.POSITIVE_INFINITY,
+      ),
+    RangeError,
+    "Restitution threshold must be finite.",
   );
 });

@@ -28,7 +28,10 @@ class TrackingIntegrator implements KinematicIntegrator {
 }
 
 function createWorld(integrator: KinematicIntegrator): World {
-  const world = new World(new Vector2(0, -9.81), integrator);
+  const world = new World({
+    gravity: new Vector2(0, -9.81),
+    integrator,
+  });
 
   world.addBody(new Body());
 
