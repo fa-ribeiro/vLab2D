@@ -115,6 +115,40 @@ Deno.test("Body rejects non-finite restitution", () => {
   );
 });
 
+Deno.test("Body uses zero friction by default", () => {
+  const body = new Body();
+
+  assertEquals(body.friction, 0);
+});
+
+Deno.test("Body retains supplied friction", () => {
+  const body = new Body({ friction: 0.75 });
+
+  assertEquals(body.friction, 0.75);
+});
+
+Deno.test("Body accepts friction greater than one", () => {
+  const body = new Body({ friction: 1.5 });
+
+  assertEquals(body.friction, 1.5);
+});
+
+Deno.test("Body rejects negative friction", () => {
+  assertThrows(
+    () => new Body({ friction: -0.1 }),
+    RangeError,
+    "Body friction must not be negative.",
+  );
+});
+
+Deno.test("Body rejects non-finite friction", () => {
+  assertThrows(
+    () => new Body({ friction: Number.POSITIVE_INFINITY }),
+    RangeError,
+    "Body friction must be finite.",
+  );
+});
+
 Deno.test("Body retains supplied Circle geometry", () => {
   const circle = new Circle(2);
 

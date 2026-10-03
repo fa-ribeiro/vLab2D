@@ -42,8 +42,21 @@ export interface BodyOptions {
    * collision normal is fully reflected. Values between them produce partial
    * bounce. Defaults to `0`.
    *
-   * When two Bodies collide, World combines their restitution values before
-   * solving the normal impulse.
+   * This is temporarily stored directly on Body. The roadmap anticipates a
+   * future physical Material concept, at which point restitution may migrate to
+   * that richer definition without changing the response mathematics.
    */
   readonly restitution?: number;
+
+  /**
+   * Coulomb friction coefficient used by tangential collision response.
+   *
+   * Friction must be finite and non-negative. `0` disables friction; larger
+   * values allow a stronger tangential impulse. Defaults to `0`, preserving the
+   * frictionless behavior of existing Body definitions.
+   *
+   * Like restitution, this is intentionally a temporary Body-level property
+   * until a concrete Material model is introduced.
+   */
+  readonly friction?: number;
 }

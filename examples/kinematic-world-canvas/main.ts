@@ -137,17 +137,26 @@ world.addBody(hexagon, {
   angularVelocity: -Math.PI / 4,
 });
 
-// A dedicated bouncy Body makes restitution visible without changing the
-// default inelastic behavior of the other example Bodies.
-const bouncyBall = new Body({ shape: new Circle(0.6), restitution: 0.85 });
+// The bouncy ball now also carries friction so its oblique impact demonstrates
+// both response components: normal velocity bounces while tangential velocity
+// is reduced by Coulomb friction.
+const bouncyBall = new Body({
+  shape: new Circle(0.6),
+  restitution: 0.85,
+  friction: 0.8,
+});
 
-world.addBody(bouncyBall, { position: new Vector2(8, -1), velocity: new Vector2(0, -1) });
+world.addBody(bouncyBall, {
+  position: new Vector2(8, -1),
+  velocity: new Vector2(2, -1),
+});
 
-// Static geometry participates in collision detection/response but is not
-// advanced by gravity or the World's kinematic integrator.
+// The floor supplies the other half of the friction pair. Existing Bodies keep
+// their default friction 0, so their previous collision behavior is unchanged.
 const floor = new Body({
   type: "static",
   shape: new Rectangle(20, 1),
+  friction: 0.8,
 });
 
 world.addBody(floor, { position: new Vector2(2, -4.5), orientation: -Math.PI / 48 });

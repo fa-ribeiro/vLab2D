@@ -1,5 +1,9 @@
 import type { BodyShape } from "../geometry/body-shape.ts";
-import { assertFiniteNumber, assertPositiveNumber } from "../math/validation.ts";
+import {
+  assertFiniteNumber,
+  assertNonNegativeNumber,
+  assertPositiveNumber,
+} from "../math/validation.ts";
 import type { BodyOptions } from "./body-options.ts";
 import type { BodyType } from "./body-type.ts";
 
@@ -41,21 +45,36 @@ export class Body {
    * `0` is inelastic along the collision normal, while `1` fully reflects the
    * relative normal closing speed. World combines the two colliding Bodies'
    * values before solving their normal impulse.
+   *
+   * This placement is provisional: a future physical Material definition may
+   * become the source of restitution.
    */
   public readonly restitution: number;
+
+  /**
+   * Coulomb friction coefficient controlling tangential collision response.
+   *
+   * `0` disables friction. Larger non-negative values permit stronger
+   * tangential impulses.
+   *
+   * This placement is provisional: a future physical Material definition may
+   * become the source of friction.
+   */
+  public readonly friction: number;
 
   /**
    * Creates a reusable body definition.
    *
    * @param options Optional intrinsic Body configuration.
    * @throws {RangeError} If the configured inverse mass contradicts the Body
-   * type or is not finite, or if restitution is outside the finite range
-   * `[0, 1]`.
+   * type or is not finite, restitution is outside `[0, 1]`, or friction is
+   * negative/non-finite.
    */
   public constructor(options: BodyOptions = {}) {
     const bodyType = options.type ?? "dynamic";
     const inverseMass = options.inverseMass ?? (bodyType === "static" ? 0 : 1);
     const restitution = options.restitution ?? 0;
+    const friction = options.friction ?? 0;
 
     assertFiniteNumber(inverseMass, "Body inverse mass");
 
@@ -81,9 +100,13 @@ export class Body {
       throw new RangeError("Body restitution must be between 0 and 1.");
     }
 
+    assertFiniteNumber(friction, "Body friction");
+    assertNonNegativeNumber(friction, "Body friction");
+
     this.type = bodyType;
     this.shape = options.shape;
     this.inverseMass = inverseMass;
     this.restitution = restitution;
+    this.friction = friction;
   }
 }

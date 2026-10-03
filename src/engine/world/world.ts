@@ -7,6 +7,7 @@ import {
   assertValidTimestep,
 } from "../kinematics/validation.ts";
 import { Vector2 } from "../math/vector2.ts";
+import { computeCollisionFrictionImpulse } from "../response/collision-friction-impulse.ts";
 import { computeCollisionNormalImpulse } from "../response/collision-normal-impulse.ts";
 import { computeCollisionPositionCorrections } from "../response/collision-position-correction.ts";
 import type { BodyId } from "./body-id.ts";
@@ -31,8 +32,9 @@ interface WorldBody {
  *
  * Dynamic body instances share the same world gravity and numerical
  * integration strategy. Static body instances remain fixed. Shaped bodies
- * participate in inverse-mass-weighted positional collision response and
- * restitution-aware normal impulse response after dynamic integration.
+ * participate in inverse-mass-weighted positional collision response,
+ * restitution-aware normal impulse response, and tangential friction response
+ * after dynamic integration.
  */
 export class World {
   #nextBodyId: BodyId = 1;
@@ -182,8 +184,8 @@ export class World {
    * 2. **Collision detection** — observe the complete integrated candidate
    *    configuration and find colliding Body pairs.
    * 3. **Collision response** — for every detected collision, compute and
-   *    accumulate positional corrections and restitution-aware normal-impulse
-   *    velocity changes.
+   *    accumulate positional corrections, restitution-aware normal impulses,
+   *    and Coulomb-limited tangential friction impulses.
    * 4. **State resolution and validation** — apply all accumulated response
    *    changes to the integrated candidate states and validate the results.
    * 5. **Atomic commit** — only after every candidate is valid are the resolved
@@ -191,15 +193,18 @@ export class World {
    *
    * A static Body has zero inverse mass, so response never translates it or
    * changes its velocity. A dynamic Body colliding with a static Body therefore
-   * receives the full positional correction and the full normal velocity
-   * response. Two overlapping static Bodies remain unchanged.
+   * receives the full positional and velocity response.
    *
-   * Restitution is mixed per colliding pair using the larger Body value. This
-   * lets a bouncy Body remain bouncy against a non-bouncy surface. The impulse
-   * response changes linear velocity only; tangential velocity and angular
-   * state remain untouched. Friction, contact-point angular effects,
-   * restitution thresholds, and iterative contact solving remain later
-   * capabilities.
+   * Restitution currently mixes using the larger Body value. Friction currently
+   * mixes using the geometric mean of the two Body values. Those properties
+   * are deliberately passed into pure response mathematics as effective pair
+   * coefficients, so their eventual migration to a physical Material model
+   * does not require the collision equations to know where material data lives.
+   *
+   * Friction in this pass changes linear tangential velocity only. Without
+   * contact points and rotational inertia, friction cannot yet create or change
+   * angular velocity. Restitution thresholds, contact-point angular effects,
+   * and iterative contact solving remain later capabilities.
    *
    * Because one batch is calculated from the same candidate state,
    * configurations with several simultaneous contacts may still need later
@@ -277,12 +282,11 @@ export class World {
       accumulateVector(accumulatedPositionCorrections, bodyAId, positionCorrections.bodyA);
       accumulateVector(accumulatedPositionCorrections, bodyBId, positionCorrections.bodyB);
 
-      // Step 3b — Velocity response: remove/reflect closing normal velocity
-      // according to the pair's effective restitution. Tangential velocity is
-      // deliberately untouched in this pass.
+      // Step 3b — Normal velocity response: remove/reflect closing velocity
+      // according to the pair's effective restitution.
       const restitution = Math.max(bodyA.definition.restitution, bodyB.definition.restitution);
 
-      const impulseResponse = computeCollisionNormalImpulse(
+      const normalImpulseResponse = computeCollisionNormalImpulse(
         collision,
         stateA.velocity,
         stateB.velocity,
@@ -294,12 +298,38 @@ export class World {
       accumulateVector(
         accumulatedVelocityChanges,
         bodyAId,
-        impulseResponse.bodyAVelocityChange,
+        normalImpulseResponse.bodyAVelocityChange,
       );
       accumulateVector(
         accumulatedVelocityChanges,
         bodyBId,
-        impulseResponse.bodyBVelocityChange,
+        normalImpulseResponse.bodyBVelocityChange,
+      );
+
+      // Step 3c — Tangential friction response: the geometric mean combines the
+      // temporary Body-level coefficients. The normal impulse from Step 3b sets
+      // the Coulomb limit for the strongest permitted tangent impulse.
+      const friction = Math.sqrt(bodyA.definition.friction * bodyB.definition.friction);
+
+      const frictionImpulseResponse = computeCollisionFrictionImpulse(
+        collision,
+        stateA.velocity,
+        stateB.velocity,
+        bodyA.definition.inverseMass,
+        bodyB.definition.inverseMass,
+        normalImpulseResponse.impulse,
+        friction,
+      );
+
+      accumulateVector(
+        accumulatedVelocityChanges,
+        bodyAId,
+        frictionImpulseResponse.bodyAVelocityChange,
+      );
+      accumulateVector(
+        accumulatedVelocityChanges,
+        bodyBId,
+        frictionImpulseResponse.bodyBVelocityChange,
       );
     }
 
