@@ -133,6 +133,7 @@ world.addBody(triangle, {
 world.addBody(hexagon, {
   position: new Vector2(3, 0),
   orientation: Math.PI / 6,
+  velocity: new Vector2(0, 0.2),
   angularVelocity: -Math.PI / 4,
 });
 

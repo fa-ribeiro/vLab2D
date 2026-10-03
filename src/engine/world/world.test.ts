@@ -279,6 +279,64 @@ Deno.test("World advances every body using the injected integrator", () => {
   }
 });
 
+Deno.test("World applies positional collision response after integration", () => {
+  const integrator = new StubIntegrator((state) => {
+    if (state.position.x < 0) {
+      return { ...state, position: new Vector2(0, 0) };
+    }
+
+    return { ...state, position: new Vector2(1, 0) };
+  });
+
+  const world = new World(new Vector2(0, 0), integrator);
+  const circle = new Body({ shape: new Circle(1) });
+
+  const bodyAId = world.addBody(circle, {
+    position: new Vector2(-2, 0),
+    velocity: new Vector2(3, 4),
+  });
+  const bodyBId = world.addBody(circle, {
+    position: new Vector2(2, 0),
+    velocity: new Vector2(-5, 6),
+  });
+
+  world.step(0.5);
+
+  const bodyAState = world.getBodyState(bodyAId);
+  const bodyBState = world.getBodyState(bodyBId);
+
+  assert(bodyAState !== undefined);
+  assert(bodyBState !== undefined);
+
+  assertVector(bodyAState.position, -0.5, 0);
+  assertVector(bodyBState.position, 1.5, 0);
+
+  // This pass separates position only; impulse response is deliberately later.
+  assertVector(bodyAState.velocity, 3, 4);
+  assertVector(bodyBState.velocity, -5, 6);
+});
+
+Deno.test("World weights positional collision response by Body inverse mass", () => {
+  const world = new World(new Vector2(0, 0), new StubIntegrator((state) => state));
+
+  const heavierCircle = new Body({ shape: new Circle(1), inverseMass: 0.25 });
+  const lighterCircle = new Body({ shape: new Circle(1), inverseMass: 0.75 });
+
+  const heavierId = world.addBody(heavierCircle, { position: new Vector2(0, 0) });
+  const lighterId = world.addBody(lighterCircle, { position: new Vector2(1, 0) });
+
+  world.step(0);
+
+  const heavierState = world.getBodyState(heavierId);
+  const lighterState = world.getBodyState(lighterId);
+
+  assert(heavierState !== undefined);
+  assert(lighterState !== undefined);
+
+  assertVector(heavierState.position, -0.25, 0);
+  assertVector(lighterState.position, 1.75, 0);
+});
+
 Deno.test("World uses updated gravity on subsequent steps", () => {
   const integrator = new StubIntegrator((state) => state);
 
