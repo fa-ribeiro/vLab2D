@@ -4,10 +4,13 @@ import { Body } from "../../src/engine/body/body.ts";
 import { Circle } from "../../src/engine/geometry/circle.ts";
 import { SemiImplicitEulerIntegrator } from "../../src/engine/kinematics/semi-implicit-euler-integrator.ts";
 import { Vector2 } from "../../src/engine/math/vector2.ts";
-import { WORLD_DEFAULTS } from "../../src/engine/world/world-config.ts";
+import { IterativeBatchCollisionSolver } from "../../src/engine/solver/iterative-batch-collision-solver.ts";
+import { ITERATIVE_BATCH_COLLISION_SOLVER_DEFAULTS } from "../../src/engine/solver/iterative-batch-collision-solver-config.ts";
 import { World } from "../../src/engine/world/world.ts";
 
-function createThreeTouchingCircles(velocityIterations = WORLD_DEFAULTS.velocityIterations): {
+function createThreeTouchingCircles(
+  velocityIterations = ITERATIVE_BATCH_COLLISION_SOLVER_DEFAULTS.velocityIterations,
+): {
   readonly world: World;
   readonly body: Body;
 } {
@@ -15,7 +18,7 @@ function createThreeTouchingCircles(velocityIterations = WORLD_DEFAULTS.velocity
     world: new World({
       gravity: new Vector2(0, 0),
       integrator: new SemiImplicitEulerIntegrator(),
-      velocityIterations,
+      collisionSolver: new IterativeBatchCollisionSolver({ velocityIterations }),
     }),
     body: new Body({ shape: new Circle(1) }),
   };
@@ -140,6 +143,7 @@ Deno.test(
     const world = new World({
       gravity: new Vector2(0, 0),
       integrator: new SemiImplicitEulerIntegrator(),
+      collisionSolver: new IterativeBatchCollisionSolver(),
     });
     const body = new Body({
       shape: new Circle(1),

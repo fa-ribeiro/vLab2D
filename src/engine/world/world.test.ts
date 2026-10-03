@@ -1,9 +1,13 @@
 import { assert, assertEquals, assertStrictEquals, assertThrows } from "@std/assert";
 
 import { Body } from "../body/body.ts";
+import type { BodyCollision } from "../collision/body-collision.ts";
 import { Circle } from "../geometry/circle.ts";
 import type { KinematicIntegrator } from "../kinematics/kinematic-integrator.ts";
 import { Vector2 } from "../math/vector2.ts";
+import type { CollisionSolver } from "../solver/collision-solver.ts";
+import type { BodyId } from "./body-id.ts";
+import type { BodySnapshot } from "./body-snapshot.ts";
 import type { BodyState } from "./body-state.ts";
 import { World } from "./world.ts";
 
@@ -49,12 +53,38 @@ class StubIntegrator implements KinematicIntegrator {
   }
 }
 
+type SolverCall = {
+  readonly bodies: readonly BodySnapshot[];
+  readonly collisions: readonly BodyCollision[];
+};
+
+class StubCollisionSolver implements CollisionSolver {
+  public readonly calls: SolverCall[] = [];
+
+  public constructor(
+    private readonly solveFn: (
+      bodies: readonly BodySnapshot[],
+      collisions: readonly BodyCollision[],
+    ) => ReadonlyMap<BodyId, BodyState> = (bodies) =>
+      new Map(bodies.map(({ id, state }) => [id, state] as const)),
+  ) {}
+
+  public solve(
+    bodies: readonly BodySnapshot[],
+    collisions: readonly BodyCollision[],
+  ): ReadonlyMap<BodyId, BodyState> {
+    this.calls.push({ bodies, collisions });
+    return this.solveFn(bodies, collisions);
+  }
+}
+
 Deno.test("World adds a body and exposes its initial runtime state", () => {
   const integrator = new StubIntegrator((state) => state);
 
   const world = new World({
     gravity: new Vector2(0, -10),
     integrator,
+    collisionSolver: new StubCollisionSolver(),
   });
 
   const bodyId = world.addBody(new Body(), {
@@ -78,6 +108,7 @@ Deno.test("World uses zero-valued body initial-condition defaults", () => {
   const world = new World({
     gravity: new Vector2(0, -10),
     integrator: new StubIntegrator((state) => state),
+    collisionSolver: new StubCollisionSolver(),
   });
 
   const bodyId = world.addBody(new Body());
@@ -98,6 +129,7 @@ Deno.test("World assigns different identifiers to different body instances", () 
   const world = new World({
     gravity: new Vector2(0, -10),
     integrator,
+    collisionSolver: new StubCollisionSolver(),
   });
 
   const body = new Body();
@@ -114,6 +146,7 @@ Deno.test("World can reuse one Body definition with independent runtime states",
   const world = new World({
     gravity: new Vector2(0, -10),
     integrator,
+    collisionSolver: new StubCollisionSolver(),
   });
 
   const body = new Body();
@@ -153,6 +186,7 @@ Deno.test("World copies body initial conditions into runtime state", () => {
   const world = new World({
     gravity: new Vector2(0, -10),
     integrator: new StubIntegrator((state) => state),
+    collisionSolver: new StubCollisionSolver(),
   });
 
   const position = new Vector2(1, 2);
@@ -186,6 +220,7 @@ Deno.test("World rejects invalid body initial conditions", () => {
   const world = new World({
     gravity: new Vector2(0, -10),
     integrator,
+    collisionSolver: new StubCollisionSolver(),
   });
 
   assertThrows(
@@ -222,6 +257,7 @@ Deno.test("World rejects non-zero initial velocity for a static Body", () => {
   const world = new World({
     gravity: new Vector2(0, -10),
     integrator: new StubIntegrator((state) => state),
+    collisionSolver: new StubCollisionSolver(),
   });
   const staticBody = new Body({ type: "static" });
 
@@ -241,6 +277,7 @@ Deno.test("World rejects non-zero initial angular velocity for a static Body", (
   const world = new World({
     gravity: new Vector2(0, -10),
     integrator: new StubIntegrator((state) => state),
+    collisionSolver: new StubCollisionSolver(),
   });
   const staticBody = new Body({ type: "static" });
 
@@ -288,6 +325,7 @@ Deno.test("World advances every body using the injected integrator", () => {
   const world = new World({
     gravity,
     integrator,
+    collisionSolver: new StubCollisionSolver(),
   });
 
   const body = new Body();
@@ -345,6 +383,7 @@ Deno.test("World preserves static Body state without invoking the integrator", (
   const world = new World({
     gravity: new Vector2(0, -10),
     integrator,
+    collisionSolver: new StubCollisionSolver(),
   });
   const staticBody = new Body({ type: "static", shape: new Circle(1) });
 
@@ -365,136 +404,13 @@ Deno.test("World preserves static Body state without invoking the integrator", (
   assertEquals(integrator.calls, []);
 });
 
-Deno.test("World applies positional and normal impulse response after integration", () => {
-  const integrator = new StubIntegrator((state) => {
-    if (state.position.x < 0) {
-      return { ...state, position: new Vector2(0, 0) };
-    }
-
-    return { ...state, position: new Vector2(1, 0) };
-  });
-
-  const world = new World({
-    gravity: new Vector2(0, 0),
-    integrator,
-  });
-  const circle = new Body({ shape: new Circle(1) });
-
-  const bodyAId = world.addBody(circle, {
-    position: new Vector2(-2, 0),
-    velocity: new Vector2(3, 4),
-  });
-  const bodyBId = world.addBody(circle, {
-    position: new Vector2(2, 0),
-    velocity: new Vector2(-5, 6),
-  });
-
-  world.step(0.5);
-
-  const bodyAState = world.getBodyState(bodyAId);
-  const bodyBState = world.getBodyState(bodyBId);
-
-  assert(bodyAState !== undefined);
-  assert(bodyBState !== undefined);
-
-  assertVector(bodyAState.position, -0.5, 0);
-  assertVector(bodyBState.position, 1.5, 0);
-
-  // Equal inverse masses receive equal/opposite impulse changes. Only the
-  // closing x component is equalized; tangential y velocity is untouched.
-  assertVector(bodyAState.velocity, -1, 4);
-  assertVector(bodyBState.velocity, -1, 6);
-});
-
-Deno.test("World weights positional collision response by Body inverse mass", () => {
-  const world = new World({
-    gravity: new Vector2(0, 0),
-    integrator: new StubIntegrator((state) => state),
-  });
-
-  const heavierCircle = new Body({ shape: new Circle(1), inverseMass: 0.25 });
-  const lighterCircle = new Body({ shape: new Circle(1), inverseMass: 0.75 });
-
-  const heavierId = world.addBody(heavierCircle, { position: new Vector2(0, 0) });
-  const lighterId = world.addBody(lighterCircle, { position: new Vector2(1, 0) });
-
-  world.step(0);
-
-  const heavierState = world.getBodyState(heavierId);
-  const lighterState = world.getBodyState(lighterId);
-
-  assert(heavierState !== undefined);
-  assert(lighterState !== undefined);
-
-  assertVector(heavierState.position, -0.25, 0);
-  assertVector(lighterState.position, 1.75, 0);
-});
-
-Deno.test("World gives a dynamic Body full response against a static Body", () => {
-  const world = new World({
-    gravity: new Vector2(0, 0),
-    integrator: new StubIntegrator((state) => state),
-  });
-
-  const dynamicCircle = new Body({ shape: new Circle(1) });
-  const staticCircle = new Body({ type: "static", shape: new Circle(1) });
-
-  const dynamicId = world.addBody(dynamicCircle, {
-    position: new Vector2(0, 0),
-    velocity: new Vector2(3, 2),
-  });
-  const staticId = world.addBody(staticCircle, { position: new Vector2(1, 0) });
-
-  world.step(0);
-
-  const dynamicState = world.getBodyState(dynamicId);
-  const staticState = world.getBodyState(staticId);
-
-  assert(dynamicState !== undefined);
-  assert(staticState !== undefined);
-
-  assertVector(dynamicState.position, -1, 0);
-  assertVector(staticState.position, 1, 0);
-
-  // The normal x velocity is removed, while the tangential y velocity remains.
-  assertVector(dynamicState.velocity, 0, 2);
-  assertVector(staticState.velocity, 0, 0);
-});
-
-Deno.test("World leaves overlapping static Bodies unchanged", () => {
-  const integrator = new StubIntegrator(() => {
-    throw new Error("Static Bodies must not be integrated.");
-  });
-  const world = new World({
-    gravity: new Vector2(0, -10),
-    integrator,
-  });
-  const staticCircle = new Body({ type: "static", shape: new Circle(1) });
-
-  const firstId = world.addBody(staticCircle, { position: new Vector2(0, 0) });
-  const secondId = world.addBody(staticCircle, { position: new Vector2(1, 0) });
-
-  world.step(1);
-
-  const firstState = world.getBodyState(firstId);
-  const secondState = world.getBodyState(secondId);
-
-  assert(firstState !== undefined);
-  assert(secondState !== undefined);
-
-  assertVector(firstState.position, 0, 0);
-  assertVector(secondState.position, 1, 0);
-  assertVector(firstState.velocity, 0, 0);
-  assertVector(secondState.velocity, 0, 0);
-  assertEquals(integrator.calls, []);
-});
-
 Deno.test("World uses updated gravity on subsequent steps", () => {
   const integrator = new StubIntegrator((state) => state);
 
   const world = new World({
     gravity: new Vector2(0, -10),
     integrator,
+    collisionSolver: new StubCollisionSolver(),
   });
 
   world.addBody(new Body());
@@ -514,6 +430,7 @@ Deno.test("World rejects invalid gravity without replacing the current value", (
   const world = new World({
     gravity,
     integrator: new StubIntegrator((state) => state),
+    collisionSolver: new StubCollisionSolver(),
   });
 
   assertThrows(
@@ -531,6 +448,7 @@ Deno.test("World rejects an invalid timestep before integrating bodies", () => {
   const world = new World({
     gravity: new Vector2(0, -10),
     integrator,
+    collisionSolver: new StubCollisionSolver(),
   });
 
   const bodyId = world.addBody(new Body(), {
@@ -579,6 +497,7 @@ Deno.test("World preserves all body states when any integration result is invali
   const world = new World({
     gravity: new Vector2(0, -10),
     integrator,
+    collisionSolver: new StubCollisionSolver(),
   });
 
   const body = new Body();
@@ -649,6 +568,7 @@ Deno.test("World rejects a non-finite integrator orientation atomically", () => 
   const world = new World({
     gravity: new Vector2(0, -10),
     integrator,
+    collisionSolver: new StubCollisionSolver(),
   });
   const body = new Body();
 
@@ -711,6 +631,7 @@ Deno.test("World rejects a non-finite integrator angular velocity atomically", (
   const world = new World({
     gravity: new Vector2(0, -10),
     integrator,
+    collisionSolver: new StubCollisionSolver(),
   });
   const body = new Body();
 
@@ -745,6 +666,7 @@ Deno.test("World rejects invalid initial gravity", () => {
       new World({
         gravity: new Vector2(0, Number.POSITIVE_INFINITY),
         integrator: new StubIntegrator((state) => state),
+        collisionSolver: new StubCollisionSolver(),
       }),
     RangeError,
     "Gravity must contain finite components.",
@@ -755,6 +677,7 @@ Deno.test("World exposes snapshots of all bodies", () => {
   const world = new World({
     gravity: new Vector2(0, -10),
     integrator: new StubIntegrator((state) => state),
+    collisionSolver: new StubCollisionSolver(),
   });
 
   const body = new Body();
@@ -800,6 +723,7 @@ Deno.test("World snapshots expose Circle geometry through the Body definition", 
   const world = new World({
     gravity: new Vector2(0, -10),
     integrator: new StubIntegrator((state) => state),
+    collisionSolver: new StubCollisionSolver(),
   });
 
   const circle = new Circle(2);
@@ -823,6 +747,7 @@ Deno.test("World exposes an empty body snapshot collection when empty", () => {
   const world = new World({
     gravity: new Vector2(0, -10),
     integrator: new StubIntegrator((state) => state),
+    collisionSolver: new StubCollisionSolver(),
   });
 
   assertEquals(world.getBodySnapshots(), []);
@@ -832,6 +757,7 @@ Deno.test("World body snapshots detach runtime state from authoritative world st
   const world = new World({
     gravity: new Vector2(0, -10),
     integrator: new StubIntegrator((state) => state),
+    collisionSolver: new StubCollisionSolver(),
   });
 
   const bodyId = world.addBody(new Body(), {
@@ -863,6 +789,7 @@ Deno.test("World getBodyState returns detached state", () => {
   const world = new World({
     gravity: new Vector2(0, -10),
     integrator: new StubIntegrator((state) => state),
+    collisionSolver: new StubCollisionSolver(),
   });
 
   const bodyId = world.addBody(new Body(), {
@@ -886,4 +813,125 @@ Deno.test("World getBodyState returns detached state", () => {
   assertVector(nextObservation.velocity, 3, 4);
   assertEquals(nextObservation.orientation, Math.PI / 6);
   assertEquals(nextObservation.angularVelocity, Math.PI / 4);
+});
+
+Deno.test("World delegates integrated candidates and detected collisions to its solver", () => {
+  const solver = new StubCollisionSolver();
+  const world = new World({
+    gravity: new Vector2(0, 0),
+    integrator: new StubIntegrator((state) => ({
+      ...state,
+      position: state.position.add(new Vector2(1, 0)),
+    })),
+    collisionSolver: solver,
+  });
+  const circle = new Body({ shape: new Circle(1) });
+
+  const bodyAId = world.addBody(circle, { position: new Vector2(-1, 0) });
+  const bodyBId = world.addBody(circle, { position: new Vector2(0, 0) });
+
+  world.step(1);
+
+  assertEquals(solver.calls.length, 1);
+  assertEquals(solver.calls[0].bodies.length, 2);
+  assertEquals(solver.calls[0].collisions.length, 1);
+
+  const observedA = solver.calls[0].bodies.find(({ id }) => id === bodyAId);
+  const observedB = solver.calls[0].bodies.find(({ id }) => id === bodyBId);
+
+  assert(observedA !== undefined);
+  assert(observedB !== undefined);
+  assertEquals(observedA.state.position, new Vector2(0, 0));
+  assertEquals(observedB.state.position, new Vector2(1, 0));
+});
+
+Deno.test("World copies solver results across the authoritative-state boundary", () => {
+  let solverState: BodyState | undefined;
+
+  const solver = new StubCollisionSolver((bodies) => {
+    const input = bodies[0];
+    solverState = {
+      ...input.state,
+      position: new Vector2(10, 20),
+      velocity: new Vector2(30, 40),
+    };
+    return new Map([[input.id, solverState]]);
+  });
+
+  const world = new World({
+    gravity: new Vector2(0, 0),
+    integrator: new StubIntegrator((state) => state),
+    collisionSolver: solver,
+  });
+  const bodyId = world.addBody(new Body());
+
+  world.step(0);
+
+  assert(solverState !== undefined);
+  (solverState.position as { x: number }).x = 999;
+  (solverState as { angularVelocity: number }).angularVelocity = 999;
+
+  const authoritative = world.getBodyState(bodyId);
+  assert(authoritative !== undefined);
+  assertEquals(authoritative.position, new Vector2(10, 20));
+  assertEquals(authoritative.velocity, new Vector2(30, 40));
+  assertEquals(authoritative.angularVelocity, 0);
+});
+
+Deno.test("World rejects an incomplete solver result atomically", () => {
+  const solver = new StubCollisionSolver(
+    (bodies) => new Map([[bodies[0].id, bodies[0].state]]),
+  );
+  const world = new World({
+    gravity: new Vector2(0, 0),
+    integrator: new StubIntegrator((state) => ({
+      ...state,
+      position: state.position.add(new Vector2(1, 0)),
+    })),
+    collisionSolver: solver,
+  });
+
+  const firstId = world.addBody(new Body(), { position: new Vector2(1, 0) });
+  const secondId = world.addBody(new Body(), { position: new Vector2(2, 0) });
+
+  assertThrows(
+    () => world.step(1),
+    Error,
+    "Collision solver must return exactly one state for every World body.",
+  );
+
+  assertEquals(world.getBodyState(firstId)?.position, new Vector2(1, 0));
+  assertEquals(world.getBodyState(secondId)?.position, new Vector2(2, 0));
+});
+
+Deno.test("World rejects a non-finite solver result atomically", () => {
+  const solver = new StubCollisionSolver((bodies) => {
+    const result = new Map<BodyId, BodyState>();
+    for (const body of bodies) {
+      result.set(body.id, body.state);
+    }
+    const second = bodies[1];
+    result.set(second.id, {
+      ...second.state,
+      velocity: new Vector2(Number.NaN, 0),
+    });
+    return result;
+  });
+  const world = new World({
+    gravity: new Vector2(0, 0),
+    integrator: new StubIntegrator((state) => state),
+    collisionSolver: solver,
+  });
+
+  const firstId = world.addBody(new Body(), { position: new Vector2(1, 0) });
+  const secondId = world.addBody(new Body(), { position: new Vector2(2, 0) });
+
+  assertThrows(
+    () => world.step(0),
+    RangeError,
+    `Collision solver result for body ${secondId} velocity must contain finite components.`,
+  );
+
+  assertEquals(world.getBodyState(firstId)?.position, new Vector2(1, 0));
+  assertEquals(world.getBodyState(secondId)?.position, new Vector2(2, 0));
 });

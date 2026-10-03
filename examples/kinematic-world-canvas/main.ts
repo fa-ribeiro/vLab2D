@@ -6,6 +6,7 @@ import {
   CanvasKinematicRenderer,
   Circle,
   type InspectionOptions,
+  IterativeBatchCollisionSolver,
   Rectangle,
   RegularPolygon,
   SemiImplicitEulerIntegrator,
@@ -91,13 +92,15 @@ if (context === null) {
   throw new Error("Canvas 2D rendering is not available.");
 }
 
-// Build and populate the simulated World independently from browser presentation.
+// Build the World from explicit physics policies independently from browser presentation.
 // Restitution is suppressed for impacts at or below 0.15 world units/second,
 // preventing the bouncy-ball example from continuing with tiny rebounds.
+const collisionSolver = new IterativeBatchCollisionSolver({ restitutionThreshold: 0.15 });
+
 const world = new World({
   gravity: new Vector2(0, -0.1),
   integrator: new SemiImplicitEulerIntegrator(),
-  restitutionThreshold: 0.15,
+  collisionSolver,
 });
 
 const particle = new Body();
@@ -167,7 +170,7 @@ const floor = new Body({
 
 world.addBody(floor, { position: new Vector2(2, -4.5), orientation: -Math.PI / 48 });
 
-// Add three touching circles to the world to demonstrate contact resolution.
+// Add three approaching circles to demonstrate coupled contact resolution.
 const body = new Body({ shape: new Circle(1), restitution: 0.9 });
 world.addBody(body, { position: new Vector2(-3, 7), velocity: new Vector2(2, 0) });
 world.addBody(body, { position: new Vector2(0, 7) });

@@ -37,6 +37,11 @@ export { SemiImplicitEulerIntegrator } from "./kinematics/semi-implicit-euler-in
 
 export { Vector2 } from "./math/vector2.ts";
 
+export type { CollisionSolver } from "./solver/collision-solver.ts";
+export { ITERATIVE_BATCH_COLLISION_SOLVER_DEFAULTS } from "./solver/iterative-batch-collision-solver-config.ts";
+export type { IterativeBatchCollisionSolverConfig } from "./solver/iterative-batch-collision-solver-config.ts";
+export { IterativeBatchCollisionSolver } from "./solver/iterative-batch-collision-solver.ts";
+
 export type { CollisionFrictionImpulse } from "./response/collision-friction-impulse.ts";
 export { computeCollisionFrictionImpulse } from "./response/collision-friction-impulse.ts";
 export type { CollisionNormalImpulse } from "./response/collision-normal-impulse.ts";
@@ -48,7 +53,6 @@ export type { BodyId } from "./world/body-id.ts";
 export type { BodyInitialConditions } from "./world/body-initial-conditions.ts";
 export type { BodySnapshot } from "./world/body-snapshot.ts";
 export type { BodyState } from "./world/body-state.ts";
-export { WORLD_DEFAULTS } from "./world/world-config.ts";
 export type { WorldConfig } from "./world/world-config.ts";
 
 export { World } from "./world/world.ts";

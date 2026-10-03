@@ -1,5 +1,4 @@
 import type { Body } from "../body/body.ts";
-import type { Collision } from "../collision/collision.ts";
 import { detectBodyCollisions } from "../collision/detect-body-collisions.ts";
 import type { KinematicIntegrator } from "../kinematics/kinematic-integrator.ts";
 import {
@@ -7,34 +6,17 @@ import {
   assertFiniteVector,
   assertValidTimestep,
 } from "../kinematics/validation.ts";
-import { assertFiniteNumber, assertNonNegativeNumber } from "../math/validation.ts";
 import { Vector2 } from "../math/vector2.ts";
-import { computeCollisionFrictionImpulse } from "../response/collision-friction-impulse.ts";
-import { computeCollisionNormalImpulse } from "../response/collision-normal-impulse.ts";
-import { computeCollisionPositionCorrections } from "../response/collision-position-correction.ts";
+import type { CollisionSolver } from "../solver/collision-solver.ts";
 import type { BodyId } from "./body-id.ts";
 import type { BodyInitialConditions } from "./body-initial-conditions.ts";
 import type { BodySnapshot } from "./body-snapshot.ts";
 import type { BodyState } from "./body-state.ts";
-import { WORLD_DEFAULTS, type WorldConfig } from "./world-config.ts";
+import type { WorldConfig } from "./world-config.ts";
 
 interface WorldBody {
   readonly definition: Body;
   state: BodyState;
-}
-
-/**
- * Per-step collision data prepared before iterative velocity response begins.
- *
- * The restitution target is captured from the integrated impact velocities
- * once, so later solver iterations cannot accidentally redefine the bounce
- * target from velocities that earlier iterations already changed.
- */
-interface PreparedContact {
-  readonly bodyAId: BodyId;
-  readonly bodyBId: BodyId;
-  readonly collision: Collision;
-  readonly targetNormalVelocity: number;
 }
 
 /**
@@ -47,49 +29,33 @@ interface PreparedContact {
  * values into authoritative runtime state that remains private and may be
  * observed through detached snapshots.
  *
- * Dynamic body instances share the same world gravity and numerical
- * integration strategy. Static body instances remain fixed. Shaped bodies
- * participate in inverse-mass-weighted positional collision response,
- * thresholded restitution-aware normal impulse response, and tangential
- * friction response after dynamic integration.
+ * World owns body lifecycle, authoritative state, environment gravity, and the
+ * atomic timestep boundary. It delegates numerical integration and collision
+ * response to injected policies. Collision detection is still the current
+ * concrete engine detector and will be extracted behind its own strategy
+ * boundary separately.
  */
 export class World {
   #nextBodyId: BodyId = 1;
 
   readonly #bodies = new Map<BodyId, WorldBody>();
   readonly #integrator: KinematicIntegrator;
-  readonly #restitutionThreshold: number;
-  readonly #velocityIterations: number;
+  readonly #collisionSolver: CollisionSolver;
 
   #gravity: Vector2;
 
   /**
-   * Creates a world from explicit experiment configuration and optional solver
-   * policy.
+   * Creates a World from explicit environment and physics-policy choices.
    *
    * @param config Complete World configuration.
-   * @throws {RangeError} If gravity contains a non-finite component, the
-   * restitution threshold is negative/non-finite, or velocity iterations is
-   * not a positive integer.
+   * @throws {RangeError} If gravity contains a non-finite component.
    */
   public constructor(config: WorldConfig) {
     assertFiniteVector(config.gravity, "Gravity");
 
-    const restitutionThreshold =
-      config.restitutionThreshold ?? WORLD_DEFAULTS.restitutionThreshold;
-    const velocityIterations = config.velocityIterations ?? WORLD_DEFAULTS.velocityIterations;
-
-    assertFiniteNumber(restitutionThreshold, "Restitution threshold");
-    assertNonNegativeNumber(restitutionThreshold, "Restitution threshold");
-
-    if (!Number.isInteger(velocityIterations) || velocityIterations <= 0) {
-      throw new RangeError("Velocity iterations must be a positive integer.");
-    }
-
     this.#gravity = config.gravity;
     this.#integrator = config.integrator;
-    this.#restitutionThreshold = restitutionThreshold;
-    this.#velocityIterations = velocityIterations;
+    this.#collisionSolver = config.collisionSolver;
   }
 
   /**
@@ -98,27 +64,6 @@ export class World {
    */
   public get gravity(): Vector2 {
     return this.#gravity;
-  }
-
-  /**
-   * The minimum relative normal closing speed required for restitution.
-   *
-   * Impacts at or below this speed are solved inelastically. Units are
-   * world-distance units per second.
-   */
-  public get restitutionThreshold(): number {
-    return this.#restitutionThreshold;
-  }
-
-  /**
-   * Number of batch velocity-response passes performed for each World step.
-   *
-   * One iteration reproduces the former one-batch velocity response. Additional
-   * iterations let impulses propagate through coupled contacts while every pass
-   * still reads one consistent velocity snapshot.
-   */
-  public get velocityIterations(): number {
-    return this.#velocityIterations;
   }
 
   /**
@@ -219,85 +164,46 @@ export class World {
    * @returns A snapshot for every body currently in the world.
    */
   public getBodySnapshots(): readonly BodySnapshot[] {
-    return Array.from(
-      this.#bodies,
-      ([id, worldBody]): BodySnapshot => ({
-        id,
-        definition: worldBody.definition,
-        state: copyState(worldBody.state),
-      }),
-    );
+    return Array.from(this.#bodies, ([id, worldBody]): BodySnapshot => ({
+      id,
+      definition: worldBody.definition,
+      state: copyState(worldBody.state),
+    }));
   }
 
   /**
-   * Advances every body in the world by one timestep.
+   * Advances every body in the World by one atomic timestep.
    *
-   * A World step is deliberately organized as a small physics pipeline:
+   * World coordinates the physics pipeline but does not implement the injected
+   * policies it uses:
    *
-   * 1. **Integration** — build candidate states for every Body. Dynamic Bodies
-   *    are advanced through the injected integrator; static Bodies keep their
-   *    current state.
-   * 2. **Collision detection** — observe the complete integrated candidate
-   *    configuration and find colliding Body pairs.
-   * 3. **Collision response**
-   *    - compute one inverse-mass-weighted positional correction batch;
-   *    - solve normal and tangential velocity response through a configurable
-   *      number of batch iterations. Every iteration reads one consistent
-   *      velocity snapshot, accumulates every contact's changes, then applies
-   *      them together before the next iteration.
-   * 4. **State resolution and validation** — combine corrected positions with
-   *    the iteratively solved velocities and validate the results.
-   * 5. **Atomic commit** — only after every candidate is valid are the resolved
-   *    states installed as authoritative World state.
+   * 1. integrate every Body into a complete detached candidate state set;
+   * 2. detect collisions from that candidate configuration;
+   * 3. ask the injected CollisionSolver for resolved candidate states;
+   * 4. validate that the solver returned one finite state for every Body;
+   * 5. atomically replace authoritative World state.
    *
-   * A static Body has zero inverse mass, so response never translates it or
-   * changes its velocity. A dynamic Body colliding with a static Body therefore
-   * receives the full positional and velocity response.
-   *
-   * Restitution currently mixes using the larger Body value. Friction currently
-   * mixes using the geometric mean of the two Body values. Those properties
-   * are deliberately passed into pure response mathematics as effective pair
-   * coefficients, so their eventual migration to a physical Material model
-   * does not require the collision equations to know where material data lives.
-   *
-   * Restitution threshold is different: it is a World-level solver policy.
-   * Before iterative response starts, every contact captures its integrated
-   * relative normal impact velocity exactly once. That impact measurement and
-   * the mixed restitution coefficient define a fixed target separating speed.
-   * Low-speed impacts receive target zero so tiny contacts do not keep
-   * bouncing.
-   *
-   * Velocity response deliberately uses batch iteration rather than immediate
-   * sequential contact mutation. This costs more iterations for coupled
-   * contacts, but each pass is symmetric with respect to contact traversal
-   * order and remains close to the World's original accumulate-then-resolve
-   * architecture. Every pass works toward the same per-contact velocity target;
-   * it never recomputes restitution from velocities changed by earlier passes.
-   *
-   * Friction changes linear tangential velocity only. Without contact points
-   * and rotational inertia, friction cannot yet create or change angular
-   * velocity. Positional correction also remains one-pass; iterative position
-   * solving is a separate future choice rather than an implied consequence of
-   * iterative velocity response.
-   *
-   * A fixed iteration count is an approximation rather than an exact
-   * simultaneous constraint solve. More iterations propagate response farther
-   * through long or strongly coupled contact chains.
-   *
-   * If integration or response produces an invalid state, the entire world step
-   * is rejected and all current body states remain unchanged.
+   * If integration, detection, solving, or validation fails, no authoritative
+   * Body state is replaced.
    *
    * @param dt The timestep duration in seconds.
    * @throws {RangeError} If the timestep is negative or not finite, or if an
-   * integration/response result contains a non-finite value.
+   * integration/solver result contains a non-finite value.
    */
   public step(dt: number): void {
-    // Precondition — reject an invalid timestep before the physics pipeline
-    // touches any candidate or authoritative body state.
     assertValidTimestep(dt);
 
-    // Step 1 — Integration: build a complete candidate state set without
-    // changing authoritative World state yet.
+    const integratedStates = this.#integrateBodies(dt);
+    const integratedSnapshots = this.#createSnapshots(integratedStates);
+    const collisions = detectBodyCollisions(integratedSnapshots);
+    const resolvedStates = this.#collisionSolver.solve(integratedSnapshots, collisions);
+
+    this.#validateResolvedStates(integratedStates, resolvedStates);
+    this.#commitResolvedStates(resolvedStates);
+  }
+
+  /** Builds a complete post-integration candidate state set. */
+  #integrateBodies(dt: number): ReadonlyMap<BodyId, BodyState> {
     const integratedStates = new Map<BodyId, BodyState>();
 
     for (const [bodyId, worldBody] of this.#bodies) {
@@ -321,232 +227,14 @@ export class World {
       integratedStates.set(bodyId, nextState);
     }
 
-    // Step 2 — Collision detection: observe the integrated candidate states and
-    // identify which shaped Body pairs are actually colliding.
-    const integratedSnapshots = this.#createSnapshots(integratedStates);
-    const collisions = detectBodyCollisions(integratedSnapshots);
-
-    // Prepare velocity targets before any collision response changes velocity.
-    // Restitution describes an impact, so its target must come from the
-    // integrated impact state rather than from a later solver iteration.
-    const preparedContacts: readonly PreparedContact[] = collisions.map(
-      ({ bodyAId, bodyBId, collision }): PreparedContact => {
-        const bodyA = this.#bodies.get(bodyAId);
-        const bodyB = this.#bodies.get(bodyBId);
-        const stateA = integratedStates.get(bodyAId);
-        const stateB = integratedStates.get(bodyBId);
-
-        if (
-          bodyA === undefined ||
-          bodyB === undefined ||
-          stateA === undefined ||
-          stateB === undefined
-        ) {
-          throw new Error("A colliding body disappeared during an atomic world step.");
-        }
-
-        const restitution = Math.max(
-          bodyA.definition.restitution,
-          bodyB.definition.restitution,
-        );
-
-        return {
-          bodyAId,
-          bodyBId,
-          collision,
-          targetNormalVelocity: computeTargetNormalVelocity(
-            collision,
-            stateA.velocity,
-            stateB.velocity,
-            restitution,
-            this.#restitutionThreshold,
-          ),
-        };
-      },
-    );
-
-    // Step 3a — Positional response remains one batch. Geometry is detected
-    // once from the integrated candidate configuration, and every contact's
-    // inverse-mass-weighted correction is accumulated before resolution.
-    const accumulatedPositionCorrections = new Map<BodyId, Vector2>();
-
-    for (const { bodyAId, bodyBId, collision } of preparedContacts) {
-      const bodyA = this.#bodies.get(bodyAId);
-      const bodyB = this.#bodies.get(bodyBId);
-
-      if (bodyA === undefined || bodyB === undefined) {
-        throw new Error("A colliding body disappeared during an atomic world step.");
-      }
-
-      const positionCorrections = computeCollisionPositionCorrections(
-        collision,
-        bodyA.definition.inverseMass,
-        bodyB.definition.inverseMass,
-      );
-
-      accumulateVector(accumulatedPositionCorrections, bodyAId, positionCorrections.bodyA);
-      accumulateVector(accumulatedPositionCorrections, bodyBId, positionCorrections.bodyB);
-    }
-
-    // Step 3b — Iterative batch velocity response. The working map is detached
-    // candidate state: no authoritative BodyState is mutated during solving.
-    //
-    // Each iteration has a strict read/accumulate/apply boundary:
-    //
-    //   current velocity snapshot
-    //          ↓
-    //   solve every contact
-    //          ↓
-    //   accumulate changes
-    //          ↓
-    //   apply together
-    //          ↓
-    //   next iteration snapshot
-    //
-    // This preserves within-pass contact-order independence while allowing one
-    // pass's response to influence every contact in the following pass.
-    const responseVelocities = new Map<BodyId, Vector2>();
-
-    for (const [bodyId, integratedState] of integratedStates) {
-      responseVelocities.set(bodyId, integratedState.velocity);
-    }
-
-    for (let iteration = 0; iteration < this.#velocityIterations; iteration++) {
-      const accumulatedVelocityChanges = new Map<BodyId, Vector2>();
-
-      for (const { bodyAId, bodyBId, collision, targetNormalVelocity } of preparedContacts) {
-        const bodyA = this.#bodies.get(bodyAId);
-        const bodyB = this.#bodies.get(bodyBId);
-        const velocityA = responseVelocities.get(bodyAId);
-        const velocityB = responseVelocities.get(bodyBId);
-
-        if (
-          bodyA === undefined ||
-          bodyB === undefined ||
-          velocityA === undefined ||
-          velocityB === undefined
-        ) {
-          throw new Error("A colliding body disappeared during an atomic world step.");
-        }
-
-        const normalImpulseResponse = computeCollisionNormalImpulse(
-          collision,
-          velocityA,
-          velocityB,
-          bodyA.definition.inverseMass,
-          bodyB.definition.inverseMass,
-          targetNormalVelocity,
-        );
-
-        accumulateVector(
-          accumulatedVelocityChanges,
-          bodyAId,
-          normalImpulseResponse.bodyAVelocityChange,
-        );
-        accumulateVector(
-          accumulatedVelocityChanges,
-          bodyBId,
-          normalImpulseResponse.bodyBVelocityChange,
-        );
-
-        // The normal solve works toward the fixed target captured before the
-        // first iteration. Inelastic contacts use target zero; restitution
-        // contacts retain their original impact-derived separating target.
-        //
-        // Friction reads the same iteration snapshot as the normal solve.
-        // Because normal impulse changes velocity only along the contact normal,
-        // the tangential relative velocity is unchanged within this linear-only
-        // model. The solved normal impulse still supplies this pass's Coulomb
-        // friction limit.
-        const friction = Math.sqrt(bodyA.definition.friction * bodyB.definition.friction);
-
-        const frictionImpulseResponse = computeCollisionFrictionImpulse(
-          collision,
-          velocityA,
-          velocityB,
-          bodyA.definition.inverseMass,
-          bodyB.definition.inverseMass,
-          normalImpulseResponse.impulse,
-          friction,
-        );
-
-        accumulateVector(
-          accumulatedVelocityChanges,
-          bodyAId,
-          frictionImpulseResponse.bodyAVelocityChange,
-        );
-        accumulateVector(
-          accumulatedVelocityChanges,
-          bodyBId,
-          frictionImpulseResponse.bodyBVelocityChange,
-        );
-      }
-
-      // Apply the complete pass only after every contact has read the same
-      // velocity snapshot. Updating this map is safe because the next contact
-      // solve does not start until the following outer iteration.
-      for (const [bodyId, velocity] of responseVelocities) {
-        const velocityChange = accumulatedVelocityChanges.get(bodyId);
-
-        if (velocityChange === undefined) {
-          continue;
-        }
-
-        const nextVelocity = velocity.add(velocityChange);
-
-        assertFiniteVector(nextVelocity, `Collision response velocity for body ${bodyId}`);
-
-        responseVelocities.set(bodyId, nextVelocity);
-      }
-    }
-
-    // Step 4 — State resolution and validation: combine integrated state,
-    // one-pass positional correction, and the final iterative velocity result.
-    const resolvedStates = new Map<BodyId, BodyState>();
-
-    for (const [bodyId, integratedState] of integratedStates) {
-      const positionCorrection = accumulatedPositionCorrections.get(bodyId);
-      const responseVelocity = responseVelocities.get(bodyId);
-
-      if (responseVelocity === undefined) {
-        throw new Error(
-          `Candidate velocity for body ${bodyId} is missing during an atomic world step.`,
-        );
-      }
-
-      const resolvedState: BodyState = {
-        ...integratedState,
-        position:
-          positionCorrection === undefined
-            ? integratedState.position
-            : integratedState.position.add(positionCorrection),
-        velocity: responseVelocity,
-      };
-
-      assertFiniteBodyState(resolvedState, `Collision response result for body ${bodyId}`);
-
-      resolvedStates.set(bodyId, resolvedState);
-    }
-
-    // Step 5 — Atomic commit: every resolved state is now known to be valid, so
-    // the complete candidate set can become authoritative World state.
-    for (const [bodyId, resolvedState] of resolvedStates) {
-      const worldBody = this.#bodies.get(bodyId);
-
-      if (worldBody === undefined) {
-        throw new Error(`Body ${bodyId} disappeared during an atomic world step.`);
-      }
-
-      worldBody.state = resolvedState;
-    }
+    return integratedStates;
   }
 
   /**
    * Creates detached observations of a complete candidate state set.
    *
-   * Collision detection remains an observation query: even while World uses it
-   * internally for response, the detector receives snapshots rather than
-   * authoritative mutable storage.
+   * Detection and solving receive observations rather than authoritative World
+   * storage, preserving the World state-ownership boundary.
    */
   #createSnapshots(states: ReadonlyMap<BodyId, BodyState>): readonly BodySnapshot[] {
     return Array.from(this.#bodies, ([id, worldBody]): BodySnapshot => {
@@ -561,28 +249,43 @@ export class World {
       return { id, definition: worldBody.definition, state: copyState(state) };
     });
   }
-}
 
-/**
- * Converts impact-time restitution policy into the fixed relative normal
- * velocity target used by every iterative solver pass.
- *
- * Negative relative normal velocity means the pair is closing. Restitution
- * applies only when that initial closing speed is strictly above the World
- * threshold; otherwise the contact is solved inelastically toward zero.
- */
-function computeTargetNormalVelocity(
-  collision: Collision,
-  velocityA: Vector2,
-  velocityB: Vector2,
-  restitution: number,
-  restitutionThreshold: number,
-): number {
-  const initialRelativeVelocity = velocityB.subtract(velocityA);
-  const initialNormalVelocity = initialRelativeVelocity.dot(collision.normal);
-  const closingSpeed = -initialNormalVelocity;
+  /**
+   * Validates the injected solver's complete candidate result before commit.
+   */
+  #validateResolvedStates(
+    integratedStates: ReadonlyMap<BodyId, BodyState>,
+    resolvedStates: ReadonlyMap<BodyId, BodyState>,
+  ): void {
+    if (resolvedStates.size !== integratedStates.size) {
+      throw new Error("Collision solver must return exactly one state for every World body.");
+    }
 
-  return closingSpeed > restitutionThreshold ? restitution * closingSpeed : 0;
+    for (const bodyId of integratedStates.keys()) {
+      const resolvedState = resolvedStates.get(bodyId);
+
+      if (resolvedState === undefined) {
+        throw new Error(`Collision solver did not return a state for body ${bodyId}.`);
+      }
+
+      assertFiniteBodyState(resolvedState, `Collision solver result for body ${bodyId}`);
+    }
+  }
+
+  /** Commits a fully validated candidate set as detached authoritative state. */
+  #commitResolvedStates(resolvedStates: ReadonlyMap<BodyId, BodyState>): void {
+    for (const [bodyId, resolvedState] of resolvedStates) {
+      const worldBody = this.#bodies.get(bodyId);
+
+      if (worldBody === undefined) {
+        throw new Error(`Collision solver returned an unknown body ${bodyId}.`);
+      }
+
+      // Copy at the ownership boundary so an injected solver cannot retain a
+      // reference to the authoritative BodyState installed in the World.
+      worldBody.state = copyState(resolvedState);
+    }
+  }
 }
 
 function assertBodyTypeInitialState(body: Body, state: BodyState): void {
@@ -604,16 +307,6 @@ function assertBodyTypeInitialState(body: Body, state: BodyState): void {
       body.type satisfies never;
       throw new Error("Unsupported Body type while validating initial state.");
   }
-}
-
-function accumulateVector(
-  vectors: Map<BodyId, Vector2>,
-  bodyId: BodyId,
-  vector: Vector2,
-): void {
-  const accumulated = vectors.get(bodyId);
-
-  vectors.set(bodyId, accumulated === undefined ? vector : accumulated.add(vector));
 }
 
 function copyState(state: BodyState): BodyState {

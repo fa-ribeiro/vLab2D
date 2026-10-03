@@ -3,6 +3,7 @@ import { assertEquals, assertStrictEquals, assertThrows } from "@std/assert";
 import {
   Body,
   type BodyState,
+  IterativeBatchCollisionSolver,
   type KinematicIntegrator,
   Vector2,
   World,
@@ -31,6 +32,7 @@ function createWorld(integrator: KinematicIntegrator): World {
   const world = new World({
     gravity: new Vector2(0, -9.81),
     integrator,
+    collisionSolver: new IterativeBatchCollisionSolver(),
   });
 
   world.addBody(new Body());

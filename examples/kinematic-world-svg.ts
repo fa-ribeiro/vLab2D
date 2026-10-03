@@ -1,5 +1,6 @@
 import {
   Body,
+  IterativeBatchCollisionSolver,
   SemiImplicitEulerIntegrator,
   Simulation,
   SvgKinematicRenderer,
@@ -7,9 +8,12 @@ import {
   World,
 } from "../src/mod.ts";
 
+const collisionSolver = new IterativeBatchCollisionSolver();
+
 const world = new World({
   gravity: new Vector2(0, -9.81),
   integrator: new SemiImplicitEulerIntegrator(),
+  collisionSolver,
 });
 
 const particle = new Body();
