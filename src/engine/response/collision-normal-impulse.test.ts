@@ -86,28 +86,8 @@ Deno.test("computeCollisionNormalImpulse supports static A against dynamic B", (
   assertEquals(response.bodyBVelocityChange, new Vector2(3, 0));
 });
 
-Deno.test("computeCollisionNormalImpulse applies partial restitution", () => {
-  const collision: Collision = {
-    normal: new Vector2(1, 0),
-    penetrationDepth: 1,
-  };
-
-  const response = computeCollisionNormalImpulse(
-    collision,
-    new Vector2(2, 1),
-    new Vector2(-2, -3),
-    1,
-    1,
-    0.5,
-  );
-
-  assertEquals(response.impulse, new Vector2(3, 0));
-  assertEquals(response.bodyAVelocityChange, new Vector2(-3, 0));
-  assertEquals(response.bodyBVelocityChange, new Vector2(3, 0));
-});
-
 Deno.test(
-  "computeCollisionNormalImpulse fully reflects normal speed at restitution one",
+  "computeCollisionNormalImpulse solves toward a positive normal-velocity target",
   () => {
     const collision: Collision = {
       normal: new Vector2(1, 0),
@@ -120,17 +100,19 @@ Deno.test(
       new Vector2(-2, -7),
       1,
       1,
-      1,
+      2,
     );
 
-    assertEquals(response.impulse, new Vector2(4, 0));
-    assertEquals(response.bodyAVelocityChange, new Vector2(-4, 0));
-    assertEquals(response.bodyBVelocityChange, new Vector2(4, 0));
+    // Initial relative normal velocity is -4. Reaching target +2 requires a
+    // relative change of +6, split equally across the two equal inverse masses.
+    assertEquals(response.impulse, new Vector2(3, 0));
+    assertEquals(response.bodyAVelocityChange, new Vector2(-3, 0));
+    assertEquals(response.bodyBVelocityChange, new Vector2(3, 0));
   },
 );
 
 Deno.test(
-  "computeCollisionNormalImpulse suppresses restitution below the speed threshold",
+  "computeCollisionNormalImpulse continues toward a positive target after separation begins",
   () => {
     const collision: Collision = {
       normal: new Vector2(1, 0),
@@ -139,67 +121,22 @@ Deno.test(
 
     const response = computeCollisionNormalImpulse(
       collision,
-      new Vector2(0.4, 2),
-      new Vector2(0, -3),
-      1,
-      0,
-      1,
-      0.5,
-    );
-
-    // Closing speed 0.4 is below the threshold, so the normal response is
-    // inelastic even though the configured restitution is perfectly elastic.
-    assertEquals(response.impulse, new Vector2(0.4, 0));
-    assertEquals(response.bodyAVelocityChange, new Vector2(-0.4, 0));
-    assertEquals(response.bodyBVelocityChange, new Vector2(0, 0));
-  },
-);
-
-Deno.test("computeCollisionNormalImpulse applies restitution above the speed threshold", () => {
-  const collision: Collision = {
-    normal: new Vector2(1, 0),
-    penetrationDepth: 1,
-  };
-
-  const response = computeCollisionNormalImpulse(
-    collision,
-    new Vector2(0.6, 2),
-    new Vector2(0, -3),
-    1,
-    0,
-    1,
-    0.5,
-  );
-
-  assertEquals(response.impulse, new Vector2(1.2, 0));
-  assertEquals(response.bodyAVelocityChange, new Vector2(-1.2, 0));
-  assertEquals(response.bodyBVelocityChange, new Vector2(0, 0));
-});
-
-Deno.test(
-  "computeCollisionNormalImpulse suppresses restitution exactly at the speed threshold",
-  () => {
-    const collision: Collision = {
-      normal: new Vector2(1, 0),
-      penetrationDepth: 1,
-    };
-
-    const response = computeCollisionNormalImpulse(
-      collision,
-      new Vector2(0.5, 0),
       new Vector2(0, 0),
+      new Vector2(0.5, 3),
       1,
-      0,
       1,
-      0.5,
+      1.5,
     );
 
+    // Current vn is already +0.5, but the fixed target is +1.5. A solver that
+    // stopped merely because the pair is separating would under-solve bounce.
     assertEquals(response.impulse, new Vector2(0.5, 0));
     assertEquals(response.bodyAVelocityChange, new Vector2(-0.5, 0));
+    assertEquals(response.bodyBVelocityChange, new Vector2(0.5, 0));
   },
 );
 
-Deno.test("computeCollisionNormalImpulse leaves separating Bodies unchanged", () => {
+Deno.test("computeCollisionNormalImpulse stops when the target is reached", () => {
   const collision: Collision = {
     normal: new Vector2(1, 0),
     penetrationDepth: 1,
@@ -207,17 +144,42 @@ Deno.test("computeCollisionNormalImpulse leaves separating Bodies unchanged", ()
 
   const response = computeCollisionNormalImpulse(
     collision,
-    new Vector2(-1, 0),
+    new Vector2(-0.5, 0),
     new Vector2(1, 0),
     1,
     1,
-    1,
+    1.5,
   );
 
   assertEquals(response.impulse, new Vector2(0, 0));
   assertEquals(response.bodyAVelocityChange, new Vector2(0, 0));
   assertEquals(response.bodyBVelocityChange, new Vector2(0, 0));
 });
+
+Deno.test(
+  "computeCollisionNormalImpulse does not pull a pair back toward a lower target",
+  () => {
+    const collision: Collision = {
+      normal: new Vector2(1, 0),
+      penetrationDepth: 1,
+    };
+
+    const response = computeCollisionNormalImpulse(
+      collision,
+      new Vector2(-1, 0),
+      new Vector2(1, 0),
+      1,
+      1,
+      1.5,
+    );
+
+    // Current vn is +2, already above the requested +1.5 target. Contact impulses
+    // are unilateral: the solver does not pull separating Bodies back together.
+    assertEquals(response.impulse, new Vector2(0, 0));
+    assertEquals(response.bodyAVelocityChange, new Vector2(0, 0));
+    assertEquals(response.bodyBVelocityChange, new Vector2(0, 0));
+  },
+);
 
 Deno.test("computeCollisionNormalImpulse leaves tangential relative velocity unchanged", () => {
   const collision: Collision = {
@@ -229,7 +191,6 @@ Deno.test("computeCollisionNormalImpulse leaves tangential relative velocity unc
     collision,
     new Vector2(0, 2),
     new Vector2(0, -3),
-    1,
     1,
     1,
   );
@@ -295,7 +256,7 @@ Deno.test("computeCollisionNormalImpulse rejects non-finite inverse mass", () =>
   );
 });
 
-Deno.test("computeCollisionNormalImpulse rejects restitution below zero", () => {
+Deno.test("computeCollisionNormalImpulse rejects negative target normal velocity", () => {
   const collision: Collision = {
     normal: new Vector2(1, 0),
     penetrationDepth: 1,
@@ -312,32 +273,11 @@ Deno.test("computeCollisionNormalImpulse rejects restitution below zero", () => 
         -0.1,
       ),
     RangeError,
-    "Restitution must be between 0 and 1.",
+    "Target normal velocity must not be negative.",
   );
 });
 
-Deno.test("computeCollisionNormalImpulse rejects restitution above one", () => {
-  const collision: Collision = {
-    normal: new Vector2(1, 0),
-    penetrationDepth: 1,
-  };
-
-  assertThrows(
-    () =>
-      computeCollisionNormalImpulse(
-        collision,
-        new Vector2(1, 0),
-        new Vector2(-1, 0),
-        1,
-        1,
-        1.1,
-      ),
-    RangeError,
-    "Restitution must be between 0 and 1.",
-  );
-});
-
-Deno.test("computeCollisionNormalImpulse rejects non-finite restitution", () => {
+Deno.test("computeCollisionNormalImpulse rejects non-finite target normal velocity", () => {
   const collision: Collision = {
     normal: new Vector2(1, 0),
     penetrationDepth: 1,
@@ -354,50 +294,6 @@ Deno.test("computeCollisionNormalImpulse rejects non-finite restitution", () => 
         Number.POSITIVE_INFINITY,
       ),
     RangeError,
-    "Restitution must be finite.",
-  );
-});
-
-Deno.test("computeCollisionNormalImpulse rejects negative restitution threshold", () => {
-  const collision: Collision = {
-    normal: new Vector2(1, 0),
-    penetrationDepth: 1,
-  };
-
-  assertThrows(
-    () =>
-      computeCollisionNormalImpulse(
-        collision,
-        new Vector2(1, 0),
-        new Vector2(0, 0),
-        1,
-        0,
-        1,
-        -0.1,
-      ),
-    RangeError,
-    "Restitution threshold must not be negative.",
-  );
-});
-
-Deno.test("computeCollisionNormalImpulse rejects non-finite restitution threshold", () => {
-  const collision: Collision = {
-    normal: new Vector2(1, 0),
-    penetrationDepth: 1,
-  };
-
-  assertThrows(
-    () =>
-      computeCollisionNormalImpulse(
-        collision,
-        new Vector2(1, 0),
-        new Vector2(0, 0),
-        1,
-        0,
-        1,
-        Number.POSITIVE_INFINITY,
-      ),
-    RangeError,
-    "Restitution threshold must be finite.",
+    "Target normal velocity must be finite.",
   );
 });

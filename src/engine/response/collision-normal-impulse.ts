@@ -21,64 +21,60 @@ export interface CollisionNormalImpulse {
 }
 
 /**
- * Computes a restitution-aware collision impulse along the collision normal.
+ * Computes the normal impulse required to move a contact toward a requested
+ * relative normal velocity.
+ *
+ * The target is deliberately supplied by the caller rather than derived from
+ * restitution here. This keeps the impulse equation independent from material
+ * mixing and World-level bounce policy, and—critically for iterative solving—
+ * lets every solver pass work toward the same target captured at impact time.
  *
  * The response pipeline is:
  *
- * 1. **Validate response inputs** — inverse masses must be finite and
- *    non-negative; restitution must be finite and in `[0, 1]`; the restitution
- *    threshold must be finite and non-negative.
+ * 1. **Validate response inputs** — inverse masses and the target normal
+ *    velocity must be finite and non-negative.
  * 2. **Check mobility** — two zero-inverse-mass Bodies cannot receive a useful
  *    impulse response.
- * 3. **Measure closing speed** — compute B's velocity relative to A and project
- *    it onto the ordered collision normal.
- * 4. **Separating-contact guard** — if relative normal velocity is non-negative,
- *    the pair is not closing and must receive no normal impulse.
- * 5. **Choose effective restitution** — impacts whose closing speed is at or
- *    below the threshold are solved inelastically to suppress tiny bounces.
- * 6. **Solve impulse magnitude** — choose the impulse that produces the target
- *    post-response relative normal velocity.
- * 7. **Convert impulse to velocity changes** — apply equal/opposite impulse,
+ * 3. **Measure current normal velocity** — compute B's velocity relative to A
+ *    and project it onto the ordered collision normal.
+ * 4. **Target guard** — if the current relative normal velocity is already at
+ *    or above the requested target, no additional normal impulse is needed.
+ * 5. **Solve impulse magnitude** — choose the impulse that would move this
+ *    isolated pair exactly to the requested target normal velocity.
+ * 6. **Convert impulse to velocity changes** — apply equal/opposite impulse,
  *    scaled by each Body's inverse mass.
  *
  * ```text
  * relativeVelocity       = velocityB - velocityA
- * relativeNormalVelocity = relativeVelocity · normal
- * closingSpeed           = -relativeNormalVelocity
- *
- * effectiveRestitution =
- *   closingSpeed > restitutionThreshold
- *     ? restitution
- *     : 0
+ * currentNormalVelocity  = relativeVelocity · normal
  *
  * impulseMagnitude =
- *   -(1 + effectiveRestitution) × relativeNormalVelocity
+ *   (targetNormalVelocity - currentNormalVelocity)
  *   / (inverseMassA + inverseMassB)
  *
  * velocityChangeA = -impulse × inverseMassA
  * velocityChangeB = +impulse × inverseMassB
  * ```
  *
- * The threshold changes bounce policy only. A low-speed closing contact still
- * receives the inelastic normal impulse required to remove closing motion.
- * Tangential relative velocity remains deliberately untouched by this helper.
+ * A target of zero gives the usual inelastic contact response: closing motion
+ * is removed but no rebound is requested. A positive target requests
+ * separation. In a coupled iterative solver, another contact may disturb a
+ * previously solved pair, so later passes can apply another impulse toward the
+ * same fixed target.
  *
- * This impulse model still changes linear velocity only. Friction,
- * contact-point angular effects, and iterative contact solving remain separate
- * or later capabilities.
+ * Tangential relative velocity remains deliberately untouched by this helper.
+ * Friction and contact-point angular effects are separate concerns.
  *
  * @param collision Narrow-phase collision result for ordered pair A/B.
  * @param velocityA Current world-space linear velocity of Body A.
  * @param velocityB Current world-space linear velocity of Body B.
  * @param inverseMassA Non-negative finite inverse mass of Body A.
  * @param inverseMassB Non-negative finite inverse mass of Body B.
- * @param restitution Effective restitution coefficient for the colliding pair.
- * Defaults to `0` to preserve inelastic response.
- * @param restitutionThreshold Non-negative closing-speed threshold below which
- * restitution is suppressed. Defaults to `0`, preserving previous behavior.
+ * @param targetNormalVelocity Non-negative desired relative normal velocity
+ * after response. Defaults to `0` for inelastic contact.
  * @returns The normal impulse and per-Body linear-velocity changes.
- * @throws {RangeError} If either inverse mass is negative or not finite,
- * restitution is outside `[0, 1]`, or the threshold is negative/non-finite.
+ * @throws {RangeError} If either inverse mass or the target normal velocity is
+ * negative or not finite.
  */
 export function computeCollisionNormalImpulse(
   collision: Collision,
@@ -86,14 +82,12 @@ export function computeCollisionNormalImpulse(
   velocityB: Vector2,
   inverseMassA: number,
   inverseMassB: number,
-  restitution = 0,
-  restitutionThreshold = 0,
+  targetNormalVelocity = 0,
 ): CollisionNormalImpulse {
   // Step 1 — Validate every scalar that participates in the impulse solve.
   assertResponseInverseMass(inverseMassA, "Body A inverse mass");
   assertResponseInverseMass(inverseMassB, "Body B inverse mass");
-  assertRestitution(restitution);
-  assertRestitutionThreshold(restitutionThreshold);
+  assertTargetNormalVelocity(targetNormalVelocity);
 
   const totalInverseMass = inverseMassA + inverseMassB;
 
@@ -103,29 +97,23 @@ export function computeCollisionNormalImpulse(
   }
 
   // Step 3 — Measure B's motion relative to A, then keep only the component
-  // along the collision normal. Negative means the pair is closing.
+  // along the collision normal.
   const relativeVelocity = velocityB.subtract(velocityA);
-  const relativeNormalVelocity = relativeVelocity.dot(collision.normal);
+  const currentNormalVelocity = relativeVelocity.dot(collision.normal);
 
-  // Step 4 — Never impulse a pair that is already separating or moving only
-  // tangentially. Doing so would add unwanted normal motion/energy.
-  if (relativeNormalVelocity >= 0) {
+  // Step 4 — A positive restitution target may still require an impulse even
+  // after the Bodies have started separating. Stop only when this contact has
+  // reached (or exceeded) the fixed target requested by the caller.
+  if (currentNormalVelocity >= targetNormalVelocity) {
     return zeroImpulseResponse();
   }
 
-  const closingSpeed = -relativeNormalVelocity;
-
-  // Step 5 — Very small impacts are solved inelastically. The normal impulse
-  // still removes closing motion; only the rebound component is suppressed.
-  const effectiveRestitution = closingSpeed > restitutionThreshold ? restitution : 0;
-
-  // Step 6 — Solve j = -(1 + e) * vn / (wA + wB), using the threshold-selected
-  // effective restitution rather than blindly applying bounce to every impact.
-  const impulseMagnitude = (-(1 + effectiveRestitution) * relativeNormalVelocity) /
-    totalInverseMass;
+  // Step 5 — For this isolated pair, this impulse would move the current
+  // relative normal velocity exactly to the requested target.
+  const impulseMagnitude = (targetNormalVelocity - currentNormalVelocity) / totalInverseMass;
   const impulse = collision.normal.scale(impulseMagnitude);
 
-  // Step 7 — Equal/opposite impulse produces different velocity changes when
+  // Step 6 — Equal/opposite impulse produces different velocity changes when
   // inverse masses differ. A zero-inverse-mass Body naturally receives none.
   return {
     impulse,
@@ -139,17 +127,9 @@ function assertResponseInverseMass(value: number, name: string): void {
   assertNonNegativeNumber(value, name);
 }
 
-function assertRestitution(value: number): void {
-  assertFiniteNumber(value, "Restitution");
-
-  if (value < 0 || value > 1) {
-    throw new RangeError("Restitution must be between 0 and 1.");
-  }
-}
-
-function assertRestitutionThreshold(value: number): void {
-  assertFiniteNumber(value, "Restitution threshold");
-  assertNonNegativeNumber(value, "Restitution threshold");
+function assertTargetNormalVelocity(value: number): void {
+  assertFiniteNumber(value, "Target normal velocity");
+  assertNonNegativeNumber(value, "Target normal velocity");
 }
 
 function zeroImpulseResponse(): CollisionNormalImpulse {
