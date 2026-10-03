@@ -10,14 +10,20 @@ import { getAxisCollision, getPolygonAxes, projectCircle, projectVertices } from
  * Detects narrow-phase collision between a circle and a convex polygon using
  * the Separating Axis Theorem (SAT).
  *
- * Polygon edge normals provide the usual SAT axes. Because a circle has no
- * edges of its own, one additional axis is tested from the circle center toward
- * the closest polygon vertex. That extra axis is required to detect separation
- * around polygon corners.
+ * A Circle has no edges, so Circle-Polygon SAT needs one extra idea beyond the
+ * Polygon-Polygon case. The algorithm is:
  *
- * Touching geometry counts as a collision with zero penetration depth. The
- * returned normal gives the minimum-separation direction for moving the
- * polygon (B) out of overlap with the Circle (A).
+ * 1. **World polygon geometry** — transform the polygon's local vertices.
+ * 2. **Polygon axes** — collect the polygon edge normals.
+ * 3. **Corner axis** — find the polygon vertex closest to the Circle center and,
+ *    when possible, add the normalized center-to-vertex direction. This extra
+ *    axis detects separation/penetration around polygon corners.
+ * 4. **Projection/separation test** — project the Circle and polygon onto every
+ *    candidate axis. Any disjoint pair of intervals proves separation.
+ * 5. **Minimum-overlap selection** — among overlapping axes, retain the minimum
+ *    translation that moves polygon B out of Circle A.
+ *
+ * Touching geometry counts as a collision with zero penetration depth.
  *
  * @param circle Intrinsic Circle geometry for shape A.
  * @param circlePosition World position of the Circle center.
@@ -34,28 +40,35 @@ export function detectCirclePolygonCollision(
   polygonPosition: Vector2,
   polygonOrientation: number,
 ): Collision | undefined {
+  // Step 1 — World polygon geometry.
   const polygonVertices = transformVerticesToWorld(
     getLocalVertices(polygon),
     polygonPosition,
     polygonOrientation,
   );
 
-  const axes = [...getPolygonAxes(polygonVertices)];
+  // Step 2 — Polygon edge normals are always SAT candidate axes.
+  const candidateAxes = [...getPolygonAxes(polygonVertices)];
 
+  // Step 3 — Add the Circle-specific corner axis. Edge normals alone are not
+  // sufficient near polygon vertices: their X/Y-like projections can overlap
+  // even while the Circle is diagonally separated from a corner.
   const closestVertex = findClosestVertex(polygonVertices, circlePosition);
   const vertexDelta = closestVertex.subtract(circlePosition);
   const vertexDistanceSquared = vertexDelta.dot(vertexDelta);
 
-  // A zero-length center-to-vertex vector cannot define an axis. If the circle
+  // A zero-length center-to-vertex vector cannot define an axis. If the Circle
   // center lies exactly on a polygon vertex, the polygon edge normals still
   // provide valid SAT axes for this already-touching/overlapping configuration.
   if (vertexDistanceSquared > 0) {
-    axes.push(vertexDelta.scale(1 / Math.sqrt(vertexDistanceSquared)));
+    candidateAxes.push(vertexDelta.scale(1 / Math.sqrt(vertexDistanceSquared)));
   }
 
   let minimumCollision: Collision | undefined;
 
-  for (const axis of axes) {
+  // Steps 4 and 5 — Test every candidate axis. A single separating axis proves
+  // no collision; otherwise retain the smallest escape translation.
+  for (const axis of candidateAxes) {
     const axisCollision = getAxisCollision(
       projectCircle(circlePosition, circle.radius, axis),
       projectVertices(polygonVertices, axis),
@@ -83,6 +96,7 @@ export function detectCirclePolygonCollision(
   return minimumCollision;
 }
 
+/** Finds the polygon vertex with the smallest squared distance to `point`. */
 function findClosestVertex(vertices: readonly Vector2[], point: Vector2): Vector2 {
   let closestVertex = vertices[0];
   let closestDistanceSquared = distanceSquared(vertices[0], point);

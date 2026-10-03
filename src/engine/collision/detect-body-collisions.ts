@@ -5,16 +5,24 @@ import { detectBodyCollisionCandidates } from "./detect-body-collision-candidate
 import { detectCollision } from "./detect-collision.ts";
 
 /**
- * Detects collisions among detached body observations from one World.
+ * Detects confirmed collisions among detached body observations from one World.
+ *
+ * This function is the bridge between broad phase and narrow phase:
+ *
+ * 1. **Candidate acquisition** — use supplied broad-phase candidates or build
+ *    them from the snapshot set.
+ * 2. **Candidate resolution** — recover the two snapshots and their shapes.
+ * 3. **Narrow-phase test** — run exact shape-pair collision detection.
+ * 4. **Collection** — keep only candidates confirmed by narrow phase.
  *
  * By default, broad-phase AABB candidates are produced by
  * {@link detectBodyCollisionCandidates}. Callers that already need those
  * candidates for another purpose, such as visualization, may supply the same
  * candidate set to avoid repeating broad-phase work.
  *
- * Every candidate is passed to exact narrow-phase geometry. AABB false
- * positives are therefore rejected before a BodyCollision is reported.
- * Touching geometry remains a collision with zero penetration depth.
+ * AABB false positives are therefore rejected before a {@link BodyCollision}
+ * is reported. Touching geometry remains a collision with zero penetration
+ * depth.
  *
  * The function is a pure query over detached observations. It does not mutate
  * snapshots, Body definitions, or authoritative World state.
@@ -28,10 +36,14 @@ export function detectBodyCollisions(
   snapshots: readonly BodySnapshot[],
   candidates: readonly BodyCollisionCandidate[] = detectBodyCollisionCandidates(snapshots),
 ): readonly BodyCollision[] {
+  // Step 1 — Index snapshots by BodyId so candidate pairs can be resolved
+  // without repeatedly scanning the observation array.
   const snapshotsById = new Map(snapshots.map((snapshot) => [snapshot.id, snapshot] as const));
   const collisions: BodyCollision[] = [];
 
   for (const candidate of candidates) {
+    // Step 2 — Resolve this broad-phase candidate back to the exact detached
+    // Body observations that narrow phase needs.
     const snapshotA = snapshotsById.get(candidate.bodyAId);
     const snapshotB = snapshotsById.get(candidate.bodyBId);
 
@@ -48,6 +60,9 @@ export function detectBodyCollisions(
       continue;
     }
 
+    // Step 3 — Narrow phase: dispatch to the exact algorithm for this concrete
+    // shape pair. `undefined` means the broad-phase candidate was a false
+    // positive and the actual geometries are separated.
     const collision = detectCollision(
       shapeA,
       snapshotA.state.position,
@@ -57,6 +72,8 @@ export function detectBodyCollisions(
       snapshotB.state.orientation,
     );
 
+    // Step 4 — Collection: preserve Body ordering together with the ordered
+    // Collision normal returned by narrow phase.
     if (collision !== undefined) {
       collisions.push({
         bodyAId: snapshotA.id,

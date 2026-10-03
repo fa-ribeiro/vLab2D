@@ -9,13 +9,21 @@ import { getAxisCollision, getPolygonAxes, projectVertices } from "./sat.ts";
  * Detects narrow-phase collision between two convex polygonal shapes using the
  * Separating Axis Theorem (SAT).
  *
- * Rectangle and RegularPolygon are both convex, so their world-space vertices
- * can be projected onto each edge normal from both shapes. A single axis with
- * disjoint projections proves separation. If every tested axis overlaps, the
- * axis requiring the least separation supplies the collision normal and
- * penetration depth.
+ * The algorithm is organized into five stages:
  *
- * Touching polygons count as a collision with zero penetration depth.
+ * 1. **World geometry** — transform both polygons' local vertices into world
+ *    coordinates using their current poses.
+ * 2. **Candidate axes** — collect edge normals from both polygons. SAT requires
+ *    axes from both shapes because either shape may provide the separating axis.
+ * 3. **Projection/separation test** — project both polygons onto every axis. A
+ *    single disjoint interval proves the polygons are separated.
+ * 4. **Minimum-overlap selection** — if every axis overlaps, keep the axis that
+ *    needs the smallest translation to make the intervals merely touch.
+ * 5. **Collision result** — return that minimum translation as our ordered A/B
+ *    collision normal and penetration depth.
+ *
+ * Rectangle and RegularPolygon are both convex, so edge normals are sufficient
+ * SAT axes. Touching polygons count as a collision with zero penetration depth.
  *
  * @param shapeA Convex polygonal geometry for shape A.
  * @param positionA World position of shape A's local origin.
@@ -34,12 +42,20 @@ export function detectPolygonPolygonCollision(
   positionB: Vector2,
   orientationB: number,
 ): Collision | undefined {
+  // Step 1 — World geometry: SAT works on the polygons at their actual current
+  // poses, so transform their reusable local vertices into world coordinates.
   const verticesA = transformVerticesToWorld(getLocalVertices(shapeA), positionA, orientationA);
   const verticesB = transformVerticesToWorld(getLocalVertices(shapeB), positionB, orientationB);
 
+  // Step 2 — Candidate axes: every edge normal from both convex polygons is a
+  // possible separating axis.
+  const candidateAxes = [...getPolygonAxes(verticesA), ...getPolygonAxes(verticesB)];
+
   let minimumCollision: Collision | undefined;
 
-  for (const axis of [...getPolygonAxes(verticesA), ...getPolygonAxes(verticesB)]) {
+  // Steps 3 and 4 — Project onto each axis. Any separating axis ends the test
+  // immediately; otherwise retain the smallest translation seen so far.
+  for (const axis of candidateAxes) {
     const axisCollision = getAxisCollision(
       projectVertices(verticesA, axis),
       projectVertices(verticesB, axis),
@@ -64,5 +80,7 @@ export function detectPolygonPolygonCollision(
     throw new Error("Polygon collision detection produced no candidate axis.");
   }
 
+  // Step 5 — Every candidate axis overlapped, so the polygons collide. The
+  // smallest per-axis escape translation is the minimum translation vector.
   return minimumCollision;
 }

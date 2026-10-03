@@ -23,37 +23,34 @@ export interface CollisionNormalImpulse {
 /**
  * Computes a zero-restitution collision impulse along the collision normal.
  *
- * The relative velocity of B with respect to A is projected onto the ordered
- * collision normal:
+ * The response pipeline is:
+ *
+ * 1. **Validate response masses** — inverse masses must be finite and
+ *    non-negative.
+ * 2. **Check mobility** — two zero-inverse-mass Bodies cannot receive a useful
+ *    impulse response.
+ * 3. **Measure closing speed** — compute B's velocity relative to A and project
+ *    it onto the ordered collision normal.
+ * 4. **Separating-contact guard** — if relative normal velocity is non-negative,
+ *    the pair is not closing and must receive no normal impulse.
+ * 5. **Solve impulse magnitude** — choose the zero-restitution impulse that
+ *    makes post-response relative normal velocity equal zero.
+ * 6. **Convert impulse to velocity changes** — apply equal/opposite impulse,
+ *    scaled by each Body's inverse mass.
  *
  * ```text
  * relativeVelocity       = velocityB - velocityA
  * relativeNormalVelocity = relativeVelocity · normal
- * ```
  *
- * A negative relative normal velocity means the Bodies are closing. With no
- * restitution yet, the impulse magnitude is chosen so the post-response
- * relative normal velocity becomes zero:
- *
- * ```text
  * impulseMagnitude = -relativeNormalVelocity / (inverseMassA + inverseMassB)
- * ```
  *
- * The resulting impulse changes velocity according to inverse mass:
- *
- * ```text
  * velocityChangeA = -impulse × inverseMassA
  * velocityChangeB = +impulse × inverseMassB
  * ```
  *
- * Tangential relative velocity is deliberately untouched. If the Bodies are
- * already separating or moving tangentially, no impulse is applied. If both
- * inverse masses are zero, the pair is immovable by impulse response and zero
- * changes are returned.
- *
- * This first impulse model changes linear velocity only. Restitution, friction,
- * contact-point angular effects, and iterative contact solving are later
- * response capabilities.
+ * Tangential relative velocity is deliberately untouched. This first impulse
+ * model changes linear velocity only. Restitution, friction, contact-point
+ * angular effects, and iterative contact solving are later capabilities.
  *
  * @param collision Narrow-phase collision result for ordered pair A/B.
  * @param velocityA Current world-space linear velocity of Body A.
@@ -70,29 +67,35 @@ export function computeCollisionNormalImpulse(
   inverseMassA: number,
   inverseMassB: number,
 ): CollisionNormalImpulse {
+  // Step 1 — Validate response weights before they participate in the solve.
   assertResponseInverseMass(inverseMassA, "Body A inverse mass");
   assertResponseInverseMass(inverseMassB, "Body B inverse mass");
 
   const totalInverseMass = inverseMassA + inverseMassB;
 
+  // Step 2 — If neither Body can change velocity, there is nothing to solve.
   if (totalInverseMass === 0) {
     return zeroImpulseResponse();
   }
 
+  // Step 3 — Measure B's motion relative to A, then keep only the component
+  // along the collision normal. Negative means the pair is closing.
   const relativeVelocity = velocityB.subtract(velocityA);
   const relativeNormalVelocity = relativeVelocity.dot(collision.normal);
 
-  // A non-negative value means the pair is separating or has no closing
-  // velocity along the collision normal. Applying an impulse here would pull
-  // separating Bodies back together or invent normal motion from tangential
-  // motion.
+  // Step 4 — Never impulse a pair that is already separating or moving only
+  // tangentially. Doing so would add unwanted normal motion/energy.
   if (relativeNormalVelocity >= 0) {
     return zeroImpulseResponse();
   }
 
+  // Step 5 — With restitution e = 0, solve the impulse that makes the
+  // post-response relative normal velocity exactly zero.
   const impulseMagnitude = -relativeNormalVelocity / totalInverseMass;
   const impulse = collision.normal.scale(impulseMagnitude);
 
+  // Step 6 — Equal/opposite impulse produces different velocity changes when
+  // inverse masses differ. A zero-inverse-mass Body naturally receives none.
   return {
     impulse,
     bodyAVelocityChange: impulse.scale(-inverseMassA),

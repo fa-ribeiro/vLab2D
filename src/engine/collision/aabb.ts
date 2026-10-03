@@ -24,9 +24,12 @@ export interface Aabb {
  * Computes the world-space axis-aligned bounding box for a physical Body shape
  * at the supplied pose.
  *
- * Circle orientation does not affect its bounds. Polygonal shapes are first
- * transformed into world space and then enclosed by the minimum/maximum X/Y
- * coordinates of their vertices.
+ * The calculation depends on shape family:
+ *
+ * - **Circle** — orientation is irrelevant; expand the center by one radius on
+ *   both world axes.
+ * - **Polygon** — transform local vertices to world space, then scan their
+ *   minimum/maximum X/Y coordinates.
  *
  * @param shape Intrinsic physical geometry to bound.
  * @param position World position of the shape's local origin.
@@ -46,9 +49,13 @@ export function computeShapeAabb(
   }
 
   if (shape instanceof Rectangle || shape instanceof RegularPolygon) {
-    return computeVerticesAabb(
-      transformVerticesToWorld(getLocalVertices(shape), position, orientation),
+    const worldVertices = transformVerticesToWorld(
+      getLocalVertices(shape),
+      position,
+      orientation,
     );
+
+    return computeVerticesAabb(worldVertices);
   }
 
   return shape satisfies never;
@@ -57,8 +64,12 @@ export function computeShapeAabb(
 /**
  * Tests whether two axis-aligned bounding boxes overlap or touch.
  *
- * Touching counts as overlap so this broad-phase predicate remains conservative
- * with the engine's narrow-phase rule that touching geometry is a collision.
+ * The logic is easier to read as its opposite: the boxes do **not** overlap if
+ * A is completely left/right/above/below B. Negating those four separation
+ * cases gives the conservative broad-phase overlap test.
+ *
+ * Touching counts as overlap so this predicate remains consistent with the
+ * narrow-phase rule that touching geometry is a collision.
  *
  * @param a First world-space AABB.
  * @param b Second world-space AABB.
@@ -68,6 +79,7 @@ export function aabbsOverlap(a: Aabb, b: Aabb): boolean {
   return !(a.max.x < b.min.x || b.max.x < a.min.x || a.max.y < b.min.y || b.max.y < a.min.y);
 }
 
+/** Encloses a non-empty world-space vertex set in the smallest world AABB. */
 function computeVerticesAabb(vertices: readonly Vector2[]): Aabb {
   let minX = vertices[0].x;
   let maxX = vertices[0].x;

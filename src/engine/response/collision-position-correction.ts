@@ -20,8 +20,16 @@ export interface CollisionPositionCorrections {
 /**
  * Computes inverse-mass-weighted positional separation for a collision.
  *
- * Inverse masses must be finite and non-negative. The collision's minimum
- * translation is split proportionally to inverse mass:
+ * The response pipeline is:
+ *
+ * 1. **Validate response masses** — inverse masses must be finite and
+ *    non-negative.
+ * 2. **Check mobility** — if both inverse masses are zero, neither Body can be
+ *    translated by response.
+ * 3. **Build the MTV** — `normal × penetrationDepth` is the full translation
+ *    that would move B out of A according to the ordered Collision contract.
+ * 4. **Split the MTV** — distribute that translation between A and B in
+ *    proportion to their inverse masses.
  *
  * ```text
  * A correction = -normal × depth × inverseMassA / totalInverseMass
@@ -29,9 +37,7 @@ export interface CollisionPositionCorrections {
  * ```
  *
  * A zero-inverse-mass Body therefore receives no positional correction and the
- * other Body receives the full translation. If both inverse masses are zero,
- * the pair is immovable by this response calculation and two zero translations
- * are returned instead of dividing by zero.
+ * other Body receives the full translation.
  *
  * This helper intentionally does not know whether zero inverse mass belongs to
  * a static Body or, in the future, a kinematic Body. Body type controls motion
@@ -51,11 +57,14 @@ export function computeCollisionPositionCorrections(
   inverseMassA: number,
   inverseMassB: number,
 ): CollisionPositionCorrections {
+  // Step 1 — Validate the numeric response weights before using them in a
+  // denominator or applying them to the MTV.
   assertResponseInverseMass(inverseMassA, "Body A inverse mass");
   assertResponseInverseMass(inverseMassB, "Body B inverse mass");
 
   const totalInverseMass = inverseMassA + inverseMassB;
 
+  // Step 2 — Two zero-inverse-mass Bodies are immovable by positional response.
   if (totalInverseMass === 0) {
     return {
       bodyA: new Vector2(0, 0),
@@ -63,8 +72,12 @@ export function computeCollisionPositionCorrections(
     };
   }
 
+  // Step 3 — Construct the full minimum translation vector. By contract this
+  // vector points in the direction that moves B out of A.
   const minimumTranslation = collision.normal.scale(collision.penetrationDepth);
 
+  // Step 4 — Split the MTV by inverse mass. A moves opposite the collision
+  // normal; B moves along it. More inverse mass means a larger share of motion.
   return {
     bodyA: minimumTranslation.scale(-inverseMassA / totalInverseMass),
     bodyB: minimumTranslation.scale(inverseMassB / totalInverseMass),
