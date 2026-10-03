@@ -167,6 +167,12 @@ const floor = new Body({
 
 world.addBody(floor, { position: new Vector2(2, -4.5), orientation: -Math.PI / 48 });
 
+// Add three touching circles to the world to demonstrate contact resolution.
+const body = new Body({ shape: new Circle(1) });
+world.addBody(body, { position: new Vector2(-3, 7), velocity: new Vector2(2, 0) });
+world.addBody(body, { position: new Vector2(0, 7) });
+world.addBody(body, { position: new Vector2(3, 7), velocity: new Vector2(-2, 0) });
+
 const simulation = new Simulation([world]);
 
 // Canvas rendering, picking, and inspection observe the same mutable viewport state.
